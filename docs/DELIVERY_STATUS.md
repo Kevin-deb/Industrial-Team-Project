@@ -35,6 +35,8 @@ The generated [Windows installer](https://github.com/Kevin-deb/Industrial-Team-P
 
 The NSIS installer completed a per-user installation into an isolated validation directory with exit code 0. The full native integration suite then passed against the installed executable. Users need no Node.js installation or separate browser. The normal application data location was verified as `%APPDATA%\CareLink Doctor`; the test uninstaller exited with code 0, removed its application and shortcuts, and preserved the default-profile SQLite file with an unchanged checksum. See [Desktop guide](DESKTOP_GUIDE.md) for install, launch and development procedures.
 
+The English and Chinese architecture presentations have been revised to v3 under `docs/presentations/`, with matching copies in the parent workspace’s `output` folder. They describe the desktop transport, bilingual UI and five-person iterative plan. Previous v2 decks remain available as historical inputs.
+
 ## Future clinical delivery
 
 | Iteration   | Reserved functionality                                                                                                   |

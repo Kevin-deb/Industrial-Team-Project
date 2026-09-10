@@ -2,7 +2,7 @@
 
 The implementation is an installable Windows desktop application built with Electron and a TypeScript modular monolith. A sandboxed React renderer calls an embedded Fastify application through a private local protocol. The main process owns the database and service lifecycle. The installer bundles the runtime and assets, so users do not need Node.js, a separate browser or a database server. Domain contracts and repository boundaries keep five-person development independent.
 
-The latest user instruction makes a Windows-installable desktop application and a persistent Chinese/English interface mandatory for Iteration 0. This supersedes the earlier browser-delivery assumption; the original Word/PPT sources remain unchanged historical inputs.
+The latest user instruction makes a Windows-installable desktop application and a persistent Chinese/English interface mandatory for Iteration 0. This supersedes the earlier browser-delivery assumption; the original requirement documents and v2 analysis decks remain historical inputs. The updated [English v3 presentation](presentations/Doctor_Service_System_Requirements_and_Architecture_EN_v3_Desktop.pptx) and [Chinese v3 presentation](presentations/医生服务系统_需求分析与架构设计_中文版_v3_桌面版.pptx) reflect this architecture and the current five-person plan.
 
 The framework currently demonstrates synthetic read-only data. Identity, clinical writes, real messaging, video, recordings, uploads, exports and external health-data ingestion are future work. Database tables, DTOs, provider ports and visible placeholders prepare those features; they do not establish production readiness.
 

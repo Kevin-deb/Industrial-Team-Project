@@ -11,7 +11,7 @@ This document links the supplied requirements to module owners, delivery iterati
 | R3        | `Doctor Work Platform - User Requirements.pptx`                  | Parent workspace `docs`; slides 3–11 expand the doctor requirements                                                                           |
 | A1        | `Doctor_Service_System_Requirements_and_Architecture_EN_v2.pptx` | Parent workspace `output`; slides 2–9 are the team's previous analysis/design, not an additional customer specification                       |
 
-**U1 — Latest user correction:** deliver software that installs and runs as a Windows desktop application, with a built-in Chinese/English switch. This current conversation instruction supersedes the earlier web-delivery assumption. The Word/PPT documents remain unchanged historical sources.
+**U1 — Latest user correction:** deliver software that installs and runs as a Windows desktop application, with a built-in Chinese/English switch. This current conversation instruction supersedes the earlier web-delivery assumption. The original requirement documents and v2 analysis decks remain historical sources. Updated v3 architecture decks in `docs/presentations/` incorporate U1 and the current five-person iteration plan; they are design outputs, not additional customer requirements.
 
 The source files remain in their supplied locations outside the software repository. The requirement IDs below are assigned for this implementation plan, not IDs from the original documents. Iteration estimates, technology, member labels and proposed state machines are engineering decisions.
 

@@ -51,7 +51,9 @@ The first command produces an unpacked application for inspection; the second pr
 | [Requirements traceability](docs/REQUIREMENTS_TRACEABILITY.md) | Source requirements and latest desktop/language correction        |
 | [Team workflow](docs/TEAM_WORKFLOW.md)                         | Parallel development, module ownership and review rules           |
 
-The original requirements and presentation files remain in the parent workspace's `docs` and `output` folders. They are historical inputs; the latest user instruction establishes an installable Windows desktop application with a persistent Chinese/English switch as the delivery format.
+Updated architecture presentations: [English v3](docs/presentations/Doctor_Service_System_Requirements_and_Architecture_EN_v3_Desktop.pptx) and [Chinese v3](docs/presentations/医生服务系统_需求分析与架构设计_中文版_v3_桌面版.pptx). Both reflect the Windows desktop runtime, persistent language switch and five-person iteration plan. Copies are also available in the parent workspace's `output` folder.
+
+The original requirement files in the parent workspace's `docs` folder and the previous v2 decks remain historical inputs. The latest instruction and current v3 design establish an installable Windows desktop application with a persistent Chinese/English switch as the delivery format.
 
 ## Repository layout
 
