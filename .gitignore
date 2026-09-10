@@ -15,3 +15,5 @@ coverage/
 Thumbs.db
 .vscode/*
 !.vscode/extensions.json
+
+release/

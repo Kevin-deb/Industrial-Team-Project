@@ -1,3 +1,4 @@
+import { useI18n } from './i18n';
 import { useEffect, useId, useRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import { ArrowUpRight, CalendarClock, CircleAlert, LoaderCircle, X } from 'lucide-react';
 
@@ -36,25 +37,29 @@ export function PageHeader({
   description?: string;
   action?: ReactNode;
 }) {
+  const { t, language, setLanguage, formatDate } = useI18n();
+
   return (
     <div className="page-heading">
       <div>
         {eyebrow && <div className="eyebrow">{eyebrow}</div>}
-        <h1>{title}</h1>
-        {description && <p>{description}</p>}
+        <h1>{t(title)}</h1>
+        {description && <p>{t(description)}</p>}
       </div>
       {action}
     </div>
   );
 }
 export function EmptyState({ title, description }: { title: string; description: string }) {
+  const { t, language, setLanguage, formatDate } = useI18n();
+
   return (
     <div className="empty-state">
       <div className="empty-icon">
         <CalendarClock size={28} />
       </div>
-      <h3>{title}</h3>
-      <p>{description}</p>
+      <h3>{t(title)}</h3>
+      <p>{t(description)}</p>
     </div>
   );
 }
@@ -67,6 +72,8 @@ export function ComingSoon({
   description: string;
   iteration?: string;
 }) {
+  const { t, language, setLanguage, formatDate } = useI18n();
+
   return (
     <div className="coming-soon">
       <div className="coming-icon">
@@ -74,31 +81,36 @@ export function ComingSoon({
       </div>
       <div>
         <div className="coming-title">
-          <h3>{title}</h3>
-          <Badge tone="amber">待上线 · {iteration}</Badge>
+          <h3>{t(title)}</h3>
+          <Badge tone="amber">
+            {t('待上线 ·')}
+            {t(iteration)}
+          </Badge>
         </div>
-        <p>{description}</p>
+        <p>{t(description)}</p>
       </div>
       <ArrowUpRight size={20} aria-hidden="true" />
     </div>
   );
 }
 export function LoadingState({ error, onRetry }: { error?: string | null; onRetry?: () => void }) {
+  const { t, language, setLanguage, formatDate } = useI18n();
+
   return (
     <div className="loading-state" role="status">
       {error ? (
         <>
           <CircleAlert size={28} />
-          <h3>暂时无法加载数据</h3>
-          <p>{error}</p>
+          <h3>{t('暂时无法加载数据')}</h3>
+          <p>{t(error)}</p>
           <Button onClick={onRetry} variant="secondary">
-            重新加载
+            {t('重新加载')}
           </Button>
         </>
       ) : (
         <>
           <LoaderCircle className="spin" size={28} />
-          <p>正在载入工作台…</p>
+          <p>{t('正在载入工作台…')}</p>
         </>
       )}
     </div>
@@ -113,6 +125,8 @@ export function Modal({
   children: ReactNode;
   onClose: () => void;
 }) {
+  const { t, language, setLanguage, formatDate } = useI18n();
+
   const ref = useRef<HTMLDialogElement>(null);
   const id = useId();
   useEffect(() => {
@@ -133,8 +147,8 @@ export function Modal({
       }}
     >
       <div className="modal-heading">
-        <h2 id={id}>{title}</h2>
-        <button className="icon-button" aria-label="关闭" onClick={onClose}>
+        <h2 id={id}>{t(title)}</h2>
+        <button className="icon-button" aria-label={t('关闭')} onClick={onClose}>
           <X size={20} />
         </button>
       </div>

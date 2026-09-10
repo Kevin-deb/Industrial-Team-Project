@@ -15,6 +15,8 @@ import { features } from './platform/index.js';
 import { registerPlannedCommands } from './platform/index.js';
 
 export interface AppOptions {
+  /** Desktop packages remain synthetic demos even when packaged with NODE_ENV=production. */
+  runtime?: 'local-demo' | 'desktop-demo';
   databasePath?: string;
   database?: DatabaseSync;
   webRoot?: string;
@@ -50,7 +52,7 @@ function isLocalUrl(value: string): boolean {
 
 /** Construct without listening; dependency injection supports isolated, repeatable integration tests. */
 export async function createApp(options: AppOptions = {}) {
-  if (process.env.NODE_ENV === 'production')
+  if (process.env.NODE_ENV === 'production' && options.runtime !== 'desktop-demo')
     throw new Error(
       'The synthetic demo refuses NODE_ENV=production. Configure real identity, authorization and approved integrations before a production deployment.',
     );

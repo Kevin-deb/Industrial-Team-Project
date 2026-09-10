@@ -29,7 +29,7 @@ export function useCommunityPreference() {
       setSaveError(null);
       window.dispatchEvent(new CustomEvent(PREFERENCES_EVENT));
     } catch {
-      setSaveError('浏览器未允许保存偏好，请检查本地存储设置。');
+      setSaveError('客户端无法保存偏好，请检查本地存储设置。');
     }
   }
   return { enabled, toggle, saveError };

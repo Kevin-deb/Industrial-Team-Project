@@ -1,8 +1,12 @@
 # API Conventions and Module Contracts
 
-The browser and API share the `@doctor/contracts` package. Each feature owner implements against this boundary rather than importing another module's internals. This guide distinguishes the current read-only demonstration from rules for future clinical writes.
+The desktop renderer and embedded API share the `@doctor/contracts` package. Each feature owner implements against this boundary rather than importing another module's internals. This guide distinguishes the current read-only demonstration from rules for future clinical writes.
 
-All application routes start with `/api/v1`. Requests and responses use JSON unless a future upload/download contract explicitly states otherwise. The current application uses a fixed synthetic doctor, synthetic records and a fixed demonstration date. It does not implement a real login or accept clinical writes.
+All application routes start with `/api/v1`. In the installed desktop application, renderer requests use `carelink://app/api/v1/...`; the private protocol dispatches to Fastify through `app.inject` without opening an HTTP listener. The optional `npm run dev:web` environment exposes the same routes on a loopback HTTP server. Requests and responses use JSON unless a future upload/download contract explicitly states otherwise. The current application uses a fixed synthetic doctor, synthetic records and a fixed demonstration date. It does not implement a real login or accept clinical writes.
+
+The private protocol accepts only the application origin and validates asset paths, request size and supported operations. Application-level errors keep the JSON envelope below. A transport-level rejection, such as an invalid protocol origin or oversized request, may return a safe plain-text error before Fastify runs; the renderer must handle a non-JSON failure gracefully.
+
+The current desktop header allowlist forwards `Accept`, `Content-Type` and `Accept-Language`. Future authenticated/concurrent write transport must explicitly add the agreed session, `If-Match` and `Idempotency-Key` handling before enabling those commands. Do not assume a new HTTP header automatically passes through the desktop bridge.
 
 ## Implemented read API
 
@@ -75,7 +79,7 @@ Errors use a stable machine code and a human-readable message:
 }
 ```
 
-The message above illustrates the shape; callers branch on `code`, never on translated message text. An unavailable operation must not return `200` or show a saved/sent/success state. The browser should explain the feature's purpose and planned delivery while preserving the user's context.
+The message above illustrates the shape; callers branch on `code`, never on translated message text. An unavailable operation must not return `200` or show a saved/sent/success state. The renderer should explain the feature's purpose and planned delivery while preserving the user's context.
 
 | HTTP status                          | Convention                                                                                  | Implementation stage                                                    |
 | ------------------------------------ | ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
@@ -84,8 +88,8 @@ The message above illustrates the shape; callers branch on `code`, never on tran
 | `404`                                | Unknown resource/route or resource outside permitted view                                   | Current read boundary; do not expose inaccessible patient details       |
 | `501` with `FEATURE_NOT_IMPLEMENTED` | Reserved write or unavailable provider capability                                           | Current                                                                 |
 | `503` with `SERVICE_UNAVAILABLE`     | Unexpected server/dependency failure with safe message and request ID                       | Current boundary                                                        |
-| `421` with `LOCAL_DEMO_ONLY`         | Non-local Host rejected                                                                     | Current local-only demo boundary                                        |
-| `403` with `ORIGIN_NOT_ALLOWED`      | External web Origin rejected                                                                | Current local-only demo boundary                                        |
+| `421` with `LOCAL_DEMO_ONLY`         | Non-local Host rejected                                                                     | Optional browser-development boundary                                   |
+| `403` with `ORIGIN_NOT_ALLOWED`      | External web Origin rejected                                                                | Optional browser-development boundary                                   |
 | `201`                                | Successfully created durable resource                                                       | Planned writes                                                          |
 | `202`                                | Accepted durable background job with a status resource                                      | Planned exports/long-running operations                                 |
 | `401` / `403`                        | Missing authentication / authenticated but forbidden action                                 | Planned real authentication and command enforcement                     |
@@ -94,7 +98,7 @@ The message above illustrates the shape; callers branch on `code`, never on tran
 | `422`                                | Syntactically valid command fails domain validation                                         | Planned clinical writes                                                 |
 | `429`                                | Rate limit with appropriate retry guidance                                                  | Planned operational hardening                                           |
 
-Never return stack traces, raw SQL, credentials or patient content in an error. The current `meta.mode` type only allows `demo`. A live mode requires an intentional compatible contract change and replacement of the demo identity/data restrictions; changing a label is not sufficient.
+Never return stack traces, raw SQL, credentials or patient content in an error. The current `meta.mode` type only allows `demo`. A live mode requires an intentional compatible contract change and replacement of the demo identity/data restrictions; changing a label or packaging a desktop executable is not sufficient.
 
 ## Unavailable commands and future route design
 
@@ -190,6 +194,12 @@ Current enum values are deliberately small:
 
 The fuller lifecycle in the architecture document is a target design. Add its state transitions through contracts and migrations before implementation. Adding an enum value can break exhaustive client switches; review it as a compatibility change even when no field is removed.
 
+## Locale-neutral service contract
+
+The renderer supports `zh-CN` and `en`, with a shared persistent language preference. Locale changes affect interface presentation, not resource identity or service semantics. Keep API paths, enum values, machine error codes and stored timestamps stable in both languages. Map known errors/statuses to domain-owned UI messages and format date/number values through `Intl` or shared locale helpers.
+
+Do not branch business authorization on a translated label, and do not send translated status strings as command values. Shared synthetic examples may use curated display translations. Future patient/clinician free text must retain its original language and provenance. The desktop main process must not expose an unrestricted IPC or filesystem bridge merely to support translated pages.
+
 ## Future write semantics
 
 Every enabled command validates its request at runtime and then checks real actor identity, action permission and patient scope. Temporary-grant access additionally checks scope, revocation, expiry and an active task. Carry the same actor/request context through public service calls; downstream modules do not silently acquire broader privileges.
@@ -202,7 +212,7 @@ Background work returns `202` only after a durable job is stored. Job state need
 
 ## Internal services, events and external adapters
 
-Domain code may import shared contracts and its own implementation. Cross-domain reads go through an exported service/repository interface; cross-domain writes are requested from the owning service. UI modules cannot import API source, and the API cannot import browser modules. Contract files contain no environment access, database handles or framework-specific request objects.
+Domain code may import shared contracts and its own implementation. Cross-domain reads go through an exported service/repository interface; cross-domain writes are requested from the owning service. Renderer modules cannot import API or Electron main-process source, and the API cannot import renderer modules. Contract files contain no environment access, database handles or framework-specific request objects.
 
 Current adapter names are `IdentityProvider`, `RtcProvider`, `RecordingProvider`, `NotificationProvider`, `ObjectStorageProvider`, `HospitalProvider` and `DeviceProvider`. Their methods are ports with no live implementation in the scaffold. Provider credentials stay in server configuration. Before adding a provider, write a contract test that can run against a fake and the selected adapter. Extend session, media-revocation and observation-provenance contracts as necessary; the initial ports intentionally do not claim full vendor coverage.
 
@@ -214,6 +224,6 @@ Within `/api/v1`, preserve existing field meanings, routes and response envelope
 
 A contract change is ready when the producer and affected consumer owners agree on examples, failure behavior and rollout order. Update typed DTOs, runtime schemas, contract fixtures and relevant tests together. Publish compatible server additions before a client relies on them. Do not treat a passing TypeScript build as proof that a deployed older client remains compatible.
 
-Run `npm run check` for boundary checks, type checking, API tests and builds. Run `npm run test:e2e` with the configured browser environment for integration changes. The initial tests should cover response envelopes, scoped reads, query validation, repeatable database initialization and all reserved write handlers. As features are enabled, add the iteration's real authorization, state transition, conflict, idempotency and provider-failure tests.
+Run `npm run check` for boundary checks, type checking, API tests and builds. Run `npm run test:desktop` on Windows for native Electron integration changes; verify both languages and persisted preferences. `npm run test:e2e` remains supplemental browser-development validation. The initial tests should cover response envelopes, scoped reads, query validation, repeatable database initialization and all reserved write handlers. As features are enabled, add the iteration's real authorization, state transition, conflict, idempotency and provider-failure tests.
 
 See [Architecture](ARCHITECTURE.md) for workflow and data ownership, [Team workflow](TEAM_WORKFLOW.md) for review responsibilities, and [Requirements traceability](REQUIREMENTS_TRACEABILITY.md) for implementation status.

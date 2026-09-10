@@ -2,6 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests/e2e',
+  outputDir: 'test-results/browser',
   fullyParallel: false,
   retries: process.env.CI ? 1 : 0,
   reporter: 'list',
@@ -12,7 +13,7 @@ export default defineConfig({
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
-    command: 'npm start',
+    command: 'npm run start:api',
     url: 'http://127.0.0.1:3001/api/v1/session',
     reuseExistingServer: !process.env.CI,
     timeout: 30000,

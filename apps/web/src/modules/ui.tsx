@@ -1,3 +1,4 @@
+import { useI18n } from '../shared/i18n';
 import { useEffect, useId, useRef, type ReactNode } from 'react';
 import {
   ArrowUpRight,
@@ -22,6 +23,7 @@ export function FeatureDialog({
   onClose: () => void;
   wide?: boolean;
 }) {
+  const { t } = useI18n();
   const titleId = useId();
   const dialog = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -79,14 +81,16 @@ export function FeatureDialog({
         <header className="feature-dialog-header">
           <div>
             <span className="feature-eyebrow">CARELINK · PREVIEW</span>
-            <h2 id={titleId}>{title}</h2>
-            {subtitle && <p>{subtitle}</p>}
+            <h2 id={titleId}>{t(title)}</h2>
+            {subtitle && <p>{t(subtitle)}</p>}
           </div>
-          <button className="feature-icon-button" onClick={onClose} aria-label="关闭详情">
+          <button className="feature-icon-button" onClick={onClose} aria-label={t('关闭详情')}>
             <X size={20} />
           </button>
         </header>
-        <div className="feature-dialog-body">{children}</div>
+        <div className="feature-dialog-body">
+          {typeof children === 'string' ? t(children) : children}
+        </div>
       </div>
     </div>
   );
@@ -103,19 +107,24 @@ export function PlannedDialog({
   children: ReactNode;
   iteration?: string;
 }) {
+  const { t } = useI18n();
   return (
-    <FeatureDialog title={title} subtitle="功能设计预览" onClose={onClose}>
+    <FeatureDialog title={t(title)} subtitle={t('功能设计预览')} onClose={onClose}>
       <div className="planned-dialog-icon">
         <CalendarDays size={30} />
       </div>
-      <Badge tone="amber">{iteration} · 尚未上线</Badge>
-      <div className="planned-dialog-copy">{children}</div>
+      <Badge tone="amber">
+        {t(iteration)} {t('· 尚未上线')}
+      </Badge>
+      <div className="planned-dialog-copy">
+        {typeof children === 'string' ? t(children) : children}
+      </div>
       <div className="feature-notice">
         <CircleHelp size={17} />
-        <span>当前为框架演示版本，此操作不会创建诊疗记录、发送消息或修改患者数据。</span>
+        <span>{t('当前为框架演示版本，此操作不会创建诊疗记录、发送消息或修改患者数据。')}</span>
       </div>
       <Button variant="secondary" onClick={onClose}>
-        了解了
+        {t('了解了')}
       </Button>
     </FeatureDialog>
   );
@@ -132,8 +141,9 @@ export function FilterTabs({
   onChange: (value: string) => void;
   label?: string;
 }) {
+  const { t } = useI18n();
   return (
-    <div className="feature-tabs" role="group" aria-label={label}>
+    <div className="feature-tabs" role="group" aria-label={t(label)}>
       {options.map((option) => (
         <button
           key={option.value}
@@ -141,7 +151,7 @@ export function FilterTabs({
           className={value === option.value ? 'active' : ''}
           onClick={() => onChange(option.value)}
         >
-          {option.label}
+          {t(option.label)}
           {option.count !== undefined && <span>{option.count}</span>}
         </button>
       ))}
@@ -162,16 +172,17 @@ export function Metric({
   detail: string;
   tone?: 'teal' | 'blue' | 'amber' | 'rose';
 }) {
+  const { t } = useI18n();
   return (
     <Card className="feature-metric">
       <div className="feature-metric-top">
         <span className={`feature-symbol ${tone}`}>
           <Icon size={20} />
         </span>
-        <span>{label}</span>
+        <span>{t(label)}</span>
       </div>
       <div className="feature-metric-value">{value}</div>
-      <p>{detail}</p>
+      <p>{t(detail)}</p>
     </Card>
   );
 }
@@ -185,13 +196,14 @@ export function SectionTitle({
   subtitle?: string;
   children?: ReactNode;
 }) {
+  const { t } = useI18n();
   return (
     <div className="feature-section-title">
       <div>
-        <h2>{title}</h2>
-        {subtitle && <p>{subtitle}</p>}
+        <h2>{t(title)}</h2>
+        {subtitle && <p>{t(subtitle)}</p>}
       </div>
-      {children}
+      {typeof children === 'string' ? t(children) : children}
     </div>
   );
 }
@@ -216,12 +228,17 @@ export function PersonAvatar({
 }
 
 export function DetailGrid({ items }: { items: { label: string; value: ReactNode }[] }) {
+  const { t } = useI18n();
   return (
     <dl className="feature-detail-grid">
       {items.map((item) => (
         <div key={item.label}>
-          <dt>{item.label}</dt>
-          <dd>{item.value || '暂无记录'}</dd>
+          <dt>{t(item.label)}</dt>
+          <dd>
+            {typeof item.value === 'string'
+              ? t(item.value || '暂无记录')
+              : item.value || t('暂无记录')}
+          </dd>
         </div>
       ))}
     </dl>
@@ -233,10 +250,11 @@ export function ReadOnlyNote({
 }: {
   children?: ReactNode;
 }) {
+  const { t } = useI18n();
   return (
     <p className="feature-readonly">
       <CircleHelp size={14} />
-      {children}
+      {typeof children === 'string' ? t(children) : children}
     </p>
   );
 }
@@ -250,9 +268,10 @@ export function LinkAction({
   onClick: () => void;
   external?: boolean;
 }) {
+  const { t } = useI18n();
   return (
     <button className="feature-link" onClick={onClick}>
-      {children}
+      {typeof children === 'string' ? t(children) : children}
       {external ? <ArrowUpRight size={15} /> : <ChevronRight size={15} />}
     </button>
   );

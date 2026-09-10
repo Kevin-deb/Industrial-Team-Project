@@ -5,3 +5,5 @@ runtime
 test-results
 playwright-report
 *.cmd
+
+release/

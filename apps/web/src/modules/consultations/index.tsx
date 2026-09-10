@@ -1,3 +1,4 @@
+import { useI18n } from '../../shared/i18n';
 import { useCallback, useMemo, useState } from 'react';
 import {
   CalendarClock,
@@ -25,11 +26,13 @@ const statuses = { requested: '申请中', scheduled: '已安排', completed: '�
 const tones = { requested: 'amber', scheduled: 'blue', completed: 'teal' } as const;
 
 export function ConsultationsPage() {
+  const { t, formatDate, language } = useI18n();
   const { data, loading, error, reload } = useApi<Consultation[]>('/consultations');
   const [status, setStatus] = useState('all');
-  const [selected, setSelected] = useState<Consultation | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selected = data?.find((item) => item.id === selectedId) ?? null;
   const [planned, setPlanned] = useState<string | null>(null);
-  const close = useCallback(() => setSelected(null), []);
+  const close = useCallback(() => setSelectedId(null), []);
   const closePlanned = useCallback(() => setPlanned(null), []);
   const cases = useMemo(
     () => (data ?? []).filter((item) => status === 'all' || item.status === status),
@@ -39,21 +42,23 @@ export function ConsultationsPage() {
     <div className="feature-page">
       <PageHeader
         eyebrow="MULTIDISCIPLINARY CARE"
-        title="专家会诊"
-        description="汇聚不同专科的经验，为复杂的照护需求找到更完整的解答。"
+        title={t('专家会诊')}
+        description={t('汇聚不同专科的经验，为复杂的照护需求找到更完整的解答。')}
         action={
           <Button onClick={() => setPlanned('发起专家会诊')}>
             <Plus size={16} />
-            发起会诊
+            {t('发起会诊')}
           </Button>
         }
       />
       <div className="feature-hero-note">
         <div>
           <span className="feature-eyebrow">BETTER CARE, TOGETHER</span>
-          <h2>以患者为中心，让协作更有序</h2>
+          <h2>{t('以患者为中心，让协作更有序')}</h2>
           <p>
-            从会诊申请、专家邀请到综合意见归档，每个环节都围绕同一份照护需求展开。当前提供演示会诊目录与流程预览。
+            {t(
+              '从会诊申请、专家邀请到综合意见归档，每个环节都围绕同一份照护需求展开。当前提供演示会诊目录与流程预览。',
+            )}
           </p>
         </div>
         <Network size={60} />
@@ -73,7 +78,7 @@ export function ConsultationsPage() {
                 { value: 'completed', label: '已完成' },
               ]}
             />
-            <span className="feature-mini-label">当前医生相关的会诊安排</span>
+            <span className="feature-mini-label">{t('当前医生相关的会诊安排')}</span>
           </div>
           <div className="feature-card-grid">
             {cases.map((item) => (
@@ -82,39 +87,39 @@ export function ConsultationsPage() {
                   <span className="feature-symbol blue">
                     <UsersRound size={20} />
                   </span>
-                  <Badge tone={tones[item.status]}>{statuses[item.status]}</Badge>
+                  <Badge tone={tones[item.status]}>{t(statuses[item.status])}</Badge>
                 </div>
                 <span className="feature-eyebrow">{item.id}</span>
-                <h3>{item.title}</h3>
+                <h3>{t(item.title)}</h3>
                 <p>
                   {item.patientName} · {item.patientId}
                 </p>
                 <div className="mdt-specialties">
                   <span>{item.specialty}</span>
-                  <span>{item.participants.length} 位参与医生</span>
+                  <span>{t('{count} 位参与医生', { count: item.participants.length })}</span>
                 </div>
                 <p className="feature-inline-icon">
                   <CalendarClock size={13} />
-                  {item.scheduledAt.replace('T', ' ').slice(0, 16)}
+                  {formatDate(item.scheduledAt, { dateStyle: 'medium', timeStyle: 'short' })}
                 </p>
                 <div className="mdt-footer" style={{ marginTop: 18 }}>
-                  <span>演示会诊</span>
-                  <LinkAction onClick={() => setSelected(item)}>查看详情</LinkAction>
+                  <span>{t('演示会诊')}</span>
+                  <LinkAction onClick={() => setSelectedId(item.id)}>{t('查看详情')}</LinkAction>
                 </div>
               </Card>
             ))}
           </div>
           {!cases.length && (
             <EmptyState
-              title="此状态下暂无会诊"
-              description="查看其他分类，或浏览下方的会诊流程规划。"
+              title={t('此状态下暂无会诊')}
+              description={t('查看其他分类，或浏览下方的会诊流程规划。')}
             />
           )}
           <Card className="feature-card-pad">
             <div style={{ marginTop: 8 }}>
               <SectionTitle
-                title="会诊协作流程"
-                subtitle="WORKFLOW PREVIEW · 以下步骤将在后续迭代接入"
+                title={t('会诊协作流程')}
+                subtitle={t('WORKFLOW PREVIEW · 以下步骤将在后续迭代接入')}
               />
               <div className="feature-workflow">
                 {[
@@ -126,8 +131,8 @@ export function ConsultationsPage() {
                 ].map((item, index) => (
                   <div className="feature-workflow-step" key={item.title}>
                     <span>{String(index + 1).padStart(2, '0')}</span>
-                    <h4>{item.title}</h4>
-                    <p>{item.note}</p>
+                    <h4>{t(item.title)}</h4>
+                    <p>{t(item.note)}</p>
                   </div>
                 ))}
               </div>
@@ -156,11 +161,11 @@ export function ConsultationsPage() {
                   <span className="feature-symbol">
                     <item.icon size={19} />
                   </span>
-                  <Badge tone="slate">规划中</Badge>
+                  <Badge tone="slate">{t('规划中')}</Badge>
                 </div>
-                <h3>{item.title}</h3>
-                <p>{item.copy}</p>
-                <LinkAction onClick={() => setPlanned(item.title)}>了解设计</LinkAction>
+                <h3>{t(item.title)}</h3>
+                <p>{t(item.copy)}</p>
+                <LinkAction onClick={() => setPlanned(item.title)}>{t('了解设计')}</LinkAction>
               </Card>
             ))}
           </div>
@@ -169,39 +174,50 @@ export function ConsultationsPage() {
       )}
       {selected && (
         <FeatureDialog
-          title={selected.title}
-          subtitle={`${selected.id} · 会诊详情预览`}
+          title={t(selected.title)}
+          subtitle={t('{value0} · 会诊详情预览', { value0: selected.id })}
           onClose={close}
         >
-          <Badge tone={tones[selected.status]}>{statuses[selected.status]}</Badge>
+          <Badge tone={tones[selected.status]}>{t(statuses[selected.status])}</Badge>
           <DetailGrid
             items={[
               { label: '患者', value: selected.patientName },
               { label: '会诊专科', value: selected.specialty },
-              { label: '计划时间', value: selected.scheduledAt.replace('T', ' ').slice(0, 16) },
-              { label: '参与医生', value: selected.participants.join('、') },
+              {
+                label: '计划时间',
+                value: formatDate(selected.scheduledAt, {
+                  dateStyle: 'medium',
+                  timeStyle: 'short',
+                }),
+              },
+              {
+                label: '参与医生',
+                value: selected.participants.join(language === 'en' ? ', ' : '、'),
+              },
             ]}
           />
-          <h4 className="feature-small-heading">会诊摘要</h4>
+          <h4 className="feature-small-heading">{t('会诊摘要')}</h4>
           <p className="feature-prose">{selected.summary}</p>
           <div className="feature-document">
             <div className="feature-document-head">
-              <h3>联合会诊报告</h3>
-              <p>报告编辑、专科意见与签署 · 尚未上线</p>
+              <h3>{t('联合会诊报告')}</h3>
+              <p>{t('报告编辑、专科意见与签署 · 尚未上线')}</p>
             </div>
             <div className="feature-document-field">
-              <span>报告预留内容</span>
-              <p>病情摘要 · 会诊目的 · 专科意见 · 综合结论 · 随访安排 · 医生签署</p>
+              <span>{t('报告预留内容')}</span>
+              <p>{t('病情摘要 · 会诊目的 · 专科意见 · 综合结论 · 随访安排 · 医生签署')}</p>
             </div>
           </div>
-          <ReadOnlyNote>会诊摘要来自虚构演示数据，不作为真实诊断或治疗依据。</ReadOnlyNote>
+          <ReadOnlyNote>{t('会诊摘要来自虚构演示数据，不作为真实诊断或治疗依据。')}</ReadOnlyNote>
         </FeatureDialog>
       )}
       {planned && (
         <PlannedDialog title={planned} iteration="Iteration 3" onClose={closePlanned}>
-          <p>专家会诊将支持申请、邀请、患者授权、跨专科讨论及会诊报告审核归档。</p>
+          <p>{t('专家会诊将支持申请、邀请、患者授权、跨专科讨论及会诊报告审核归档。')}</p>
           <p>
-            共享权限按会诊任务设置范围和有效期。专家邀请、实时讨论及报告提交尚未接入，此预览不会发送邀请或共享患者档案。
+            {t(
+              '共享权限按会诊任务设置范围和有效期。专家邀请、实时讨论及报告提交尚未接入，此预览不会发送邀请或共享患者档案。',
+            )}
           </p>
         </PlannedDialog>
       )}

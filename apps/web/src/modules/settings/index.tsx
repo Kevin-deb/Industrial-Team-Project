@@ -1,3 +1,4 @@
+import { useI18n } from '../../shared/i18n';
 import { useCallback, useState } from 'react';
 import {
   Bell,
@@ -47,6 +48,7 @@ const securityFeatures = [
 ] as const;
 
 export function SettingsPage() {
+  const { t, language, setLanguage } = useI18n();
   const { data, loading, error, reload } = useApi<Session>('/session');
   const { enabled, toggle, saveError } = useCommunityPreference();
   const [planned, setPlanned] = useState<{ title: string; description: string } | null>(null);
@@ -55,9 +57,9 @@ export function SettingsPage() {
     <div className="feature-page">
       <PageHeader
         eyebrow="ACCOUNT & PREFERENCES"
-        title="个人设置"
-        description="管理您的工作身份、界面偏好与未来的安全设置。"
-        action={<Badge tone="teal">演示工作空间</Badge>}
+        title={t('个人设置')}
+        description={t('管理您的工作身份、界面偏好与未来的安全设置。')}
+        action={<Badge tone="teal">{t('演示工作空间')}</Badge>}
       />
       {loading || error || !data ? (
         <LoadingState error={error} onRetry={reload} />
@@ -66,7 +68,7 @@ export function SettingsPage() {
           <div className="feature-columns" style={{ marginTop: 26 }}>
             <div className="feature-stack">
               <Card className="feature-card-pad">
-                <SectionTitle title="医生资料" subtitle="DOCTOR PROFILE · 虚构演示身份" />
+                <SectionTitle title={t('医生资料')} subtitle={t('DOCTOR PROFILE · 虚构演示身份')} />
                 <div className="settings-profile">
                   <PersonAvatar name={data.doctor.name} size="large" />
                   <div>
@@ -84,8 +86,8 @@ export function SettingsPage() {
                   { label: '当前环境', value: '本地演示 · 固定虚构身份' },
                 ].map((item) => (
                   <div className="settings-field" key={item.label}>
-                    <span>{item.label}</span>
-                    <strong>{item.value}</strong>
+                    <span>{t(item.label)}</span>
+                    <strong>{t(item.value)}</strong>
                   </div>
                 ))}
                 <LinkAction
@@ -97,11 +99,14 @@ export function SettingsPage() {
                     })
                   }
                 >
-                  资料编辑 · 尚未上线
+                  {t('资料编辑 · 尚未上线')}
                 </LinkAction>
               </Card>
               <Card className="feature-card-pad">
-                <SectionTitle title="工作台偏好" subtitle="PREFERENCES · 当前浏览器本地保存" />
+                <SectionTitle
+                  title={t('工作台偏好')}
+                  subtitle={t('PREFERENCES · 当前设备本地保存')}
+                />
                 <div
                   className="settings-preference"
                   style={{ borderTop: 0, paddingTop: 0, marginTop: 0 }}
@@ -109,42 +114,57 @@ export function SettingsPage() {
                   <div>
                     <h3 className="feature-inline-icon">
                       <MessageCircle size={15} />
-                      显示医生社区入口
+                      {t('显示医生社区入口')}
                     </h3>
                     <p>
-                      关闭后隐藏侧边栏入口，诊疗功能保持可用。
+                      {t('关闭后隐藏侧边栏入口，诊疗功能保持可用。')}
                       <br />
-                      消息服务尚未启用。
+                      {t('消息服务尚未启用。')}
                     </p>
-                    {saveError && <p role="alert">{saveError}</p>}
+                    {saveError && <p role="alert">{t(saveError)}</p>}
                   </div>
                   <button
                     className="feature-switch"
                     role="switch"
                     aria-checked={enabled}
-                    aria-label="显示医生社区入口"
+                    aria-label={t('显示医生社区入口')}
                     onClick={toggle}
                   >
                     <span />
                   </button>
                 </div>
+                <div className="settings-preference settings-language">
+                  <div>
+                    <h3>{t('界面语言')}</h3>
+                    <p>{t('切换中文或英文，即时生效并保存在此设备。')}</p>
+                  </div>
+                  <select
+                    className="feature-select"
+                    aria-label={t('界面语言')}
+                    value={language}
+                    onChange={(event) => setLanguage(event.target.value as 'zh-CN' | 'en')}
+                  >
+                    <option value="zh-CN">简体中文</option>
+                    <option value="en">English</option>
+                  </select>
+                </div>
                 <div className="settings-preference">
                   <div>
                     <h3 className="feature-inline-icon">
                       <Settings2 size={15} />
-                      界面主题
+                      {t('界面主题')}
                     </h3>
-                    <p>当前采用适合医疗工作台的浅色风格。</p>
+                    <p>{t('当前采用适合医疗工作台的浅色风格。')}</p>
                   </div>
-                  <Badge tone="slate">浅色</Badge>
+                  <Badge tone="slate">{t('浅色')}</Badge>
                 </div>
                 <div className="settings-preference">
                   <div>
                     <h3 className="feature-inline-icon">
                       <Bell size={15} />
-                      通知偏好
+                      {t('通知偏好')}
                     </h3>
-                    <p>接诊、随访与社区通知的独立偏好将在后续接入。</p>
+                    <p>{t('接诊、随访与社区通知的独立偏好将在后续接入。')}</p>
                   </div>
                   <LinkAction
                     onClick={() =>
@@ -155,40 +175,45 @@ export function SettingsPage() {
                       })
                     }
                   >
-                    查看规划
+                    {t('查看规划')}
                   </LinkAction>
                 </div>
               </Card>
             </div>
             <Card className="feature-card-pad">
-              <SectionTitle title="账号与安全" subtitle="SECURITY · 正式身份验证尚未接入" />
+              <SectionTitle
+                title={t('账号与安全')}
+                subtitle={t('SECURITY · 正式身份验证尚未接入')}
+              />
               {securityFeatures.map((item) => (
                 <div className="settings-feature" key={item.title}>
                   <span className="feature-symbol blue">
                     <item.icon size={19} />
                   </span>
                   <div>
-                    <h3>{item.title}</h3>
-                    <p>{item.description}</p>
+                    <h3>{t(item.title)}</h3>
+                    <p>{t(item.description)}</p>
                     <LinkAction
                       onClick={() => setPlanned({ title: item.title, description: item.planned })}
                     >
-                      了解接入计划
+                      {t('了解接入计划')}
                     </LinkAction>
                   </div>
-                  <Badge tone="slate">待上线</Badge>
+                  <Badge tone="slate">{t('待上线')}</Badge>
                 </div>
               ))}
               <div className="feature-notice">
                 <UserRound size={17} />
                 <span>
-                  当前固定演示身份用于验证软件结构。邮箱、短信、人脸和生产权限体系均需要独立配置后上线。
+                  {t(
+                    '当前固定演示身份用于验证软件结构。邮箱、短信、人脸和生产权限体系均需要独立配置后上线。',
+                  )}
                 </span>
               </div>
             </Card>
           </div>
           <ReadOnlyNote>
-            本地社区入口偏好可以实际保存；医生资料、身份验证和通知设置均为规划入口。
+            {t('语言与社区入口偏好可以实际保存；医生资料、身份验证和通知设置均为规划入口。')}
           </ReadOnlyNote>
         </>
       )}
@@ -198,7 +223,7 @@ export function SettingsPage() {
           iteration={planned.title === '通知偏好' ? 'Iteration 2' : 'Iteration 1'}
           onClose={close}
         >
-          <p>{planned.description}</p>
+          <p>{t(planned.description)}</p>
         </PlannedDialog>
       )}
     </div>

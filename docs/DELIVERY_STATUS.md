@@ -1,52 +1,72 @@
-# Iteration 0 Delivery Status
+# Iteration 0 Desktop Delivery Status
 
-CareLink is a working local framework demonstration for the doctor service subsystem. It includes a light doctor workspace, a versioned API and persistent SQLite storage with synthetic records. The delivery completes the requested first framework step. The clinical workflows described in the iteration plan remain future work.
+CareLink 0.2.0 targets an installable Windows doctor application with an immediate, persistent Chinese/English interface switch. It retains the Iteration 0 synthetic-data scope. The latest desktop/language instruction supersedes the earlier browser-delivery assumption; clinical write workflows remain future iterations.
 
-## Available in this framework
+## Framework implementation
 
-| Area                 | Current behavior                                                                                                                                               |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Doctor workspace     | Dashboard plus eight domain pages: patients, encounters, records, expert consultations, health, audit, community preview and settings                          |
-| Patient browsing     | API-backed search, status/disease filters, pagination and read-only details; eight permitted synthetic patients and one excluded scope-test fixture            |
-| Clinical previews    | Encounter schedules, record/review summaries, expert-consultation summaries, health trends with units/time/source and care-plan examples                       |
-| Audit                | Seeded demonstration events and locally recorded patient list/detail accesses; view filtered to the fixed demonstration doctor                                 |
-| Community preference | Browser-local switch hides/shows the community navigation entry and persists in that browser; the social service and all social messaging remain disabled      |
-| Failure states       | Loading/error/empty views, retry controls and planned-function explanations; unavailable commands cannot report a completed clinical operation                 |
-| Backend              | Eleven read routes and 39 explicit reserved command routes under `/api/v1`; reserved commands return `501 FEATURE_NOT_IMPLEMENTED`, unknown paths return `404` |
-| Persistence          | Six ordered domain migrations, relational constraints, synthetic seeding, and a local database that persists across normal restarts                            |
-| Team boundaries      | Domain-owned frontend pages, backend repositories/migrations/command files, shared typed contracts, provider interfaces and repository checks                  |
+| Area                      | Implemented design and current scope                                                                                                           |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Windows application       | Electron main process, sandboxed renderer, bundled local assets and embedded Fastify services; NSIS and unpacked Windows x64 packaging         |
+| Internal transport        | `carelink://app/` serves local assets; `/api/v1` calls Fastify through `app.inject`; desktop mode opens no HTTP listener                       |
+| Languages                 | `zh-CN` default and `en` option; shared top-bar/Settings preference, domain message catalogs and locale-aware presentation                     |
+| Workspace                 | Dashboard and eight domain pages: patients, encounters, records, expert consultations, health, audit, community preview and settings           |
+| Patient/clinical previews | Search, filters, read-only details, schedules, records/review summaries, health trends and care-plan examples using fictional data             |
+| Audit                     | Seed events and local patient-list/detail access events filtered to the synthetic doctor                                                       |
+| Preferences               | Language and community-entry visibility persist in the application profile; the actual social service and social notifications remain disabled |
+| Service boundary          | Eleven read routes and 39 explicit reserved commands; reserved commands return `501 FEATURE_NOT_IMPLEMENTED`, unknown paths return `404`       |
+| Persistence               | Six domain migrations, relational constraints and synthetic seeding; installed data at `%APPDATA%\CareLink Doctor\data\doctor.sqlite`          |
+| Team separation           | Owned renderer pages/catalogs, backend commands/repositories/migrations, shared DTOs and external-provider ports                               |
 
-The fixed demonstration date is 10 September 2026. Displayed patients, observations, diagnoses and workloads are fictional. Local audit access timestamps reflect actual demo requests. Access-policy tests exercise synthetic role/scope/grant logic; no real user authentication is implemented.
+The fixed demonstration date is 10 September 2026. Displayed patients, clinical values and workload examples are fictional. Local audit timestamps reflect demo requests. The fixed synthetic identity is not real authentication. A desktop package does not enable clinical writes or connect external providers.
 
-## Reserved for later iterations
+## Delivery artifacts
 
-| Iteration   | Planned delivery                                                                                                                      |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| 1           | Real identity/session integration, server-enforced clinical access, persistent patient edits, text encounters and record drafts       |
-| 2           | Senior review/archive, independent orders, history/export jobs, care plans/assessments and reliable reminders through a test provider |
-| 3           | Images/media, policy-controlled recording, expert consultation, temporary access and confirmed report workflow                        |
-| 4           | Live data/notification providers, operational monitoring, backup/restore, accessibility and performance release gates                 |
-| 5, optional | Isolated peer groups, manually de-identified posts, interaction, reporting and server-side social notification opt-out                |
+The generated [Windows installer](https://github.com/Kevin-deb/Industrial-Team-Project/releases/download/v0.2.0/CareLink-Doctor-0.2.0-Windows-x64-Setup.exe) is published with its checksum through [GitHub release 0.2.0](https://github.com/Kevin-deb/Industrial-Team-Project/releases/tag/v0.2.0). Local build outputs are `release/CareLink-Doctor-0.2.0-Windows-x64-Setup.exe` and the complete `release/win-unpacked/` directory.
 
-The database reserves record and order versions, review records, attachments/recordings, expert reports, health assessments, reminder jobs/outbox state and isolated social data. Provider interfaces cover identity, RTC, recording, storage, notification, hospital and device integration. These structures and interfaces do not yet execute the corresponding workflows. The browser preference is not a substitute for the future server-side social notification policy.
+| Artifact                 | Recorded result                                                                            |
+| ------------------------ | ------------------------------------------------------------------------------------------ |
+| Installer                | `CareLink-Doctor-0.2.0-Windows-x64-Setup.exe`                                              |
+| Size                     | 111,592,108 bytes (106.4 MiB)                                                              |
+| SHA-256                  | `b86192da109072257bb1eea98430450146e0609a99f5754e407d9348486543fb`                         |
+| Publisher signature      | NotSigned — current framework preview has no publisher certificate                         |
+| Runtime                  | Electron 44.3.0, embedded Node.js 24.20.0, Chromium 152.0.7977.78                          |
+| Tested host              | Windows 11 Home, Chinese edition, x64, OS build 10.0.26200                                 |
+| Supported package target | Windows 10/11 x64; this delivery was exercised on Windows 11, not separately on Windows 10 |
 
-## Windows startup
+The NSIS installer completed a per-user installation into an isolated validation directory with exit code 0. The full native integration suite then passed against the installed executable. Users need no Node.js installation or separate browser. The normal application data location was verified as `%APPDATA%\CareLink Doctor`; the test uninstaller exited with code 0, removed its application and shortcuts, and preserved the default-profile SQLite file with an unchanged checksum. See [Desktop guide](DESKTOP_GUIDE.md) for install, launch and development procedures.
 
-Use Node.js 24.14.0 or later within the 24.x line. From the repository root:
+## Future clinical delivery
 
-```powershell
-npm ci
-npm run dev
-```
+| Iteration   | Reserved functionality                                                                                                   |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------ |
+| 1           | Real identity/session integration, enforced clinical access, persistent patient edits, text encounters and record drafts |
+| 2           | Senior review/archive, independent orders, export jobs, care plans/assessments and reminders through a test provider     |
+| 3           | Images/media, policy-controlled recording, expert consultation, temporary access and confirmed reports                   |
+| 4           | Live data/notification providers, operational monitoring, backup/restore, performance and release hardening              |
+| 5, optional | Isolated professional groups, manually de-identified posts, interaction, reporting and server-side social opt-out        |
 
-Open `http://127.0.0.1:5173`. Alternatively, run `npm run build` then `npm start`, and open `http://127.0.0.1:3001`, or use `start-windows.cmd`. The default database is `runtime/data/doctor.sqlite`. Initial dependency installation needs internet access; the installed local demonstration has no external provider dependency. The server binds to loopback and intentionally rejects production mode.
+Every new feature must preserve both interface languages. Tables and provider interfaces reserve future behavior without implementing it. No real identity, hospital/device, RTC, recording, storage or messaging provider is configured.
 
-## Verification coverage
+## Verification status
 
-The twelve backend tests cover migration/foreign-key integrity, response envelopes and scoped dashboard counts, patient query validation, hidden-patient behavior, own-audit filtering, temporary grants including exact expiry and completed/mismatched tasks, all 39 placeholder commands with no database mutation, file persistence across restart, safe failure responses, local Host/Origin restrictions production-mode refusal, SQLite memory-mode configuration, incompatible migration histories, and static route/file boundaries. These tests validate the current demonstration, not future real authentication, clinical writes or live providers.
+Validation completed on 10 September 2026:
 
-`npm run check` runs module boundary checks, strict TypeScript checks, the backend suite and both builds. `npm run test:e2e` runs Chromium UI/API integration checks after the application is built and the browser is installed. A GitHub Actions template for Windows and Ubuntu is saved at `docs/ci/github-actions.yml`. It is inactive: the available OAuth credential has repository access but lacks the `workflow` scope required to upload active workflow files. No remote CI run is claimed.
+| Check                                                          | Result                                                                                                                                                      |
+| -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run check`                                                | Passed source boundaries, all workspace TypeScript checks, 12 API tests, 3 desktop protocol tests and renderer/API/desktop builds                           |
+| `npm run test:desktop` against source-built desktop            | 3 passed                                                                                                                                                    |
+| `npm run test:desktop` against the actual installed executable | 3 passed, including all nine pages in English, dialog switching, locale/community preference persistence, database/audit persistence and renderer isolation |
+| Optional `npm run test:e2e`                                    | 5 passed for the browser development environment                                                                                                            |
+| Windows NSIS packaging and actual installation                 | Passed, installation exit code 0                                                                                                                            |
+| Bilingual visual inspection                                    | Chinese and English installed-client screenshots reviewed; domain review additionally covered 39 dialog/tab/template states                                 |
+| `npm audit --omit=dev`                                         | Zero reported production dependency vulnerabilities at verification time                                                                                    |
 
-Local validation on Windows with Node.js 24.14.0 passed: module boundary checks, all three TypeScript workspaces, twelve backend integration tests, both application builds, and five Chromium browser tests covering all pages, global search, patient detail, unavailable operations, persistent community preferences, recovery from API failure and mobile navigation. Dependency audit reported zero vulnerabilities. Remote CI remains inactive pending installation of the supplied template by a repository maintainer. No live hospital, identity, video, recording or messaging provider has been exercised in this release.
+A separate packaged launch without Playwright debugging switches had zero TCP listeners across the main process and its three child processes. Closing the native window exited with code 0. Default-profile SQLite startup also passed.
 
-See [Iteration plan](ITERATION_PLAN.md), [Architecture](ARCHITECTURE.md), [API conventions](API_CONVENTIONS.md) and [Requirement traceability](REQUIREMENTS_TRACEABILITY.md) for ownership and acceptance criteria.
+The first installed-client screenshot attempt timed out because the test window was hidden. Showing the window only during screenshot capture resolved the automation issue, and all installed-client tests passed on rerun. Application code and installer contents did not change for that correction.
+
+The existing backend suite covers schema/relationships, scoped reads, query validation, synthetic grants, placeholder immutability, database reopen, safe errors and environment boundaries. Those tests do not establish production authentication, live access revocation or clinical correctness. Desktop-specific checks must additionally establish renderer isolation, private-protocol routing, clean lifecycle and profile persistence.
+
+The Windows/Ubuntu GitHub Actions configuration remains an inactive template in `docs/ci/`. The available credential lacks the permission to upload active workflow files. The successful local Windows build and installation above do not establish a remote CI run; remote CI has not run.
+
+See [Iteration plan](ITERATION_PLAN.md), [Architecture](ARCHITECTURE.md), [API conventions](API_CONVENTIONS.md) and [Requirement traceability](REQUIREMENTS_TRACEABILITY.md).

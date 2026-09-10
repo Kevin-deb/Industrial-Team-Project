@@ -1978,3 +1978,110 @@ input::placeholder {
     scroll-behavior: auto !important;
   }
 }
+
+/* Both languages share the same visual system; allow longer English labels to wrap. */
+.language-select {
+  background: #f5f8f7;
+  border: 1px solid #e1ebe7;
+  border-radius: 7px;
+  color: #4b7d70;
+  padding: 7px 10px;
+  font-size: 11px;
+  min-width: 88px;
+}
+html[lang='en'] .nav-item {
+  font-size: 11px;
+  gap: 10px;
+}
+html[lang='en'] .brand small {
+  font-size: 7px;
+  letter-spacing: 0.7px;
+}
+html[lang='en'] .nav-label {
+  letter-spacing: 1px;
+}
+html[lang='en'] .metric-top {
+  font-size: 10px;
+  gap: 6px;
+}
+html[lang='en'] .metric-value > span {
+  font-size: 9px;
+}
+html[lang='en'] .metric-bottom > span {
+  line-height: 1.5;
+}
+html[lang='en'] .schedule-patient strong {
+  flex-wrap: wrap;
+  gap: 4px 7px;
+}
+html[lang='en'] .schedule-footer {
+  flex-wrap: wrap;
+}
+html[lang='en'] .health-alert-row strong {
+  flex-wrap: wrap;
+  gap: 2px 7px;
+}
+html[lang='en'] .welcome-copy h2 {
+  font-size: 23px;
+}
+html[lang='en'] .table-patient span {
+  white-space: nowrap;
+}
+@media (max-width: 1200px) {
+  html[lang='en'] .schedule-kind > span {
+    display: none;
+  }
+  html[lang='en'] .global-search {
+    width: 150px;
+  }
+}
+@media (max-width: 560px) {
+  .topbar-actions {
+    gap: 7px;
+  }
+  .global-search {
+    width: 112px;
+  }
+  .global-search input {
+    font-size: 9px;
+  }
+  .language-select {
+    min-width: 76px;
+    max-width: 85px;
+    font-size: 10px;
+    padding: 7px;
+  }
+  .topbar-profile {
+    display: none;
+  }
+  html[lang='en'] .global-search {
+    width: 112px;
+  }
+  html[lang='en'] .welcome-copy h2 {
+    font-size: 19px;
+  }
+  .welcome-art {
+    opacity: 0.35;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #d4dfdb;
+  border-radius: 8px;
+  border: 2px solid #f6f9f7;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #b9ccc4;
+}
+html[lang='en'] .brand small {
+  font-size: 6.8px;
+  white-space: nowrap;
+  letter-spacing: 0.3px;
+}

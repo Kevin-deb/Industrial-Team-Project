@@ -25,7 +25,7 @@ if errorlevel 1 (
   exit /b 1
 )
 echo.
-echo CareLink local demo: http://127.0.0.1:3001
-echo Keep this window open. Press Ctrl+C to stop.
+echo Opening the CareLink Doctor desktop application...
+echo Close the application window to exit.
 call npm start
 if errorlevel 1 pause

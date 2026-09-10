@@ -1,4 +1,4 @@
-name: Framework checks
+name: Desktop framework checks
 on:
   pull_request:
   push:
@@ -6,12 +6,9 @@ on:
 permissions:
   contents: read
 jobs:
-  verify:
-    strategy:
-      matrix:
-        os: [windows-latest, ubuntu-latest]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
+  source-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -20,10 +17,28 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check
-      - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e
+  windows-desktop:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npm run test:desktop
+      - run: npm run package:win
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: carelink-windows-x64-installer
+          path: release/*Setup.exe
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: playwright-${{ matrix.os }}
-          path: test-results/
+          name: desktop-test-results
+          path: |
+            test-results/
+            test-results-desktop/

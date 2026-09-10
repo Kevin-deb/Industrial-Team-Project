@@ -1,3 +1,4 @@
+import { useI18n } from '../../shared/i18n';
 import { useCallback, useMemo, useState } from 'react';
 import {
   Activity,
@@ -25,6 +26,7 @@ import {
 } from '../ui';
 
 function TrendChart({ observations }: { observations: Observation[] }) {
+  const { t, formatDate } = useI18n();
   const systolic = observations
     .filter((item) => item.metric === 'systolic')
     .sort((a, b) => a.measuredAt.localeCompare(b.measuredAt));
@@ -35,8 +37,8 @@ function TrendChart({ observations }: { observations: Observation[] }) {
   if (!all.length)
     return (
       <EmptyState
-        title="该患者暂无血压趋势数据"
-        description="设备连接功能尚未启用；这里只显示已有演示观测记录。"
+        title={t('该患者暂无血压趋势数据')}
+        description={t('设备连接功能尚未启用；这里只显示已有演示观测记录。')}
       />
     );
   const dates = Array.from(new Set(all.map((item) => item.measuredAt.slice(0, 10)))).sort();
@@ -53,7 +55,9 @@ function TrendChart({ observations }: { observations: Observation[] }) {
         <svg
           viewBox="0 0 570 215"
           role="img"
-          aria-label={`演示血压趋势，${dates.length} 个日期；下方可查看各次观测的具体数据。`}
+          aria-label={t('演示血压趋势，{value0} 个日期；下方可查看各次观测的具体数据。', {
+            value0: dates.length,
+          })}
         >
           <defs>
             <linearGradient id="health-bp-fill" x1="0" x2="0" y1="0" y2="1">
@@ -110,8 +114,8 @@ function TrendChart({ observations }: { observations: Observation[] }) {
               strokeWidth="2"
             >
               <title>
-                {item.measuredAt.slice(0, 10)} {item.metric === 'systolic' ? '收缩压' : '舒张压'}：
-                {item.value} {item.unit}
+                {formatDate(item.measuredAt)}{' '}
+                {item.metric === 'systolic' ? t('收缩压') : t('舒张压')}：{item.value} {item.unit}
               </title>
             </circle>
           ))}
@@ -124,7 +128,7 @@ function TrendChart({ observations }: { observations: Observation[] }) {
               fontSize="9"
               fill="#a0aeb5"
             >
-              {date.slice(5).replace('-', '/')}
+              {formatDate(date, { month: 'numeric', day: 'numeric' })}
             </text>
           ))}
         </svg>
@@ -132,11 +136,11 @@ function TrendChart({ observations }: { observations: Observation[] }) {
       <div className="health-chart-legend">
         <span>
           <i />
-          收缩压 · mmHg
+          {t('收缩压 · mmHg')}
         </span>
         <span>
           <i />
-          舒张压 · mmHg
+          {t('舒张压 · mmHg')}
         </span>
       </div>
     </>
@@ -151,6 +155,7 @@ const metricLabels: Record<Observation['metric'], string> = {
 };
 
 export function HealthPage() {
+  const { t, formatDate } = useI18n();
   const { data, loading, error, reload } = useApi<HealthOverview>('/health/overview');
   const [patientId, setPatientId] = useState('');
   const [planned, setPlanned] = useState<string | null>(null);
@@ -180,12 +185,12 @@ export function HealthPage() {
     <div className="feature-page">
       <PageHeader
         eyebrow="CONTINUOUS HEALTH MANAGEMENT"
-        title="健康管理"
-        description="关注日常健康变化，让照护从诊室延伸到每一天。"
+        title={t('健康管理')}
+        description={t('关注日常健康变化，让照护从诊室延伸到每一天。')}
         action={
           <Button onClick={() => setPlanned('新建健康管理计划')}>
             <Plus size={16} />
-            新建管理计划
+            {t('新建管理计划')}
           </Button>
         }
       />
@@ -196,44 +201,44 @@ export function HealthPage() {
           <div className="feature-metrics">
             <Metric
               icon={HeartPulse}
-              label="纳入健康管理"
+              label={t('纳入健康管理')}
               value={
                 <>
                   {data.summary.monitoredPatients}
-                  <small>人</small>
+                  <small>{t('人')}</small>
                 </>
               }
-              detail="虚构患者健康数据"
+              detail={t('虚构患者健康数据')}
             />
             <Metric
               icon={ClipboardList}
-              label="进行中的计划"
+              label={t('进行中的计划')}
               value={data.summary.activePlans}
-              detail="健康管理计划演示"
+              detail={t('健康管理计划演示')}
               tone="blue"
             />
             <Metric
               icon={Activity}
-              label="待医生查看"
+              label={t('待医生查看')}
               value={data.summary.needsReview}
-              detail="演示提醒，不构成临床预警"
+              detail={t('演示提醒，不构成临床预警')}
               tone="amber"
             />
             <Metric
               icon={BellRing}
-              label="计划中的提醒"
+              label={t('计划中的提醒')}
               value={data.summary.remindersPlanned}
-              detail="提醒发送功能尚未上线"
+              detail={t('提醒发送功能尚未上线')}
               tone="rose"
             />
           </div>
           <div className="feature-toolbar">
             <SectionTitle
-              title="患者健康概览"
-              subtitle="数据来自本地合成样本，未连接任何真实设备"
+              title={t('患者健康概览')}
+              subtitle={t('数据来自本地合成样本，未连接任何真实设备')}
             />
             <select
-              aria-label="选择健康管理患者"
+              aria-label={t('选择健康管理患者')}
               className="feature-select"
               value={activePatient}
               onChange={(event) => setPatientId(event.target.value)}
@@ -247,14 +252,14 @@ export function HealthPage() {
           </div>
           <div className="feature-columns">
             <Card className="feature-card-pad">
-              <SectionTitle title="血压变化趋势" subtitle="BLOOD PRESSURE · 合成演示观测">
-                <LinkAction onClick={() => setShowReadings(true)}>查看观测数据</LinkAction>
+              <SectionTitle title={t('血压变化趋势')} subtitle={t('BLOOD PRESSURE · 合成演示观测')}>
+                <LinkAction onClick={() => setShowReadings(true)}>{t('查看观测数据')}</LinkAction>
               </SectionTitle>
               <TrendChart observations={observations} />
-              <ReadOnlyNote>此图不显示临床正常范围，不作诊断、分级或治疗建议。</ReadOnlyNote>
+              <ReadOnlyNote>{t('此图不显示临床正常范围，不作诊断、分级或治疗建议。')}</ReadOnlyNote>
             </Card>
             <Card className="feature-card-pad">
-              <SectionTitle title="最近一次观测" subtitle="按指标展示最新合成读数" />
+              <SectionTitle title={t('最近一次观测')} subtitle={t('按指标展示最新合成读数')} />
               {(
                 [
                   { metric: 'systolic', icon: HeartPulse, tone: 'teal' },
@@ -269,14 +274,16 @@ export function HealthPage() {
                       <item.icon size={19} />
                     </span>
                     <div>
-                      <h3>{metricLabels[item.metric]}</h3>
+                      <h3>{t(metricLabels[item.metric])}</h3>
                       <p>
                         {reading?.value ?? '—'}
                         <small>{reading?.unit ?? ''}</small>
                       </p>
                     </div>
                     <span className="feature-mini-label">
-                      {reading ? reading.measuredAt.slice(5, 10) : '暂无数据'}
+                      {reading
+                        ? formatDate(reading.measuredAt, { month: 'short', day: 'numeric' })
+                        : t('暂无数据')}
                     </span>
                   </div>
                 );
@@ -284,16 +291,16 @@ export function HealthPage() {
               <div className="feature-notice">
                 <Radio size={17} />
                 <span>
-                  尚未连接可穿戴设备
+                  {t('尚未连接可穿戴设备')}
                   <br />
-                  设备厂商接口将在后续迭代接入
+                  {t('设备厂商接口将在后续迭代接入')}
                 </span>
               </div>
             </Card>
           </div>
           <div className="feature-columns" style={{ marginTop: 22 }}>
             <Card className="feature-card-pad">
-              <SectionTitle title="连续照护计划" subtitle="CARE PLANS · 仅展示演示计划" />
+              <SectionTitle title={t('连续照护计划')} subtitle={t('CARE PLANS · 仅展示演示计划')} />
               {plans.length ? (
                 plans.map((plan) => (
                   <div className="health-plan" key={plan.id}>
@@ -301,51 +308,57 @@ export function HealthPage() {
                       <Target size={19} />
                     </span>
                     <div>
-                      <h3>{plan.title}</h3>
+                      <h3>{t(plan.title)}</h3>
                       <p>{plan.goals.join(' · ')}</p>
                       <div className="feature-mini-label" style={{ marginTop: 10 }}>
-                        下次复核：{plan.nextReview} · 演示完成进度 {plan.completionPercent}%
+                        {t('下次复核：{date} · 演示完成进度 {progress}%', {
+                          date: formatDate(plan.nextReview),
+                          progress: plan.completionPercent,
+                        })}
                       </div>
                     </div>
                     <Badge tone={plan.status === 'active' ? 'teal' : 'slate'}>
-                      {plan.status === 'active' ? '进行中' : '草稿'}
+                      {plan.status === 'active' ? t('进行中') : t('草稿')}
                     </Badge>
                   </div>
                 ))
               ) : (
-                <EmptyState title="暂无关联的照护计划" description="选择其他患者浏览演示计划。" />
+                <EmptyState
+                  title={t('暂无关联的照护计划')}
+                  description={t('选择其他患者浏览演示计划。')}
+                />
               )}
               <LinkAction onClick={() => setPlanned('健康管理计划与复核')}>
-                查看计划功能规划
+                {t('查看计划功能规划')}
               </LinkAction>
             </Card>
             <Card className="feature-card-pad">
-              <SectionTitle title="关注事项" subtitle="仅列出当前患者的演示标记" />
+              <SectionTitle title={t('关注事项')} subtitle={t('仅列出当前患者的演示标记')} />
               {data.alerts
                 .filter((alert) => alert.patientId === activePatient)
                 .map((alert) => (
                   <div className="feature-alert-box" key={alert.id}>
                     <strong>
-                      {alert.metric} · {alert.value}
+                      {t(alert.metric)} · {alert.value}
                     </strong>
                     <p style={{ margin: '7px 0' }}>{alert.description}</p>
                     <span style={{ fontSize: 10 }}>
-                      {alert.sourceLabel} · {alert.measuredAt.slice(0, 10)}
+                      {alert.sourceLabel} · {formatDate(alert.measuredAt)}
                     </span>
                   </div>
                 ))}
               {!data.alerts.some((alert) => alert.patientId === activePatient) && (
                 <div className="feature-info-card">
                   <ShieldCheck size={22} />
-                  <h3>当前无演示关注事项</h3>
-                  <p>此状态仅反映样本标签，不代表对患者健康状态的判断。</p>
+                  <h3>{t('当前无演示关注事项')}</h3>
+                  <p>{t('此状态仅反映样本标签，不代表对患者健康状态的判断。')}</p>
                 </div>
               )}
               <div className="feature-coming-panel">
                 <CalendarCheck2 size={22} />
                 <div>
-                  <h3>随访与提醒 · 规划中</h3>
-                  <p>量表评估、健康报告、自动提醒与家属协同将分步接入。</p>
+                  <h3>{t('随访与提醒 · 规划中')}</h3>
+                  <p>{t('量表评估、健康报告、自动提醒与家属协同将分步接入。')}</p>
                 </div>
               </div>
             </Card>
@@ -355,8 +368,10 @@ export function HealthPage() {
       )}
       {showReadings && (
         <FeatureDialog
-          title="健康观测记录"
-          subtitle={`${patients.find((patient) => patient.id === activePatient)?.name ?? ''} · 合成演示数据`}
+          title={t('健康观测记录')}
+          subtitle={t('{value0} · 合成演示数据', {
+            value0: patients.find((patient) => patient.id === activePatient)?.name ?? '',
+          })}
           onClose={closeReadings}
           wide
         >
@@ -364,10 +379,10 @@ export function HealthPage() {
             <table className="feature-table">
               <thead>
                 <tr>
-                  <th>指标</th>
-                  <th>数值</th>
-                  <th>测量时间</th>
-                  <th>数据来源</th>
+                  <th>{t('指标')}</th>
+                  <th>{t('数值')}</th>
+                  <th>{t('测量时间')}</th>
+                  <th>{t('数据来源')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -375,11 +390,13 @@ export function HealthPage() {
                   .sort((a, b) => b.measuredAt.localeCompare(a.measuredAt))
                   .map((item) => (
                     <tr key={item.id}>
-                      <td>{metricLabels[item.metric]}</td>
+                      <td>{t(metricLabels[item.metric])}</td>
                       <td>
                         {item.value} {item.unit}
                       </td>
-                      <td>{item.measuredAt.replace('T', ' ').slice(0, 16)}</td>
+                      <td>
+                        {formatDate(item.measuredAt, { dateStyle: 'medium', timeStyle: 'short' })}
+                      </td>
                       <td>{item.sourceLabel}</td>
                     </tr>
                   ))}
@@ -387,7 +404,7 @@ export function HealthPage() {
             </table>
           </div>
           {!observations.length && (
-            <EmptyState title="暂无观测记录" description="该演示患者尚未配置合成读数。" />
+            <EmptyState title={t('暂无观测记录')} description={t('该演示患者尚未配置合成读数。')} />
           )}
           <DetailGrid
             items={[
@@ -400,11 +417,14 @@ export function HealthPage() {
       {planned && (
         <PlannedDialog title={planned} iteration="Iteration 2–4" onClose={closePlanned}>
           <p>
-            Iteration 2 完成人工健康计划和随访提醒，Iteration 4
-            接入医院及设备数据。健康管理将支持目标设定、计划复核、量表评估、设备数据接入和随访提醒。
+            {t(
+              'Iteration 2 完成人工健康计划和随访提醒，Iteration 4 接入医院及设备数据。健康管理将支持目标设定、计划复核、量表评估、设备数据接入和随访提醒。',
+            )}
           </p>
           <p>
-            观测记录保留测量时间、接收时间、来源与授权信息。提醒规则与临床评估需要单独验证，当前不会生成或发送健康建议。
+            {t(
+              '观测记录保留测量时间、接收时间、来源与授权信息。提醒规则与临床评估需要单独验证，当前不会生成或发送健康建议。',
+            )}
           </p>
         </PlannedDialog>
       )}

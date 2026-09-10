@@ -1,3 +1,4 @@
+import { useI18n } from '../../shared/i18n';
 import { useCallback, useState } from 'react';
 import {
   BookOpen,
@@ -65,6 +66,7 @@ const features = [
 ] as const;
 
 export function CommunityPage() {
+  const { t } = useI18n();
   const { enabled, toggle, saveError } = useCommunityPreference();
   const [selected, setSelected] = useState<(typeof features)[number] | null>(null);
   const close = useCallback(() => setSelected(null), []);
@@ -72,37 +74,39 @@ export function CommunityPage() {
     <div className="feature-page">
       <PageHeader
         eyebrow="PROFESSIONAL COMMUNITY"
-        title="医生社区"
-        description="连接同行，分享经验。一个由您自主选择参与的专业交流空间。"
-        action={<Badge tone="amber">扩展功能 · 尚未上线</Badge>}
+        title={t('医生社区')}
+        description={t('连接同行，分享经验。一个由您自主选择参与的专业交流空间。')}
+        action={<Badge tone="amber">{t('扩展功能 · 尚未上线')}</Badge>}
       />
       <div className="feature-hero-note">
         <div>
           <span className="feature-eyebrow">KNOWLEDGE GROWS WHEN SHARED</span>
-          <h2>好的照护，源于不断交流与学习</h2>
+          <h2>{t('好的照护，源于不断交流与学习')}</h2>
           <p>
-            我们为医生设计了独立的交流空间。专业讨论与诊疗工作分开授权，社区参与保持自愿，关闭后不影响诊疗工作。
+            {t(
+              '我们为医生设计了独立的交流空间。专业讨论与诊疗工作分开授权，社区参与保持自愿，关闭后不影响诊疗工作。',
+            )}
           </p>
         </div>
         <HeartHandshake size={60} />
       </div>
       <Card className="community-preference">
         <div>
-          <h3>显示医生社区入口</h3>
+          <h3>{t('显示医生社区入口')}</h3>
           <p>
             {enabled
-              ? '入口已显示。此开关立即生效，仅保存在当前浏览器；消息服务尚未启用。'
-              : '社区入口已隐藏。可在此处或个人设置中重新开启。'}
+              ? t('入口已显示。此开关立即生效，仅保存在当前客户端；消息服务尚未启用。')
+              : t('社区入口已隐藏。可在此处或个人设置中重新开启。')}
             <br />
-            正式上线后将提供独立的社区消息偏好设置。
+            {t('正式上线后将提供独立的社区消息偏好设置。')}
           </p>
-          {saveError && <p role="alert">{saveError}</p>}
+          {saveError && <p role="alert">{t(saveError)}</p>}
         </div>
         <button
           className="feature-switch"
           role="switch"
           aria-checked={enabled}
-          aria-label="显示医生社区入口"
+          aria-label={t('显示医生社区入口')}
           onClick={toggle}
         >
           <span />
@@ -111,8 +115,8 @@ export function CommunityPage() {
       {enabled ? (
         <>
           <SectionTitle
-            title="为同行连接，预留更多可能"
-            subtitle="以下为设计中的社区功能；目前无法发帖、评论或发送消息。"
+            title={t('为同行连接，预留更多可能')}
+            subtitle={t('以下为设计中的社区功能；目前无法发帖、评论或发送消息。')}
           />
           <div className="feature-card-grid">
             {features.map((item) => (
@@ -121,11 +125,11 @@ export function CommunityPage() {
                   <span className={`feature-symbol ${item.tone}`}>
                     <item.icon size={21} />
                   </span>
-                  <Badge tone="slate">规划中</Badge>
+                  <Badge tone="slate">{t('规划中')}</Badge>
                 </div>
-                <h3>{item.title}</h3>
-                <p>{item.copy}</p>
-                <LinkAction onClick={() => setSelected(item)}>查看功能设计</LinkAction>
+                <h3>{t(item.title)}</h3>
+                <p>{t(item.copy)}</p>
+                <LinkAction onClick={() => setSelected(item)}>{t('查看功能设计')}</LinkAction>
               </Card>
             ))}
           </div>
@@ -135,42 +139,44 @@ export function CommunityPage() {
           <span className="feature-symbol">
             <MessageCircle size={25} />
           </span>
-          <h3>您的工作台，由您决定</h3>
+          <h3>{t('您的工作台，由您决定')}</h3>
           <p>
-            社区入口已关闭。患者管理、在线诊疗与其他医生服务保持可用。
+            {t('社区入口已关闭。患者管理、在线诊疗与其他医生服务保持可用。')}
             <br />
-            重新开启上方开关即可恢复入口。
+            {t('重新开启上方开关即可恢复入口。')}
           </p>
         </Card>
       )}
       <div className="audit-protection">
         <ShieldCheck size={27} />
         <div>
-          <h3>专业交流，也尊重信息边界</h3>
+          <h3>{t('专业交流，也尊重信息边界')}</h3>
           <ul className="feature-check-list" style={{ marginBottom: 0 }}>
             <li>
               <Check />
-              患者档案不会自动发布或同步到社区
+              {t('患者档案不会自动发布或同步到社区')}
             </li>
             <li>
               <Check />
-              分享前手动去标识化，并确认授权范围
+              {t('分享前手动去标识化，并确认授权范围')}
             </li>
             <li>
               <Check />
-              讨论仅供专业参考，不提供针对具体患者的诊疗方案
+              {t('讨论仅供专业参考，不提供针对具体患者的诊疗方案')}
             </li>
             <li>
               <Check />
-              内容审核、举报与屏蔽能力已纳入后续计划
+              {t('内容审核、举报与屏蔽能力已纳入后续计划')}
             </li>
           </ul>
         </div>
       </div>
-      <ReadOnlyNote>社区当前展示功能规划，不包含真实帖子、医生互动或外部消息连接。</ReadOnlyNote>
+      <ReadOnlyNote>
+        {t('社区当前展示功能规划，不包含真实帖子、医生互动或外部消息连接。')}
+      </ReadOnlyNote>
       {selected && (
-        <PlannedDialog title={selected.title} iteration="Iteration 5" onClose={close}>
-          <p>{selected.details}</p>
+        <PlannedDialog title={t(selected.title)} iteration="Iteration 5" onClose={close}>
+          <p>{t(selected.details)}</p>
         </PlannedDialog>
       )}
     </div>

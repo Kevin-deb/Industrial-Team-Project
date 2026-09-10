@@ -1,3 +1,4 @@
+import { useI18n } from './shared/i18n';
 import { useEffect, useState, type ReactNode } from 'react';
 import { NavLink, Route, Routes, useLocation, useNavigate, Link } from 'react-router-dom';
 import {
@@ -47,8 +48,10 @@ const navigation = [
 ];
 
 function Brand() {
+  const { t, language, setLanguage, formatDate } = useI18n();
+
   return (
-    <Link className="brand" to="/" aria-label="CareLink 首页">
+    <Link className="brand" to="/" aria-label={t('CareLink 首页')}>
       <div className="brand-mark">
         <Stethoscope size={25} strokeWidth={2.1} />
         <span />
@@ -57,13 +60,15 @@ function Brand() {
         <strong>
           Care<span>Link</span>
         </strong>
-        <small>智慧医养 · 医生工作台</small>
+        <small>{t('智慧医养 · 医生工作台')}</small>
       </div>
     </Link>
   );
 }
 
 export function App() {
+  const { t, language, setLanguage, formatDate } = useI18n();
+
   const location = useLocation();
   const navigate = useNavigate();
   const { data: session } = useApi<DoctorSession>('/session');
@@ -96,12 +101,12 @@ export function App() {
   return (
     <div className="app-shell">
       <a className="skip-link" href="#main-content">
-        跳到主要内容
+        {t('跳到主要内容')}
       </a>
       {sidebarOpen && (
         <button
           className="sidebar-scrim"
-          aria-label="关闭导航"
+          aria-label={t('关闭导航')}
           onClick={() => setSidebarOpen(false)}
         />
       )}
@@ -110,7 +115,7 @@ export function App() {
           <Brand />
           <button
             className="icon-button mobile-close"
-            aria-label="收起导航"
+            aria-label={t('收起导航')}
             onClick={() => setSidebarOpen(false)}
           >
             <PanelLeftClose size={20} />
@@ -121,13 +126,13 @@ export function App() {
             <Activity size={19} />
           </div>
           <div>
-            <strong>医生服务中心</strong>
-            <span>医养协同服务平台</span>
+            <strong>{t('医生服务中心')}</strong>
+            <span>{t('医养协同服务平台')}</span>
           </div>
           <ChevronDown size={16} />
         </div>
-        <nav aria-label="主导航">
-          <p className="nav-label">诊疗工作</p>
+        <nav aria-label={t('主导航')}>
+          <p className="nav-label">{t('诊疗工作')}</p>
           {navigation.map((item) => (
             <NavLink
               key={item.path}
@@ -136,25 +141,25 @@ export function App() {
               className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
             >
               <item.icon size={19} />
-              <span>{item.label}</span>
+              <span>{t(item.label)}</span>
               {item.path === '/' && <span className="nav-current-dot" />}
             </NavLink>
           ))}
-          <p className="nav-label nav-label-second">协作与管理</p>
+          <p className="nav-label nav-label-second">{t('协作与管理')}</p>
           {communityEnabled && (
             <NavLink to="/community" className="nav-item">
               <BookOpen size={19} />
-              <span>同行协作</span>
-              <span className="nav-soon">规划中</span>
+              <span>{t('同行协作')}</span>
+              <span className="nav-soon">{t('规划中')}</span>
             </NavLink>
           )}
           <NavLink to="/audit" className="nav-item">
             <ShieldCheck size={19} />
-            <span>操作审计</span>
+            <span>{t('操作审计')}</span>
           </NavLink>
           <NavLink to="/settings" className="nav-item">
             <Settings size={19} />
-            <span>设置中心</span>
+            <span>{t('设置中心')}</span>
           </NavLink>
         </nav>
         <div className="sidebar-bottom">
@@ -162,23 +167,24 @@ export function App() {
             <div className="sidebar-note-icon">
               <HeartPulse size={21} />
             </div>
-            <strong>让关怀，更有连接</strong>
+            <strong>{t('让关怀，更有连接')}</strong>
             <p>
-              连接每一次诊疗，
+              {t('连接每一次诊疗，')}
               <br />
-              守护每一段健康旅程。
+              {t('守护每一段健康旅程。')}
             </p>
             <button onClick={() => setDialog('help')}>
-              了解工作台 <ArrowUpRight size={14} />
+              {t('了解工作台')}
+              <ArrowUpRight size={14} />
             </button>
           </div>
           <button className="sidebar-profile" onClick={() => navigate('/settings')}>
-            <div className="avatar avatar-teal">{session?.doctor.avatarInitials ?? '医'}</div>
+            <div className="avatar avatar-teal">{session?.doctor.avatarInitials ?? t('医')}</div>
             <div>
               <strong>
-                {session?.doctor.name ?? '演示医生'} <span>医生</span>
+                {session?.doctor.name ?? t('演示医生')} <span>{t('医生')}</span>
               </strong>
-              <small>{session?.doctor.department ?? '医生服务中心'}</small>
+              <small>{session?.doctor.department ?? t('医生服务中心')}</small>
             </div>
             <ChevronRight size={16} />
           </button>
@@ -189,16 +195,26 @@ export function App() {
           <div className="breadcrumbs">
             <button
               className="icon-button mobile-menu"
-              aria-label="展开导航"
+              aria-label={t('展开导航')}
               onClick={() => setSidebarOpen(true)}
             >
               <Menu size={21} />
             </button>
-            <span>医生服务中心</span>
+            <span>{t('医生服务中心')}</span>
             <ChevronRight size={14} />
-            <strong>{title}</strong>
+            <strong>{t(title)}</strong>
           </div>
           <div className="topbar-actions">
+            <select
+              className="language-select"
+              data-testid="language-select"
+              aria-label={t('软件语言')}
+              value={language}
+              onChange={(event) => setLanguage(event.target.value as 'zh-CN' | 'en')}
+            >
+              <option value="zh-CN">中文</option>
+              <option value="en">English</option>
+            </select>
             <form
               className="global-search"
               onSubmit={(event) => {
@@ -208,8 +224,8 @@ export function App() {
             >
               <Search size={17} />
               <input
-                aria-label="全局患者搜索"
-                placeholder="搜索患者、患者编号…"
+                aria-label={t('全局患者搜索')}
+                placeholder={t('搜索患者、患者编号…')}
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
               />
@@ -217,14 +233,14 @@ export function App() {
             </form>
             <button
               className="icon-button help-button"
-              aria-label="使用帮助"
+              aria-label={t('使用帮助')}
               onClick={() => setDialog('help')}
             >
               <CircleHelp size={20} />
             </button>
             <button
               className="icon-button notification-button"
-              aria-label="通知中心"
+              aria-label={t('通知中心')}
               onClick={() => setDialog('notifications')}
             >
               <Bell size={20} />
@@ -234,10 +250,10 @@ export function App() {
             <button
               className="topbar-profile"
               onClick={() => navigate('/settings')}
-              aria-label="打开个人设置"
+              aria-label={t('打开个人设置')}
             >
               <div className="avatar avatar-teal small">
-                {session?.doctor.avatarInitials ?? '医'}
+                {session?.doctor.avatarInitials ?? t('医')}
               </div>
               <ChevronDown size={14} />
             </button>
@@ -258,10 +274,10 @@ export function App() {
               path="*"
               element={
                 <div className="empty-state">
-                  <h1>页面暂未收录</h1>
-                  <p>请通过侧边导航访问医生工作台。</p>
+                  <h1>{t('页面暂未收录')}</h1>
+                  <p>{t('请通过侧边导航访问医生工作台。')}</p>
                   <Link className="button button-primary" to="/">
-                    返回工作台
+                    {t('返回工作台')}
                   </Link>
                 </div>
               }
@@ -269,10 +285,12 @@ export function App() {
           </Routes>
           <footer className="page-footer">
             <span>
-              CareLink 医生服务系统 <span className="footer-dot">·</span> Iteration 0
+              {t('CareLink 医生服务系统')}
+              <span className="footer-dot">·</span> Iteration 0
             </span>
             <span>
-              <span className="status-dot" /> 框架演示 · 仅使用虚构数据
+              <span className="status-dot" />
+              {t('框架演示 · 仅使用虚构数据')}
             </span>
           </footer>
         </main>
@@ -289,9 +307,9 @@ export function App() {
                   <Bell size={21} />
                 </div>
                 <div>
-                  <h3>工作台框架已就绪</h3>
-                  <p>现在可以浏览患者档案、问诊安排与健康趋势示例。</p>
-                  <Badge tone="teal">本地演示通知</Badge>
+                  <h3>{t('工作台框架已就绪')}</h3>
+                  <p>{t('现在可以浏览患者档案、问诊安排与健康趋势示例。')}</p>
+                  <Badge tone="teal">{t('本地演示通知')}</Badge>
                 </div>
               </div>
               <div className="notice-row">
@@ -299,31 +317,36 @@ export function App() {
                   <CalendarDays size={21} />
                 </div>
                 <div>
-                  <h3>消息推送将在后续迭代上线</h3>
-                  <p>目前没有连接患者端或消息服务，也不会发送临床提醒。</p>
-                  <Badge tone="amber">待上线 · 后续迭代</Badge>
+                  <h3>{t('消息推送将在后续迭代上线')}</h3>
+                  <p>{t('目前没有连接患者端或消息服务，也不会发送临床提醒。')}</p>
+                  <Badge tone="amber">{t('待上线 · 后续迭代')}</Badge>
                 </div>
               </div>
             </>
           ) : (
             <>
-              <p className="modal-lead">把患者信息、诊疗协作与持续健康管理，连接在同一个工作台。</p>
+              <p className="modal-lead">
+                {t('把患者信息、诊疗协作与持续健康管理，连接在同一个工作台。')}
+              </p>
               <div className="help-grid">
                 <Info
-                  title="浏览演示"
-                  text="查看左侧业务模块，通过搜索、筛选和详情面板了解计划中的工作流程。"
+                  title={t('浏览演示')}
+                  text={t('查看左侧业务模块，通过搜索、筛选和详情面板了解计划中的工作流程。')}
                 />
                 <Info
-                  title="功能状态"
-                  text="标记「待上线」的操作尚未接入真实业务，所有演示人物和数据均为虚构。"
+                  title={t('功能状态')}
+                  text={t('标记「待上线」的操作尚未接入真实业务，所有演示人物和数据均为虚构。')}
                 />
                 <Info
-                  title="开发边界"
-                  text="当前提供前后端框架与本地数据库。真实认证、业务写入、视频与消息将在后续迭代开发。"
+                  title={t('开发边界')}
+                  text={t(
+                    '当前提供前后端框架与本地数据库。真实认证、业务写入、视频与消息将在后续迭代开发。',
+                  )}
                 />
               </div>
               <Button onClick={() => setDialog(null)}>
-                开始浏览 <ChevronRight size={16} />
+                {t('开始浏览')}
+                <ChevronRight size={16} />
               </Button>
             </>
           )}
@@ -333,9 +356,11 @@ export function App() {
   );
 }
 function Info({ title, text }: { title: string; text: ReactNode }) {
+  const { t, language, setLanguage, formatDate } = useI18n();
+
   return (
     <div>
-      <h3>{title}</h3>
+      <h3>{t(title)}</h3>
       <p>{text}</p>
     </div>
   );

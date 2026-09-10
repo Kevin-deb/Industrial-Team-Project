@@ -19,9 +19,15 @@ async function visit(directory) {
           : specifier;
         if (
           relative.startsWith('apps/web/') &&
-          (resolved.startsWith('apps/api/') || specifier === '@doctor/api')
+          (resolved.startsWith('apps/api/') ||
+            resolved.startsWith('apps/desktop/') ||
+            specifier === '@doctor/api' ||
+            specifier === 'electron' ||
+            specifier.startsWith('node:'))
         )
-          failures.push(`${relative}: UI cannot import backend code (${specifier})`);
+          failures.push(
+            `${relative}: Renderer cannot import backend or desktop privileges (${specifier})`,
+          );
         if (
           relative.startsWith('apps/api/') &&
           (resolved.startsWith('apps/web/') || specifier === '@doctor/web')

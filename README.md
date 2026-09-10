@@ -1,25 +1,26 @@
 # CareLink Doctor Service System
 
-A doctor-facing subsystem for the Smart Medical and Elderly Care Big Data Public Service Platform. Iteration 0 provides a working Windows-compatible application shell, a light medical UI, versioned API contracts, a local relational database, and isolated domain modules for a five-person team.
+CareLink is an installable Windows desktop application for the doctor side of the Smart Medical and Elderly Care Big Data Public Service Platform. Version 0.2.0 delivers the Iteration 0 framework: a light medical workspace, Chinese and English interface switching, synthetic patient data, a local database, versioned service contracts and independently owned modules for a five-person team.
 
-**Current release: framework demonstration, using fictional records only.** Patient search, filters, read-only details, charts, navigation, audit browsing and the local community visibility preference work. Identity verification, clinical writes, prescriptions, live consultation, recording, notifications, uploads and exports are planned features. The UI labels them “待上线”; corresponding API actions return an explicit `501 FEATURE_NOT_IMPLEMENTED`. Do not enter real patient data in this scaffold.
+**Current scope: framework demonstration using fictional records.** Patient search, filters, read-only details, health charts, navigation, audit browsing and local preferences are available. Identity verification, clinical writes, prescriptions, live consultation, recording, notifications, uploads and exports remain clearly marked as planned. Reserved service commands return `501 FEATURE_NOT_IMPLEMENTED`.
 
-![CareLink doctor workspace](docs/images/dashboard.png)
+![CareLink Windows doctor workspace in Chinese](docs/images/dashboard.png)
 
-## Quick start on Windows
+[Preview the English interface](docs/images/dashboard-en.png).
 
-Install **Node.js 24 LTS, version 24.14.0 or later in the 24.x line**, including npm. Node is the only application prerequisite. No Docker, database service, Visual Studio compiler or separate Python installation is needed.
+## Install and run on Windows
 
-Open PowerShell or Windows Terminal in the repository directory:
+Download the [Windows installer](https://github.com/Kevin-deb/Industrial-Team-Project/releases/download/v0.2.0/CareLink-Doctor-0.2.0-Windows-x64-Setup.exe) from [release 0.2.0](https://github.com/Kevin-deb/Industrial-Team-Project/releases/tag/v0.2.0), which also provides its SHA-256 checksum. Use **CareLink-Doctor-0.2.0-Windows-x64-Setup.exe** on Windows 10 or 11, x64. Complete setup, then open **CareLink Doctor** from the Start menu or desktop shortcut. The application includes its runtime and opens in its own desktop window. End users do not need Node.js, npm, a database server or a separate browser.
 
-```powershell
-npm ci
-npm run dev
-```
+The interface starts in Simplified Chinese. Use the language control in the top bar or Settings to select **English** or **简体中文**. The interface changes immediately, and the choice is retained after restarting the application.
 
-Open [http://127.0.0.1:5173](http://127.0.0.1:5173). The API runs at `127.0.0.1:3001`; Vite proxies `/api` to it. Both services use loopback only. Stop them with `Ctrl+C`. The directory name may contain spaces and its parent may contain Chinese characters.
+After installation, the synthetic local demonstration works offline. Future hospital/device, identity, video and messaging providers will require network access when enabled. The local database belongs to the Windows user's application-data folder, separately from the installation directory. See [Desktop guide](docs/DESKTOP_GUIDE.md) for installation, data locations, uninstall behavior and development builds. Installer artifacts are generated release outputs, not source files to commit to Git.
 
-For a single-server demonstration, double-click `start-windows.cmd`, or run:
+The current installer is unsigned unless a later release explicitly supplies a verified signature. Check the publisher/source and supplied checksum before running the package; signing and update distribution remain release-engineering work.
+
+## Develop from source
+
+Developers need **Node.js 24.14.0 or later within the 24.x line**, npm and internet access for the initial dependency/runtime download. Open PowerShell in this repository:
 
 ```powershell
 npm ci
@@ -27,66 +28,69 @@ npm run build
 npm start
 ```
 
-Open [http://127.0.0.1:3001](http://127.0.0.1:3001). The built API serves the web application and supports direct navigation to page URLs. Keep the terminal open while using the application.
+`npm start` launches the already-built desktop application. `npm run dev` builds all application parts and then opens the desktop application. To package the Windows application:
 
-Initial dependency installation requires the internet. After installation and build, the local demo works without external network services. There are no runtime CDN fonts or image dependencies. First launch creates `runtime/data/doctor.sqlite` using numbered domain migrations and fictional seed records. A normal restart preserves the database. Generated databases are excluded from Git.
+```powershell
+npm run package:dir
+npm run package:win
+```
 
-The built application is still a **local demo**. Setting `NODE_ENV=production` is intentionally rejected until real authentication and operational controls are delivered. On Node versions where `node:sqlite` is marked experimental, its runtime warning is expected; the repository adapter confines that dependency to the backend.
+The first command produces an unpacked application for inspection; the second produces the NSIS installer. Output is written under `release/`. The renderer, embedded API and Electron runtime are bundled in the application. Normal desktop use starts no HTTP listener and needs no localhost URL.
 
-## Documentation for the team
+`npm run dev:web` is optional browser tooling for frontend developers. It starts Vite at `http://127.0.0.1:5173` with an API at `127.0.0.1:3001`. It is a development aid, not the installation or launch procedure for users. See the desktop guide before changing ports or data paths.
 
-| Document                                                       | Purpose                                                                             |
-| -------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| [Iteration plan](docs/ITERATION_PLAN.md)                       | English delivery plan, five-person ownership, basic features first, iteration gates |
-| [Architecture](docs/ARCHITECTURE.md)                           | Domain boundaries, deployment, entities, integration ports and extension strategy   |
-| [API conventions](docs/API_CONVENTIONS.md)                     | Versioned contracts, request and response rules, compatibility and planned behavior |
-| [Requirements traceability](docs/REQUIREMENTS_TRACEABILITY.md) | Source requirements mapped to modules, iterations and acceptance criteria           |
-| [Team workflow](docs/TEAM_WORKFLOW.md)                         | Parallel development, branch conventions, review and shared-file coordination       |
+## Documentation
 
-The requirements and previous presentation files remain in the parent workspace's `docs` and `output` directories. Source references and decisions are recorded in the repository documentation; software and developer documentation live in this repository.
+| Document                                                       | Purpose                                                           |
+| -------------------------------------------------------------- | ----------------------------------------------------------------- |
+| [Desktop guide](docs/DESKTOP_GUIDE.md)                         | Windows installation, launch, languages, local data and packaging |
+| [Delivery status](docs/DELIVERY_STATUS.md)                     | Implemented framework, deferred functions and verified results    |
+| [Iteration plan](docs/ITERATION_PLAN.md)                       | English plan, five-person ownership and acceptance gates          |
+| [Architecture](docs/ARCHITECTURE.md)                           | Desktop processes, service boundaries, data and extension points  |
+| [API conventions](docs/API_CONVENTIONS.md)                     | Internal protocol, DTOs, compatibility and reserved operations    |
+| [Requirements traceability](docs/REQUIREMENTS_TRACEABILITY.md) | Source requirements and latest desktop/language correction        |
+| [Team workflow](docs/TEAM_WORKFLOW.md)                         | Parallel development, module ownership and review rules           |
+
+The original requirements and presentation files remain in the parent workspace's `docs` and `output` folders. They are historical inputs; the latest user instruction establishes an installable Windows desktop application with a persistent Chinese/English switch as the delivery format.
 
 ## Repository layout
 
 ```text
-apps/web/              React and TypeScript doctor UI
-  src/dashboard/       Aggregated read-only work overview
-  src/modules/         Independently owned business pages
-  src/shared/          API client and common UI primitives
-apps/api/              Fastify modular backend
-  src/platform/        Shared identity, policy and audit foundation
+apps/desktop/          Electron main process, private protocol and Windows packaging
+apps/web/              React desktop renderer and optional browser development tooling
+  src/dashboard/       Read-only work overview
+  src/modules/         Owned domain pages
+  src/shared/          UI primitives and service client
+apps/api/              Embedded Fastify business services
+  src/platform/        Identity/policy/audit foundation and shared composition
   src/patients/        Patient domain
-  src/encounters/      Online encounters and remote consultations
-  src/clinical/        Medical records, review and orders
+  src/encounters/      Online encounters and expert consultations
+  src/clinical/        Records, review and orders
   src/health/          Observations, plans and reminders
   src/social/          Isolated optional community scaffold
-  src/database/        Migration composition and local database adapter
-packages/contracts/    Shared API DTOs and provider port interfaces
-docs/                  English plan, architecture and contract guidance
-scripts/               Repository checks and Windows support
-tests/                 Browser integration checks
-runtime/               Generated local data, ignored by Git
+  src/database/        Migration composition and SQLite connection
+packages/contracts/    Shared DTOs and integration ports
+README.md              Installation and contributor entry point
+docs/                  English guides, plan and inactive CI template
+scripts/               Build and repository verification helpers
+tests/                 Integration checks
+release/               Generated Windows artifacts, excluded from Git
 ```
 
-## Checks
+## Verification
 
 ```powershell
 npm run check
-npx playwright install chromium
-npm run test:e2e
+npm run test:desktop
+npm run package:win
 ```
 
-`npm run format:check` checks source formatting; `npm run format` applies the shared style.
+`check` validates source boundaries, TypeScript, API/desktop-protocol tests and all application builds. `test:desktop` runs native Electron integration checks on Windows, including both interface languages. `test:e2e` remains an optional browser-development suite; it does not substitute for desktop tests. Packaging verifies that an installer can be produced; it does not by itself prove installation or clinical readiness. Exact completed checks are recorded in [Delivery status](docs/DELIVERY_STATUS.md).
 
-`check` validates module boundaries, strict TypeScript, backend integration tests and both application builds. Browser tests exercise actual UI/API integration, planned-feature messaging, keyboard interactions and responsive layout. The [CI template](docs/ci/README.md) targets Windows and Ubuntu. It is not active yet because the available GitHub credential lacks workflow-upload permission. Browser-test artifacts stay in ignored directories.
+`npm run format:check` checks formatting and `npm run format` applies it. The [CI template](docs/ci/README.md) separates Windows desktop testing/packaging from Ubuntu source checks. It remains inactive because the available GitHub credential lacks workflow-upload permission; no remote CI success is claimed.
 
-## Implementation scope
+## Architecture and scope
 
-The backend starts as a modular monolith: one process with isolated domain code and stable contracts. Each domain owns its tables and repository. Other modules consume public interfaces and IDs instead of directly modifying those tables. SQLite keeps development setup small; production PostgreSQL requires a new repository adapter and database migrations, not a new UI or clinical workflow design.
+The sandboxed renderer loads local assets through a private `carelink://app/` protocol. Requests under `/api/v1` are forwarded to embedded Fastify handlers through `app.inject`, preserving the typed service boundary without opening a network port. SQLite stores synthetic data in the user's application-data directory. Domain code owns its repositories, migrations, commands and message catalogs; shared composition supplies identity, policy, audit and provider ports.
 
-Roles, patient scope, time-limited grants, record versions, review states, media references, reminders, outbox events and social isolation are represented in the framework. Only the explicitly documented demo read paths execute today. An interface, table or placeholder does not imply the corresponding production capability is finished.
-
-See the English plan for the implementation order and acceptance tests before enabling each feature. Providers for identity, hospital/device data, RTC, recording, storage and notifications are replaceable ports; no real provider credentials are bundled.
-
-## Technology references
-
-Runtime and tool requirements were checked against the [Node.js 24 SQLite documentation](https://nodejs.org/download/release/latest-v24.x/docs/api/sqlite.html), [Vite guide](https://vite.dev/guide/) and [Fastify v5 migration guide](https://fastify.dev/docs/latest/Guides/Migration-Guide-V5/). Dependency versions are fixed by `package-lock.json`; use `npm ci` for consistent team installs.
+The same domain contracts can support a later authenticated remote service. PostgreSQL still requires a repository adapter, schema migration and parity tests. Real identity, clinical writes, video, recordings, exports, notifications and external data integrations are reserved work, not completed capabilities. Every new feature must support Chinese and English and pass its iteration's acceptance scenarios.

@@ -1,3 +1,4 @@
+import { useI18n } from '../../shared/i18n';
 import { useCallback, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { CalendarClock, HeartPulse, Plus, Search, ShieldCheck, Users } from 'lucide-react';
@@ -24,6 +25,7 @@ const statusLabels: Record<Patient['status'], string> = {
 const statusTones = { stable: 'teal', attention: 'amber', 'follow-up': 'blue' } as const;
 
 function PatientRecords({ patientId }: { patientId: string }) {
+  const { t, formatDate } = useI18n();
   // The records API returns the doctor's scoped collection; filtering by patient is local.
   const { data, loading, error, reload } = useApi<MedicalRecord[]>('/records');
   const records = data?.filter((record) => record.patientId === patientId) ?? [];
@@ -32,21 +34,23 @@ function PatientRecords({ patientId }: { patientId: string }) {
     <div className="feature-timeline">
       {records.map((record) => (
         <div className="feature-timeline-item" key={record.id}>
-          <time>{record.updatedAt.replace('T', ' ').slice(0, 16)}</time>
+          <time>{formatDate(record.updatedAt, { dateStyle: 'medium', timeStyle: 'short' })}</time>
           <h4>{record.title}</h4>
           <p>
-            {record.diagnosis} · {record.authorName} · 版本 {record.version}
+            {record.diagnosis} · {record.authorName} ·{' '}
+            {t('版本 {version}', { version: record.version })}
           </p>
         </div>
       ))}
       {!records.length && (
-        <EmptyState title="暂无诊疗记录" description="后续完成的诊疗记录将在这里汇总。" />
+        <EmptyState title={t('暂无诊疗记录')} description={t('后续完成的诊疗记录将在这里汇总。')} />
       )}
     </div>
   );
 }
 
 function PatientDetail({ patientId, onClose }: { patientId: string; onClose: () => void }) {
+  const { t, formatDate } = useI18n();
   // Fetching the detail endpoint rechecks patient scope and records this access in audit.
   const {
     data: patient,
@@ -56,7 +60,11 @@ function PatientDetail({ patientId, onClose }: { patientId: string; onClose: () 
   } = useApi<Patient>('/patients/' + encodeURIComponent(patientId));
   const [tab, setTab] = useState('profile');
   return (
-    <FeatureDialog title="患者健康档案" subtitle="仅限当前演示医生负责的患者" onClose={onClose}>
+    <FeatureDialog
+      title={t('患者健康档案')}
+      subtitle={t('仅限当前演示医生负责的患者')}
+      onClose={onClose}
+    >
       {loading || error || !patient ? (
         <LoadingState error={error} onRetry={reload} />
       ) : (
@@ -66,7 +74,7 @@ function PatientDetail({ patientId, onClose }: { patientId: string; onClose: () 
             <div>
               <h3>{patient.name}</h3>
               <p>
-                {patient.gender} · {patient.age} 岁 · {patient.id}
+                {t(patient.gender)} · {t('{age} 岁', { age: patient.age })} · {patient.id}
               </p>
             </div>
           </div>
@@ -78,20 +86,20 @@ function PatientDetail({ patientId, onClose }: { patientId: string; onClose: () 
               { value: 'history', label: '病史与过敏' },
               { value: 'records', label: '诊疗记录' },
             ]}
-            label="患者详情分类"
+            label={t('患者详情分类')}
           />
           {tab === 'profile' && (
             <>
-              <Badge tone={statusTones[patient.status]}>{statusLabels[patient.status]}</Badge>
+              <Badge tone={statusTones[patient.status]}>{t(statusLabels[patient.status])}</Badge>
               <DetailGrid
                 items={[
                   { label: '联系电话', value: patient.phone },
                   { label: '健康分类', value: patient.diagnosis },
-                  { label: '最近就诊', value: patient.lastVisit },
-                  { label: '下次随访', value: patient.nextFollowUp },
+                  { label: '最近就诊', value: formatDate(patient.lastVisit) },
+                  { label: '下次随访', value: formatDate(patient.nextFollowUp) },
                 ]}
               />
-              <h4 className="feature-small-heading">照护摘要</h4>
+              <h4 className="feature-small-heading">{t('照护摘要')}</h4>
               <p className="feature-prose">{patient.careSummary}</p>
               <div className="feature-tag-row">
                 {patient.tags.map((tag) => (
@@ -104,14 +112,16 @@ function PatientDetail({ patientId, onClose }: { patientId: string; onClose: () 
           )}
           {tab === 'history' && (
             <>
-              <h4 className="feature-small-heading">既往病史</h4>
+              <h4 className="feature-small-heading">{t('既往病史')}</h4>
               {patient.medicalHistory.map((item, index) => (
                 <p className="feature-prose" key={item + index}>
                   {item}
                 </p>
               ))}
-              {!patient.medicalHistory.length && <p className="feature-prose">暂无既往病史记录</p>}
-              <h4 className="feature-small-heading">过敏史</h4>
+              {!patient.medicalHistory.length && (
+                <p className="feature-prose">{t('暂无既往病史记录')}</p>
+              )}
+              <h4 className="feature-small-heading">{t('过敏史')}</h4>
               <div className="feature-tag-row">
                 {patient.allergies.length ? (
                   patient.allergies.map((item) => (
@@ -120,12 +130,14 @@ function PatientDetail({ patientId, onClose }: { patientId: string; onClose: () 
                     </Badge>
                   ))
                 ) : (
-                  <Badge tone="slate">暂无过敏记录</Badge>
+                  <Badge tone="slate">{t('暂无过敏记录')}</Badge>
                 )}
               </div>
               <div className="feature-notice">
                 <ShieldCheck size={17} />
-                <span>演示档案不可编辑。患者建档、信息修改与跨医院数据导入将在后续迭代提供。</span>
+                <span>
+                  {t('演示档案不可编辑。患者建档、信息修改与跨医院数据导入将在后续迭代提供。')}
+                </span>
               </div>
             </>
           )}
@@ -138,6 +150,7 @@ function PatientDetail({ patientId, onClose }: { patientId: string; onClose: () 
 }
 
 export function PatientsPage() {
+  const { t, formatDate } = useI18n();
   const { data, loading, error, reload } = useApi<Patient[]>('/patients?pageSize=100');
   const [searchParams, setSearchParams] = useSearchParams();
   // URL parameters are the source of truth, including same-route searches from the shell.
@@ -186,12 +199,13 @@ export function PatientsPage() {
     <div className="feature-page">
       <PageHeader
         eyebrow="PATIENT MANAGEMENT"
-        title="患者管理"
-        description="让每一份关注，都有迹可循。管理您负责的患者与连续健康档案。"
+        title={t('患者管理')}
+        description={t('让每一份关注，都有迹可循。管理您负责的患者与连续健康档案。')}
         action={
           <Button onClick={() => setShowPlanned(true)}>
             <Plus size={16} />
-            患者建档 <span className="feature-mini-label">即将上线</span>
+            {t('患者建档')}
+            <span className="feature-mini-label">{t('即将上线')}</span>
           </Button>
         }
       />
@@ -202,39 +216,39 @@ export function PatientsPage() {
           <div className="feature-metrics">
             <Metric
               icon={Users}
-              label="我的患者"
+              label={t('我的患者')}
               value={
                 <>
                   {data?.length ?? 0}
-                  <small>人</small>
+                  <small>{t('人')}</small>
                 </>
               }
-              detail="已分配至当前演示医生"
+              detail={t('已分配至当前演示医生')}
             />
             <Metric
               icon={HeartPulse}
-              label="状态平稳"
+              label={t('状态平稳')}
               value={data?.filter((patient) => patient.status === 'stable').length ?? 0}
-              detail="按演示档案标签汇总"
+              detail={t('按演示档案标签汇总')}
               tone="blue"
             />
             <Metric
               icon={CalendarClock}
-              label="待随访患者"
+              label={t('待随访患者')}
               value={data?.filter((patient) => patient.status === 'follow-up').length ?? 0}
-              detail="连续照护，从一次随访开始"
+              detail={t('连续照护，从一次随访开始')}
               tone="amber"
             />
             <Metric
               icon={ShieldCheck}
-              label="需要关注"
+              label={t('需要关注')}
               value={data?.filter((patient) => patient.status === 'attention').length ?? 0}
-              detail="演示标记，非临床风险判断"
+              detail={t('演示标记，非临床风险判断')}
               tone="rose"
             />
           </div>
           <Card className="feature-card-pad">
-            <SectionTitle title="患者档案" subtitle="PATIENT DIRECTORY · 演示数据" />
+            <SectionTitle title={t('患者档案')} subtitle={t('PATIENT DIRECTORY · 演示数据')} />
             <div className="feature-toolbar">
               <FilterTabs
                 value={status}
@@ -249,8 +263,8 @@ export function PatientsPage() {
               <label className="feature-search">
                 <Search size={16} />
                 <input
-                  aria-label="搜索患者姓名、编号或疾病"
-                  placeholder="搜索姓名、编号或疾病"
+                  aria-label={t('搜索患者姓名、编号或疾病')}
+                  placeholder={t('搜索姓名、编号或疾病')}
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                 />
@@ -261,12 +275,12 @@ export function PatientsPage() {
                 <table className="feature-table">
                   <thead>
                     <tr>
-                      <th>患者信息</th>
-                      <th>健康分类</th>
-                      <th>管理状态</th>
-                      <th>最近就诊</th>
-                      <th>下次随访</th>
-                      <th>档案</th>
+                      <th>{t('患者信息')}</th>
+                      <th>{t('健康分类')}</th>
+                      <th>{t('管理状态')}</th>
+                      <th>{t('最近就诊')}</th>
+                      <th>{t('下次随访')}</th>
+                      <th>{t('档案')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -278,7 +292,8 @@ export function PatientsPage() {
                             <div>
                               <strong>{patient.name}</strong>
                               <small>
-                                {patient.gender} · {patient.age} 岁 · {patient.id}
+                                {t(patient.gender)} · {t('{age} 岁', { age: patient.age })} ·{' '}
+                                {patient.id}
                               </small>
                             </div>
                           </div>
@@ -286,13 +301,15 @@ export function PatientsPage() {
                         <td>{patient.diagnosis}</td>
                         <td>
                           <Badge tone={statusTones[patient.status]}>
-                            {statusLabels[patient.status]}
+                            {t(statusLabels[patient.status])}
                           </Badge>
                         </td>
-                        <td>{patient.lastVisit}</td>
-                        <td>{patient.nextFollowUp}</td>
+                        <td>{formatDate(patient.lastVisit)}</td>
+                        <td>{formatDate(patient.nextFollowUp)}</td>
                         <td>
-                          <LinkAction onClick={() => setSelected(patient.id)}>查看档案</LinkAction>
+                          <LinkAction onClick={() => setSelected(patient.id)}>
+                            {t('查看档案')}
+                          </LinkAction>
                         </td>
                       </tr>
                     ))}
@@ -301,17 +318,20 @@ export function PatientsPage() {
               </div>
             ) : (
               <EmptyState
-                title="未找到符合条件的患者"
-                description="请尝试其他姓名、编号或筛选条件。"
+                title={t('未找到符合条件的患者')}
+                description={t('请尝试其他姓名、编号或筛选条件。')}
               />
             )}
             <div className="feature-table-footer">
               <span>
-                共 {data?.length ?? 0} 位演示患者 · 当前显示 {patients.length} 位
+                {t('共 {total} 位演示患者 · 当前显示 {count} 位', {
+                  total: data?.length ?? 0,
+                  count: patients.length,
+                })}
               </span>
               <span className="feature-inline-icon">
                 <ShieldCheck size={13} />
-                医生数据访问范围已隔离
+                {t('医生数据访问范围已隔离')}
               </span>
             </div>
           </Card>
@@ -320,14 +340,14 @@ export function PatientsPage() {
       )}
       {selected && <PatientDetail patientId={selected} onClose={closePatient} />}
       {showPlanned && (
-        <PlannedDialog title="新建患者档案" iteration="Iteration 1" onClose={closePlanned}>
-          <p>患者建档将按以下流程接入患者管理模块：</p>
+        <PlannedDialog title={t('新建患者档案')} iteration="Iteration 1" onClose={closePlanned}>
+          <p>{t('患者建档将按以下流程接入患者管理模块：')}</p>
           <ol>
-            <li>核验患者身份及数据使用授权。</li>
-            <li>填写基本信息、过敏史与既往病史。</li>
-            <li>绑定负责医生，生成独立健康档案。</li>
+            <li>{t('核验患者身份及数据使用授权。')}</li>
+            <li>{t('填写基本信息、过敏史与既往病史。')}</li>
+            <li>{t('绑定负责医生，生成独立健康档案。')}</li>
           </ol>
-          <p>后端已预留患者档案与医生访问范围的接口边界。</p>
+          <p>{t('后端已预留患者档案与医生访问范围的接口边界。')}</p>
         </PlannedDialog>
       )}
     </div>

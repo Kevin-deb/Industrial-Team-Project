@@ -1,0 +1,60 @@
+{
+  "name": "@doctor/desktop",
+  "version": "0.2.0",
+  "private": true,
+  "description": "CareLink Doctor — bilingual Windows desktop client",
+  "author": "CareLink Team",
+  "license": "UNLICENSED",
+  "type": "module",
+  "main": "dist/main.cjs",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "start": "electron .",
+    "package:win": "electron-builder --win nsis --x64",
+    "package:dir": "electron-builder --win --x64 --dir",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test test/*.test.ts"
+  },
+  "build": {
+    "appId": "org.carelink.doctor",
+    "productName": "CareLink Doctor",
+    "asar": true,
+    "npmRebuild": false,
+    "directories": {
+      "output": "../../release",
+      "buildResources": "assets"
+    },
+    "files": [
+      "dist/**",
+      "assets/icon.ico",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.ico",
+      "artifactName": "CareLink-Doctor-${version}-Windows-${arch}-Setup.${ext}",
+      "signAndEditExecutable": true
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "CareLink Doctor",
+      "installerLanguages": [
+        "en_US",
+        "zh_CN"
+      ],
+      "displayLanguageSelector": true,
+      "deleteAppDataOnUninstall": false
+    }
+  }
+}

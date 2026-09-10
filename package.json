@@ -1,6 +1,6 @@
 {
   "name": "carelink-doctor-platform",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "CareLink doctor services for the Smart Medical and Elderly Care Platform",
@@ -12,21 +12,30 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "concurrently --kill-others --names API,WEB --prefix-colors cyan,green \"npm run dev -w @doctor/api\" \"npm run dev -w @doctor/web\"",
-    "build": "npm run build -w @doctor/web && npm run build -w @doctor/api",
-    "start": "npm run start -w @doctor/api",
+    "dev": "npm run build && npm start",
+    "build": "npm run build -w @doctor/web && npm run build -w @doctor/api && npm run build -w @doctor/desktop",
+    "start": "npm run start -w @doctor/desktop",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "test": "npm run test -w @doctor/api",
+    "test": "npm run test -w @doctor/api && npm run test -w @doctor/desktop",
     "test:e2e": "playwright test",
     "check:boundaries": "node scripts/check-boundaries.mjs",
     "check": "npm run check:boundaries && npm run typecheck && npm test && npm run build",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "postinstall": "node node_modules/electron/install.js",
+    "dev:web": "concurrently --kill-others --names API,WEB --prefix-colors cyan,green \"npm run dev -w @doctor/api\" \"npm run dev -w @doctor/web\"",
+    "start:api": "npm run start -w @doctor/api",
+    "test:desktop": "playwright test --config playwright.desktop.config.ts",
+    "package:win": "npm run build && node scripts/package-desktop.mjs nsis",
+    "package:dir": "npm run build && node scripts/package-desktop.mjs dir"
   },
   "devDependencies": {
     "@playwright/test": "^1.55.0",
     "@types/node": "^24.0.0",
     "concurrently": "^9.2.0",
+    "electron": "44.3.0",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.25.12",
     "prettier": "^3.9.6",
     "tsx": "^4.20.5",
     "typescript": "~5.9.2"

@@ -1,7 +1,9 @@
-# Continuous integration template
+# Continuous Integration Template
 
-`github-actions.yml` contains the Windows and Ubuntu verification workflow for Node.js 24. It runs dependency installation, module boundaries, TypeScript checks, backend tests, builds and Chromium browser tests. It uploads browser artifacts only on failure.
+`github-actions.yml` is an inactive template for the Windows desktop repository. Ubuntu runs `npm run check` for boundaries, TypeScript, API/desktop-protocol tests and all builds. Windows runs the same checks, native Electron integration through `npm run test:desktop`, and `npm run package:win`; a successful installer build is retained as a workflow artifact. Browser-only tests remain an optional developer aid.
 
-The framework was verified locally on Windows. This template is not an active GitHub Actions workflow. The first push was rejected because the existing OAuth credential lacks the `workflow` scope; moving the configuration here lets the software and documentation synchronize without changing account permissions.
+The template is not an active GitHub Actions workflow. The available OAuth credential has repository access but lacks the `workflow` scope required to upload active workflow files. No remote CI result is implied by including this file in the repository.
 
-A repository maintainer can activate it by copying `github-actions.yml` to `.github/workflows/ci.yml` using a credential permitted to manage workflows, or GitHub's authorized web editor. Review the first remote run before relying on it as a merge gate. Until then, run `npm run check` and `npm run test:e2e` locally and record the results with each pull request.
+A maintainer with workflow-management permission can copy the template to `.github/workflows/ci.yml`. Review the first remote run before making it a required merge check. Until activation, run the checks locally, including desktop/language/restart verification on Windows, and record results in the pull request. Packaging on CI does not replace installation and launch verification of the delivered installer.
+
+`npm ci` installs Electron 44.3.0 and downloads its runtime through the repository postinstall script. Initial installation/build therefore requires network access; installed users receive the bundled runtime and do not need npm. Code-signing credentials are not part of this template. Installer publishing remains a separate release action.

@@ -1331,3 +1331,70 @@
     align-items: flex-start;
   }
 }
+
+/* English copy can wrap without changing module boundaries or controls. */
+.feature-metric-top > span:last-child,
+.feature-section-title > div,
+.settings-preference > div,
+.settings-feature > div {
+  min-width: 0;
+}
+.feature-metric-top,
+.feature-metric p,
+.feature-section-title h2,
+.feature-section-title p,
+.feature-workflow-step h4,
+.feature-workflow-step p {
+  line-height: 1.55;
+}
+.feature-section-title,
+.feature-table-footer,
+.encounter-card-top,
+.encounter-card-bottom,
+.mdt-specialties,
+.settings-preference {
+  flex-wrap: wrap;
+}
+.feature-service-card > p,
+.feature-prose,
+.feature-dialog-header p,
+.feature-detail-grid dd {
+  overflow-wrap: anywhere;
+}
+.feature-page .feature-link,
+.feature-overlay .feature-link {
+  white-space: normal;
+  text-align: left;
+}
+.feature-page .feature-link svg,
+.feature-overlay .feature-link svg,
+.feature-check-list svg {
+  flex-shrink: 0;
+}
+.settings-language .feature-select {
+  min-width: 145px;
+}
+html[lang='en'] .feature-eyebrow {
+  letter-spacing: 1px;
+}
+html[lang='en'] .feature-table td {
+  white-space: normal;
+  min-width: 108px;
+}
+html[lang='en'] .feature-person {
+  min-width: 165px;
+}
+html[lang='en'] .feature-table .audit-code {
+  white-space: nowrap;
+}
+@media (max-width: 920px) {
+  html[lang='en'] .feature-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .feature-page,
+  .feature-dialog {
+    animation: none;
+  }
+}
