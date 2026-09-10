@@ -1,0 +1,127 @@
+# Doctor Service System Iterative Development Plan
+
+This plan divides the doctor subsystem among five developers and delivers a small, working clinical workflow before adding external integrations. Iteration 0 is the current assignment: a runnable Windows-compatible framework, a polished light interface, synthetic read-only examples, and explicit placeholders for future functionality. It is not a completed clinical system.
+
+The delivery dates and member names were not provided. Members A–E below are role labels to replace with real names. The durations are planning estimates based on five available developers, not commitments. Re-estimate at the end of each iteration using completed work and actual availability.
+
+## Scope and delivery sequence
+
+The team delivers the doctor web application and the backend capabilities it needs. The patient app, family app, full cloud administration console, payment, insurance, bed management, and care-worker scheduling remain outside this repository's initial delivery scope. Their future connections use agreed interfaces. The shared capability layer is a service layer, not another end-user screen.
+
+| Iteration                             | Estimated duration        | Demonstrable outcome                                                                                                                     | Exit gate                                                                                                                    |
+| ------------------------------------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| 0 — Framework                         | 1 week                    | Doctor workspace, domain navigation, synthetic examples, API contracts, database schema, provider interfaces, unavailable-feature states | Clean Windows installation; web and API start; navigation and example reads work; unavailable writes return a clear error    |
+| 1 — Authorized basic consultation     | 2 weeks                   | Sign in, find an authorized patient, edit their profile, receive and conduct a text consultation                                         | Server rejects unauthorized access; edits persist; a consultation can be accepted and completed without losing saved text    |
+| 2 — Complete basic care workflow      | 2 weeks                   | Structured records, senior review and archive, separate order lifecycle, manual health plans and reminders                               | A junior doctor completes a visit; a senior doctor reviews the record; orders and follow-up remain traceable                 |
+| 3 — Remote collaboration              | 2 weeks                   | Images/files, video and policy-controlled recording, expert consultations, scoped temporary access, report drafts and exports            | Two authorized clinicians collaborate; closing or revoking a task blocks subsequent records, files, exports, and live access |
+| 4 — Integration and release readiness | 2 weeks                   | Hospital/device data adapter, reliable notifications, monitoring, backup/restore, accessibility and performance verification             | End-to-end release candidate meets agreed targets and recovery checks on Windows                                             |
+| 5 — Optional peer community           | 2 weeks, only if approved | Isolated professional groups, manually de-identified discussions, interactions, reporting and complete opt-out                           | No automatic clinical-data flow; disabling community prevents social notifications; core care regression suite still passes  |
+
+The core estimate is nine weeks including the framework. Iteration 5 is an optional two-week extension. Authentication, basic access enforcement, and durable records are prerequisites for real clinical data. Framework demonstrations use synthetic data only.
+
+## Stable ownership for five developers
+
+Each member owns the frontend, backend, contracts, migrations, and tests for one group. This vertical ownership makes most daily changes independent. A coordinates integration but is not required to implement everybody else's APIs.
+
+| Member                            | Responsibilities                                                                                                          | Owned module directories                                                         | Required public collaborators                                                        |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| A — Platform                      | Application shell and navigation, identity, authorization, audit, configuration, shared infrastructure, CI and release    | API `src/platform`; web shell and `modules/audit`, `modules/settings`; shared UI | Identity context, authorization service, audit writer, provider registration         |
+| B — Patients                      | Authorized patient search, profile/history/allergies, disease/status groups, batch management                             | API `src/patients`; web `modules/patients`                                       | Patient summary/read service and patient IDs                                         |
+| C — Encounters and consultation   | Patient requests, text/image/video encounters, session history/export, expert consultation, attachments and report drafts | API `src/encounters`; web `modules/encounters`, `modules/consultations`          | Patient summaries from B; authorization from A; finalized encounter references for D |
+| D — Records and orders            | Structured EMR templates, versioned drafting, senior review/archive, medication/inspection/laboratory orders              | API `src/clinical`; web `modules/records`                                        | Encounter and patient references, audit writer, attachments port                     |
+| E — Health and optional community | Observations, care plans, assessments, reminder jobs, health integration; isolated optional professional community        | API `src/health`, `src/social`; web `modules/health`, `modules/community`        | Patient references, notification port, authorization, moderation handoff             |
+
+The existing scaffold is the starting point for these boundaries. Maintain a dedicated contract file and migration file for each domain as it grows. A single backend process and local database do not grant another module permission to edit a module's tables directly.
+
+## Iteration 0 tasks and acceptance
+
+| Member | Concrete work                                                                                                                                                                      | Individual evidence                                                                                                    |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| A      | Set up npm workspaces and root scripts; build the doctor shell, responsive light theme, dashboard and settings; wire module APIs; provide the CI template and Windows instructions | Fresh clone installs and builds; shell navigation, empty/loading/error states and keyboard navigation are demonstrable |
+| B      | Establish patient DTOs and database structures; create searchable synthetic patient list and profile preview; reserve editing and grouping actions                                 | Search and filters show consistent synthetic records; editing is visibly unavailable                                   |
+| C      | Create encounter and expert-consultation structures, synthetic worklists and session/detail previews; define media/storage ports                                                   | Text/video/recording/upload entry points explain their future availability and do not simulate real calls              |
+| D      | Create EMR, review and order structures; show structured-record and order previews; reserve draft/review/archive/order commands                                                    | Review/archive and order status are visibly separate; blocked commands cannot silently succeed                         |
+| E      | Create observation/plan/reminder structures; show sample trends and plan summaries; reserve community, notification and integration capabilities                                   | Measurements show units/source/time; reminders and community clearly state implementation status                       |
+
+Integration acceptance: run repository lint/type checks, build, API tests, and browser smoke checks. Verify sample data arrives through the API, every navigation destination renders, unsupported commands report `FEATURE_NOT_IMPLEMENTED`, database initialization is repeatable, and data shown in demonstrations is clearly synthetic. Future schema rows, interfaces, and pages must not be described as completed business workflows.
+
+## Iteration 1 tasks and acceptance
+
+| Member | Concrete work                                                                                                                                                                | Dependency or handoff                                                                                                                     |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| A      | Implement session login/logout through an identity adapter, select a first MFA provider, enforce role and patient scope, record access/edit audit events, protect all routes | Publish tested `AuthContext` and authorization facade first; authentication provider and administrator permission source must be selected |
+| B      | Persist profile/history/allergy edits with versions; add server search, disease/status groups and per-item authorized batch updates                                          | Provide patient fixtures and a stable summary query before C integrates                                                                   |
+| C      | Implement encounter request ingestion, acceptance, text messages, draft autosave and completion; preserve history                                                            | Use a patient-side simulator behind an adapter until a patient app exists                                                                 |
+| D      | Implement structured templates, record draft storage and revision conflicts; associate drafts with patient and encounter IDs                                                 | Consume encounter references; draft editing can proceed against fixtures before C finishes                                                |
+| E      | Implement validated manual observation ingestion and source/time/unit display; create basic plan drafts                                                                      | Use synthetic/device simulator contracts; do not derive medical decisions from demo thresholds                                            |
+
+Acceptance: a permitted doctor signs in, locates a scoped patient, revises a profile, accepts a text encounter, saves messages and a draft, reloads, and sees persisted data. A doctor outside that scope receives no patient details. Duplicate acceptance and stale edits are rejected predictably. All modules must also render a useful error when the API is unavailable.
+
+## Iteration 2 tasks and acceptance
+
+| Member | Concrete work                                                                                                                                           | Dependency or handoff                                                                                              |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| A      | Add senior-review permissions, self-audit filters, audit export access checks, transactional task/outbox foundation, first backup and restore procedure | Agree event envelope and idempotency contracts before workers are written                                          |
+| B      | Complete admission-date and treatment-stage filters, treatment-plan links, version history and batch results                                            | Coordinate treatment-plan reference fields with E; no duplicate ownership of care plans                            |
+| C      | Harden reconnect/retry and autosave behavior; implement encounter keyword/date history and structured export jobs                                       | Export through the shared job/storage contracts; authorization is rechecked at execution and download              |
+| D      | Implement submit, return, approve and archive states; versioned corrections after archive; create/revise/stop orders with validation                    | Senior approval is a clinical permission, not automatically an administrator privilege                             |
+| E      | Implement plan activation/revision, periodic assessments, reminder scheduling, notification preferences, retry/deduplication                            | Use the notification adapter and persistent job state; a local fake provider is acceptable in the test environment |
+
+Acceptance: demonstrate consultation → draft record → submission → senior approval → archive. Rejected records return to editing. Orders can be revised or stopped independently, with a history. A scheduled reminder is delivered once through the configured test provider, survives a failed attempt, and respects user preferences. Restoring a backup preserves the visit and related records. Define numeric latency, concurrency and recovery targets before the next release gate.
+
+## Iteration 3 tasks and acceptance
+
+| Member | Concrete work                                                                                                                                                                     | Dependency or handoff                                                                                                       |
+| ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| A      | Implement scoped temporary grants with expiry and active-task checks; revoke access on task close; audit media/download/export access; manage integration credentials             | Agree recording consent, retention, access, deletion and live-session revocation policy before enabling recording           |
+| B      | Publish purpose-limited patient material summaries for expert consultation and cross-institution access requests                                                                  | Return only fields permitted by the grant; avoid copying whole patient charts                                               |
+| C      | Add image upload with validation and object-storage adapter; integrate RTC provider; expose recording states; implement invitations, participants, report drafts and confirmation | Highest workload this iteration: build expert workflow against a fake RTC provider while real provider integration proceeds |
+| D      | Supply scoped record snapshots/material references and clinician-confirmed report links; make exported artifacts version-specific                                                 | Archived records remain stable; reports cannot bypass EMR review rules                                                      |
+| E      | Test notification delivery for invitations and plan changes; support safe observation links in consultation; expand health assessments                                            | Share retry/idempotency infrastructure; avoid embedding measurements in unprotected message payloads                        |
+
+Acceptance: two clinicians with different scopes enter an expert task, access its permitted materials and confirm a report. Completion, revocation, or expiry blocks the next request and terminates live access according to the chosen provider policy. Upload/recording failure is visible. Denied downloads and export retries must not bypass access checks. Reports compile clinician-entered findings and require confirmation; automatic diagnosis is outside scope.
+
+## Iteration 4 tasks and acceptance
+
+| Member | Concrete work                                                                                                                                      | Dependency or handoff                                                                                           |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| A      | Complete Windows release scripts, deployment configuration, secret handling, monitoring, backup/restore drill and security/access regression suite | Release approval requires agreed operational targets and a reviewed deployment environment                      |
+| B      | Test large patient lists, pagination and import reconciliation; complete accessibility and search usability review                                 | Use representative synthetic volumes and document measurements                                                  |
+| C      | Test network loss, media fallback, multi-expert capacity and export recovery; add provider contract tests                                          | Record tested browser/provider/Windows versions and limits                                                      |
+| D      | Verify validation rules with an authorized clinical reviewer; test concurrent edits, review permissions and version history                        | Medical validation rules and terminology require domain approval; do not claim clinical certification           |
+| E      | Integrate an agreed hospital/device input, normalize units and provenance, test duplicate/out-of-order observations, stabilize reminder delivery   | If real interfaces remain unavailable, deliver a contract-tested simulator and label the integration incomplete |
+
+Acceptance: execute the core scenario suite with representative synthetic data, an actual restore, failed-provider recovery, missing/expired grants, keyboard-only navigation, and targeted performance tests. Document which external providers were exercised. Do not label simulator-only integrations as live. Migration to PostgreSQL is triggered by actual deployment/concurrency needs, with repository parity and migration tests, rather than by the calendar alone.
+
+## Iteration 5 tasks and acceptance
+
+| Member | Concrete work                                                                                                       | Dependency or handoff                                                                       |
+| ------ | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| A      | Add organization enablement, personal opt-out, community permissions and moderator integration                      | Server-side notification suppression must match UI preferences                              |
+| B      | Review privacy isolation tests; provide no automatic patient export-to-community endpoint                           | Manual de-identification remains the author's responsibility and confirmation step          |
+| C      | Implement or review community-only private-message transport and notification delivery                              | Clinical encounter messages and social messages remain distinct                             |
+| D      | Help implement report/moderation workflow and verify clinical materials are inaccessible to community code          | Community content cannot create or modify treatment orders                                  |
+| E      | Lead groups, join/leave, real-name/anonymous discussions, manual case editor, likes/comments and module preferences | Community data stores only submitted community content, without patient-record foreign keys |
+
+Acceptance: a doctor can join and leave a group, submit a manually edited case, interact and report content. The interface states that content is for professional discussion. Disabling the module hides it and suppresses social notifications server-side. Automated tests establish that clinical events never populate community posts or messages. Optional work must not delay unmet core requirements.
+
+## Integration rhythm and completion rules
+
+At the start of an iteration, spend one short planning session confirming contracts, acceptance scenarios and owner boundaries. Each member works in an owned module and can run it against contract fixtures. Open small pull requests continuously; reserve the final one or two days for integration and a shared demo. A rotates the weekly integration review with another member so integration knowledge is not concentrated in one person.
+
+A task is complete when its promised behavior, loading/empty/error states, contract validation, server authorization where relevant, migration, meaningful tests and documentation all work. Completed writes must persist, reject duplicate or stale commands appropriately, and create an audit trail where required. A placeholder is complete only when its label, reserved API, storage model and future owner are present; it does not count as feature completion.
+
+Breaking contract changes require an agreed migration or `/api/v2` strategy before merge. A member who discovers a cross-module requirement opens a contract proposal instead of editing another module's implementation. Provider credentials, real records and local database files never belong in Git. See [Team workflow](TEAM_WORKFLOW.md), [Architecture](ARCHITECTURE.md), [API conventions](API_CONVENTIONS.md), and [Requirement traceability](REQUIREMENTS_TRACEABILITY.md).
+
+## Decisions needed before dependent work
+
+| Decision                                                                              | Owner                              | Needed by            |
+| ------------------------------------------------------------------------------------- | ---------------------------------- | -------------------- |
+| Real member assignments, weekly availability and academic deadline                    | Whole team                         | Iteration 1 planning |
+| Identity/MFA provider, account provisioning and patient-scope source                  | A with platform stakeholders       | Iteration 1          |
+| First medical templates, order validation rules and review roles                      | D with domain reviewer             | Iteration 2          |
+| Performance, concurrent users, availability, recovery-point and recovery-time targets | Whole team with project sponsor    | Iteration 2          |
+| RTC/object-storage/notification providers, budget and network constraints             | A, C and E                         | Iteration 3          |
+| Recording consent/defaults, retention, access, revocation and deletion                | Platform stakeholders with A and C | Before any recording |
+| Hospital/device interface and deployment database                                     | B, E and A with integration owners | Iteration 4          |
+| Whether peer collaboration is funded and who handles moderation                       | Whole team with platform owner     | Before Iteration 5   |

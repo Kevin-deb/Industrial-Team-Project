@@ -1,0 +1,17 @@
+node_modules/
+dist/
+runtime/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+.env
+.env.*
+!.env.example
+test-results/
+playwright-report/
+coverage/
+*.log
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
