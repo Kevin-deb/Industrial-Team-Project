@@ -18,3 +18,4 @@ export type {
   HealthNotificationPort,
   PatientSummaryPort,
 } from './ports.js';
+export { registerHealthRoutes } from './routes.js';

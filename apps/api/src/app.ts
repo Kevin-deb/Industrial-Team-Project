@@ -9,8 +9,8 @@ import { DEMO_DOCTOR_ID, DEMO_DATE } from './database/seed.js';
 import { SqlitePatientRepository } from './patients/index.js';
 import { SqliteEncounterRepository } from './encounters/index.js';
 import { SqliteClinicalRepository } from './clinical/index.js';
-import { SqliteHealthRepository } from './health/index.js';
-import { SqlitePlatformRepository } from './platform/index.js';
+import { HealthService, registerHealthRoutes, SqliteHealthRepository } from './health/index.js';
+import { SqlitePatientAccess, SqlitePlatformRepository } from './platform/index.js';
 import { features } from './platform/index.js';
 import { registerPlannedCommands } from './platform/index.js';
 
@@ -67,12 +67,22 @@ export async function createApp(options: AppOptions = {}) {
   const patients = new SqlitePatientRepository(db);
   const encounters = new SqliteEncounterRepository(db);
   const clinical = new SqliteClinicalRepository(db);
-  const health = new SqliteHealthRepository(db);
+  const healthRepository = new SqliteHealthRepository(db);
   const platform = new SqlitePlatformRepository(db);
   const context = () => ({
     actorId: DEMO_DOCTOR_ID,
     now: options.now?.() ?? new Date().toISOString(),
   });
+  const health = new HealthService(
+    healthRepository,
+    new SqlitePatientAccess(db),
+    {
+      find(patientId, requestContext) {
+        const patient = patients.findById(patientId, requestContext);
+        return patient ? { id: patient.id, name: patient.name } : undefined;
+      },
+    },
+  );
   app.addHook('onClose', async () => {
     if (!options.database) db.close();
   });
@@ -198,6 +208,7 @@ export async function createApp(options: AppOptions = {}) {
   app.get('/api/v1/health/overview', async (request) =>
     envelope(request, health.overview(context())),
   );
+  registerHealthRoutes(app, health, context);
   app.get('/api/v1/audit', async (request) => envelope(request, platform.ownAudit(DEMO_DOCTOR_ID)));
   app.get('/api/v1/features', async (request) => envelope(request, features));
   app.get('/api/v1/dashboard', async (request) => {
