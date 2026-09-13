@@ -5,3 +5,16 @@ export { seedHealthDemo } from './fixtures.js';
 export { healthCommands } from './commands.js';
 export { SqliteHealthRepository } from './repository.js';
 export type { HealthRepository } from './repository.js';
+export {
+  CommandConflict,
+  HealthResourceNotFound,
+  HealthService,
+  NotificationUnavailable,
+  StaleVersion,
+} from './service.js';
+export type {
+  HealthAuditEvent,
+  HealthAuditPort,
+  HealthNotificationPort,
+  PatientSummaryPort,
+} from './ports.js';
