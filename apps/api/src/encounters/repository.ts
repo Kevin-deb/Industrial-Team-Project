@@ -5,6 +5,7 @@ import { patientScopeSql, type RequestContext } from '../platform/index.js';
 export interface EncounterRepository {
   list(context: RequestContext): Encounter[];
   listConsultations(context: RequestContext): Consultation[];
+  findReference(id: string, context: RequestContext): { id: string; patientId: string } | undefined;
 }
 export class SqliteEncounterRepository implements EncounterRepository {
   constructor(private readonly db: DatabaseSync) {}
@@ -47,5 +48,15 @@ export class SqliteEncounterRepository implements EncounterRepository {
           .all(String(r.id))
           .map((p) => String(p.display_name)),
       }));
+  }
+
+  findReference(id: string, context: RequestContext) {
+    const row = this.db
+      .prepare(
+        `SELECT e.id,e.patient_id FROM encounters e JOIN patients p ON p.id=e.patient_id
+         WHERE e.id=:id AND ${patientScopeSql}`,
+      )
+      .get({ id, ...context });
+    return row ? { id: String(row.id), patientId: String(row.patient_id) } : undefined;
   }
 }

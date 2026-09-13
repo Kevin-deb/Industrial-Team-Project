@@ -8,7 +8,7 @@ import { openDatabase } from './database/connection.js';
 import { DEMO_DOCTOR_ID, DEMO_DATE } from './database/seed.js';
 import { SqlitePatientRepository } from './patients/index.js';
 import { SqliteEncounterRepository } from './encounters/index.js';
-import { SqliteClinicalRepository } from './clinical/index.js';
+import { registerClinicalRoutes, SqliteClinicalRepository } from './clinical/index.js';
 import { SqliteHealthRepository } from './health/index.js';
 import { SqlitePlatformRepository } from './platform/index.js';
 import { features } from './platform/index.js';
@@ -191,7 +191,7 @@ export async function createApp(options: AppOptions = {}) {
     },
   );
   app.get('/api/v1/encounters', async (request) => envelope(request, encounters.list(context())));
-  app.get('/api/v1/records', async (request) => envelope(request, clinical.listRecords(context())));
+  registerClinicalRoutes(app, { clinical, encounters, platform, context });
   app.get('/api/v1/consultations', async (request) =>
     envelope(request, encounters.listConsultations(context())),
   );
