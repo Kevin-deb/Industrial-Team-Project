@@ -24,6 +24,7 @@ import { useApi } from '../shared/api';
 import { Badge, Card, LoadingState, PageHeader } from '../shared/ui';
 
 const patientStatus = { stable: '管理中', attention: '待关注', 'follow-up': '待随访' } as const;
+const isPendingEncounter = (status: string) => status === 'waiting' || status === 'scheduled';
 export function DashboardPage() {
   const { t, language, setLanguage, formatDate } = useI18n();
 
@@ -71,7 +72,7 @@ export function DashboardPage() {
     },
   ];
   const schedule = data.schedule.filter(
-    (item) => scheduleTab === '全部' || item.status === 'waiting',
+    (item) => scheduleTab === '全部' || isPendingEncounter(item.status),
   );
   return (
     <div className="dashboard">
@@ -186,7 +187,9 @@ export function DashboardPage() {
               >
                 {t(tab)}
                 {tab === '待接诊' && (
-                  <span>{data.schedule.filter((item) => item.status === 'waiting').length}</span>
+                  <span>
+                    {data.schedule.filter((item) => isPendingEncounter(item.status)).length}
+                  </span>
                 )}
               </button>
             ))}
@@ -219,13 +222,13 @@ export function DashboardPage() {
                   <div className="schedule-patient">
                     <strong>
                       {item.patientName}
-                      <Badge tone={item.status === 'waiting' ? 'amber' : 'slate'}>
+                      <Badge tone={isPendingEncounter(item.status) ? 'amber' : 'slate'}>
                         {t(
-                          item.status === 'waiting'
+                          isPendingEncounter(item.status)
                             ? '待接诊'
                             : item.status === 'completed'
                               ? '已完成'
-                              : '已预约',
+                              : '待接诊',
                         )}
                       </Badge>
                     </strong>

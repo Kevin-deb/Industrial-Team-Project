@@ -1,6 +1,7 @@
 /** Shared module UI copy and labels used by multiple business domains. */
 export const commonMessages: Record<string, string> = {
   关闭详情: 'Close details',
+  查看大图: 'View full image',
   后续迭代: 'Future iteration',
   功能设计预览: 'Feature preview',
   '当前为框架演示版本，此操作不会创建诊疗记录、发送消息或修改患者数据。':
