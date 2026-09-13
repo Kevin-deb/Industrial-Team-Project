@@ -2,7 +2,7 @@
 
 CareLink is an installable Windows desktop application for the doctor side of the Smart Medical and Elderly Care Big Data Public Service Platform. Version 0.2.0 delivers the Iteration 0 framework: a light medical workspace, Chinese and English interface switching, synthetic patient data, a local database, versioned service contracts and independently owned modules for a five-person team.
 
-**Current scope: framework demonstration using fictional records.** Patient search, filters, read-only details, health charts, navigation, audit browsing and local preferences are available. Identity verification, clinical writes, prescriptions, live consultation, recording, notifications, uploads and exports remain clearly marked as planned. Reserved service commands return `501 FEATURE_NOT_IMPLEMENTED`.
+**Current scope: framework demonstration using fictional records.** Patient search, filters, local structured medical-record drafts, health charts, navigation, audit browsing and local preferences are available. Identity verification, record review/archive, prescriptions, live consultation, recording, notifications, uploads and exports remain clearly marked as planned. Reserved service commands return `501 FEATURE_NOT_IMPLEMENTED`.
 
 ![CareLink Windows doctor workspace in Chinese](docs/images/dashboard.png)
 
@@ -95,4 +95,4 @@ npm run package:win
 
 The sandboxed renderer loads local assets through a private `carelink://app/` protocol. Requests under `/api/v1` are forwarded to embedded Fastify handlers through `app.inject`, preserving the typed service boundary without opening a network port. SQLite stores synthetic data in the user's application-data directory. Domain code owns its repositories, migrations, commands and message catalogs; shared composition supplies identity, policy, audit and provider ports.
 
-The same domain contracts can support a later authenticated remote service. PostgreSQL still requires a repository adapter, schema migration and parity tests. Real identity, clinical writes, video, recordings, exports, notifications and external data integrations are reserved work, not completed capabilities. Every new feature must support Chinese and English and pass its iteration's acceptance scenarios.
+The same domain contracts can support a later authenticated remote service. PostgreSQL still requires a repository adapter, schema migration and parity tests. Medical-record drafts remain a synthetic local workflow; real identity, production clinical writes, video, recordings, exports, notifications and external data integrations are reserved work, not completed capabilities. Every new feature must support Chinese and English and pass its iteration's acceptance scenarios.

@@ -1,30 +1,40 @@
 # API Conventions and Module Contracts
 
-The desktop renderer and embedded API share the `@doctor/contracts` package. Each feature owner implements against this boundary rather than importing another module's internals. This guide distinguishes the current read-only demonstration from rules for future clinical writes.
+The desktop renderer and embedded API share the `@doctor/contracts` package. Each feature owner implements against this boundary rather than importing another module's internals. This guide distinguishes the current synthetic draft workflow from rules for future production clinical writes.
 
-All application routes start with `/api/v1`. In the installed desktop application, renderer requests use `carelink://app/api/v1/...`; the private protocol dispatches to Fastify through `app.inject` without opening an HTTP listener. The optional `npm run dev:web` environment exposes the same routes on a loopback HTTP server. Requests and responses use JSON unless a future upload/download contract explicitly states otherwise. The current application uses a fixed synthetic doctor, synthetic records and a fixed demonstration date. It does not implement a real login or accept clinical writes.
+All application routes start with `/api/v1`. In the installed desktop application, renderer requests use `carelink://app/api/v1/...`; the private protocol dispatches to Fastify through `app.inject` without opening an HTTP listener. The optional `npm run dev:web` environment exposes the same routes on a loopback HTTP server. Requests and responses use JSON unless a future upload/download contract explicitly states otherwise. The current application uses a fixed synthetic doctor, synthetic records and a fixed demonstration date. It does not implement a real login; only structured medical-record drafts can currently be written, and only in the local synthetic environment.
 
 The private protocol accepts only the application origin and validates asset paths, request size and supported operations. Application-level errors keep the JSON envelope below. A transport-level rejection, such as an invalid protocol origin or oversized request, may return a safe plain-text error before Fastify runs; the renderer must handle a non-JSON failure gracefully.
 
-The current desktop header allowlist forwards `Accept`, `Content-Type` and `Accept-Language`. Future authenticated/concurrent write transport must explicitly add the agreed session, `If-Match` and `Idempotency-Key` handling before enabling those commands. Do not assume a new HTTP header automatically passes through the desktop bridge.
+The current desktop header allowlist forwards `Accept`, `Content-Type`, `Accept-Language` and the record-draft concurrency header `If-Match`. Future authenticated transport must explicitly add the agreed session and `Idempotency-Key` handling before enabling retriable production commands. Do not assume a new HTTP header automatically passes through the desktop bridge.
 
 ## Implemented read API
 
-| Method and path               | Owner                         | Response data     | Current behavior                                                                                  |
-| ----------------------------- | ----------------------------- | ----------------- | ------------------------------------------------------------------------------------------------- |
-| `GET /api/v1/session`         | A                             | `Session`         | Fixed demonstration doctor, mode, date and disclaimer; not an authentication handshake            |
-| `GET /api/v1/dashboard`       | A, composing domain summaries | `Dashboard`       | Synthetic workload counts, schedule, patient previews, health alerts and activity                 |
-| `GET /api/v1/patients`        | B                             | `Patient[]`       | Scoped search/filter/pagination; page metadata is outside `data`                                  |
-| `GET /api/v1/patients/:id`    | B                             | `Patient`         | Scoped synthetic patient detail; an unavailable patient is not disclosed                          |
-| `GET /api/v1/encounters`      | C                             | `Encounter[]`     | Synthetic text/video appointment and encounter worklist                                           |
-| `GET /api/v1/records`         | D                             | `MedicalRecord[]` | Synthetic record summaries, review state, version and order count                                 |
-| `GET /api/v1/consultations`   | C                             | `Consultation[]`  | Synthetic expert-consultation summaries and participants                                          |
-| `GET /api/v1/health/overview` | E                             | `HealthOverview`  | Synthetic observations, alerts, plans and summary counts                                          |
-| `GET /api/v1/audit`           | A                             | `AuditEvent[]`    | Seeded synthetic events and local demo patient-access events, filtered to the demonstration actor |
-| `GET /api/v1/features`        | A                             | `Feature[]`       | Capability descriptions, owner domain, iteration and demo/planned/disabled state                  |
-| `GET /api/v1/health`          | A                             | `ServiceHealth`   | API/database availability and demonstration mode                                                  |
+| Method and path               | Owner                         | Response data         | Current behavior                                                                                  |
+| ----------------------------- | ----------------------------- | --------------------- | ------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/session`         | A                             | `Session`             | Fixed demonstration doctor, mode, date and disclaimer; not an authentication handshake            |
+| `GET /api/v1/dashboard`       | A, composing domain summaries | `Dashboard`           | Synthetic workload counts, schedule, patient previews, health alerts and activity                 |
+| `GET /api/v1/patients`        | B                             | `Patient[]`           | Scoped search/filter/pagination; page metadata is outside `data`                                  |
+| `GET /api/v1/patients/:id`    | B                             | `Patient`             | Scoped synthetic patient detail; an unavailable patient is not disclosed                          |
+| `GET /api/v1/encounters`      | C                             | `Encounter[]`         | Synthetic text/video appointment and encounter worklist                                           |
+| `GET /api/v1/records`         | D                             | `MedicalRecord[]`     | Synthetic record summaries, review state, version and order count                                 |
+| `GET /api/v1/records/:id`     | D                             | `MedicalRecordDetail` | Scoped current structured body and draft version                                                  |
+| `GET /api/v1/consultations`   | C                             | `Consultation[]`      | Synthetic expert-consultation summaries and participants                                          |
+| `GET /api/v1/health/overview` | E                             | `HealthOverview`      | Synthetic observations, alerts, plans and summary counts                                          |
+| `GET /api/v1/audit`           | A                             | `AuditEvent[]`        | Seeded synthetic events and local demo patient-access events, filtered to the demonstration actor |
+| `GET /api/v1/features`        | A                             | `Feature[]`           | Capability descriptions, owner domain, iteration and demo/planned/disabled state                  |
+| `GET /api/v1/health`          | A                             | `ServiceHealth`       | API/database availability and demonstration mode                                                  |
 
 `/health` reports service availability; `/health/overview` is the doctor's health-management view. Do not substitute one for the other.
+
+## Implemented synthetic draft commands
+
+| Method and path             | Request contract             | Success | Preconditions and limits                                                  |
+| --------------------------- | ---------------------------- | ------- | ------------------------------------------------------------------------- |
+| `POST /api/v1/records`      | `CreateMedicalRecordRequest` | `201`   | Scoped patient; optional encounter must belong to that patient            |
+| `PATCH /api/v1/records/:id` | `UpdateMedicalRecordRequest` | `200`   | Author-owned draft and exact `If-Match: "record-v{version}"` precondition |
+
+Both commands return `MedicalRecordDetail` with the current ETag. Every save appends a record version. Missing version preconditions return `428`, stale versions return `412`, non-draft updates return `409`, and template-shape failures return `422`. These commands store fictional local data only; they are not authenticated production clinical writes.
 
 Patient query parameters:
 
@@ -102,7 +112,7 @@ Never return stack traces, raw SQL, credentials or patient content in an error. 
 
 ## Unavailable commands and future route design
 
-Iteration 0 registers 39 explicit future command routes with `501 FEATURE_NOT_IMPLEMENTED` handlers. Unknown paths return `404 NOT_FOUND`; there is no catch-all write route. Each domain owns its `commands.ts`, which records method/path, owner, tables, provider dependencies and an optional future handler. The [composition registry](../apps/api/src/platform/planned-commands.ts) combines these entries and supplies the standard placeholder response. Domain owners implement a handler in their own file once its command meets the iteration's acceptance criteria; normal feature work does not require editing the shared registry.
+The original Iteration 0 scaffold registered 39 explicit future command routes. Iteration 1 enables `POST /records` and `PATCH /records/:id` for local synthetic drafts; the remaining 37 commands keep their `501 FEATURE_NOT_IMPLEMENTED` handlers. Unknown paths return `404 NOT_FOUND`; there is no catch-all write route. Each domain owns its command and route registration. The [composition registry](../apps/api/src/platform/planned-commands.ts) combines unavailable commands and supplies the standard placeholder response.
 
 The following resource families define ownership and implementation responsibility. Exact accepted payloads must be added to the owning contract before enabling a command.
 
@@ -124,7 +134,7 @@ Use `POST` to create resources or invoke a state transition; `PATCH` to revise p
 
 ### Reserved route registry snapshot
 
-All of these routes are placeholders and return `501`; request body schemas and real operations remain future work. The paths include the common prefix.
+The routes below remain placeholders and return `501`; request body schemas and real operations remain future work. The paths include the common prefix. Record draft creation and update are intentionally absent because they are implemented above.
 
 | Method   | Route                                   | Owner domain |
 | -------- | --------------------------------------- | ------------ |
@@ -140,8 +150,6 @@ All of these routes are placeholders and return `501`; request body schemas and 
 | `POST`   | `/api/v1/encounters/:id/rtc-room`       | `encounters` |
 | `POST`   | `/api/v1/encounters/:id/recordings`     | `encounters` |
 | `POST`   | `/api/v1/encounters/:id/export`         | `encounters` |
-| `POST`   | `/api/v1/records`                       | `clinical`   |
-| `PATCH`  | `/api/v1/records/:id`                   | `clinical`   |
 | `POST`   | `/api/v1/records/:id/submit`            | `clinical`   |
 | `POST`   | `/api/v1/records/:id/reviews`           | `clinical`   |
 | `POST`   | `/api/v1/records/:id/archive`           | `clinical`   |

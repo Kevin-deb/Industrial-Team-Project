@@ -82,6 +82,52 @@ test('private protocol rejects foreign origins, path escapes, oversized requests
   }
 });
 
+test('private protocol forwards medical-record concurrency preconditions', async () => {
+  const root = mkdtempSync(resolve(tmpdir(), 'carelink-record-protocol-'));
+  const app = await createApp({ runtime: 'desktop-demo' });
+  const handler = createProtocolHandler(app, root);
+  const recordBody = {
+    chiefComplaint: 'Synthetic protocol test',
+    presentIllness: '',
+    medicalAndAllergyHistory: '',
+    examinationAndInvestigations: '',
+    assessmentAndPlan: '',
+  };
+  try {
+    const created = await handler(
+      new Request('carelink://app/api/v1/records', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          patientId: 'PAT-001',
+          templateId: 'outpatient',
+          title: 'Protocol draft',
+          diagnosis: 'Synthetic diagnosis',
+          body: recordBody,
+        }),
+      }),
+    );
+    assert.equal(created.status, 201);
+    const record = (await created.json()).data;
+    const updated = await handler(
+      new Request(`carelink://app/api/v1/records/${record.id}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json', 'if-match': '"record-v1"' },
+        body: JSON.stringify({
+          title: 'Protocol draft v2',
+          diagnosis: 'Synthetic diagnosis',
+          body: recordBody,
+        }),
+      }),
+    );
+    assert.equal(updated.status, 200);
+    assert.equal(updated.headers.get('etag'), '"record-v2"');
+  } finally {
+    await app.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('production environment still refuses standalone demo but permits explicit desktop demo', async () => {
   const previous = process.env.NODE_ENV;
   process.env.NODE_ENV = 'production';

@@ -88,6 +88,31 @@ test('API failure is visible and recoverable', async ({ page }) => {
   await expect(page.getByRole('heading', { name: '工作台概览' })).toBeVisible();
 });
 
+test('medical record drafts create, version and remain bilingual', async ({ page }) => {
+  await page.goto('/records');
+  await page.getByRole('button', { name: '新建病历' }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible();
+  await dialog.getByLabel('选择患者').selectOption('PAT-001');
+  await dialog.getByLabel('选择关联问诊').selectOption('ENC-001');
+  await dialog.getByLabel('选择病历模板').selectOption('followup');
+  await dialog.getByLabel('病历标题').fill('端到端演示草稿');
+  await dialog.getByLabel('诊断').fill('合成测试诊断');
+  await dialog.getByLabel('本次随访目的').fill('验证本地持久化');
+  await dialog.getByRole('button', { name: '保存草稿' }).click();
+  await expect(dialog).toContainText('草稿已保存到本地数据库');
+  await expect(dialog).toContainText('v1.0');
+
+  await dialog.getByLabel('本次随访目的').fill('验证第二个版本');
+  await dialog.getByRole('button', { name: '保存草稿' }).click();
+  await expect(dialog).toContainText('v2.0');
+  await page.getByTestId('language-select').selectOption('en', { force: true });
+  await expect(dialog.getByLabel('Follow-up purpose')).toHaveValue('验证第二个版本');
+  await expect(dialog.getByRole('button', { name: 'Save draft' })).toBeDisabled();
+  await dialog.getByRole('button', { name: 'Close' }).click();
+  await expect(page.getByText('端到端演示草稿')).toBeVisible();
+});
+
 test('mobile navigation and help dialog remain usable', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
