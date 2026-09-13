@@ -14,6 +14,8 @@ export const consultationsMessages: Record<string, string> = {
   '{count} 位参与医生': '{count} participating doctors',
   演示会诊: 'Demo consultation',
   查看详情: 'View details',
+  进入诊室: 'Enter room',
+  返回会诊列表: 'Back to consultations',
   此状态下暂无会诊: 'No consultations with this status',
   '查看其他分类，或浏览下方的会诊流程规划。':
     'Select another status or explore the planned workflow below.',
@@ -30,12 +32,29 @@ export const consultationsMessages: Record<string, string> = {
   出具报告: 'Issue report',
   审核后归档: 'Review and archive',
   会诊材料: 'Consultation materials',
+  近三个月血压趋势: 'Blood pressure trend from the last three months',
+  心电图摘要: 'ECG summary',
+  当前用药清单: 'Current medication list',
+  血糖监测记录: 'Blood glucose records',
+  饮食运动记录: 'Diet and exercise log',
+  既往随访摘要: 'Previous follow-up summary',
+  病情摘要: 'Case summary',
+  检查结果: 'Investigation results',
+  用药记录: 'Medication records',
   '按会诊任务共享必要材料，附件访问单独授权。':
     'Share necessary materials for each consultation, with separate attachment authorization.',
   临时访问授权: 'Temporary access',
+  '共享基础档案、健康监测与本次会诊材料':
+    'Share demographics, health monitoring, and materials for this consultation',
+  仅共享糖尿病随访相关资料: 'Share only diabetes follow-up materials',
+  按本次会诊任务共享必要资料: 'Share necessary materials for this consultation',
+  有效期至: 'Valid until',
   '仅参与专家可查看授权范围内的患者信息。':
     'Only participating specialists can view patient information within the authorized scope.',
   联合会诊报告: 'Joint consultation report',
+  报告草稿待联合讨论后生成: 'Report draft will be generated after joint discussion',
+  待专家确认后建立报告模板: 'Report template will be created after specialists confirm',
+  会诊结束后生成联合报告: 'Joint report will be generated after the consultation',
   '整合专科意见，审核签署后关联患者病历。':
     'Combine specialist opinions and link the reviewed, signed report to the patient record.',
   了解设计: 'Explore design',
@@ -44,6 +63,14 @@ export const consultationsMessages: Record<string, string> = {
   计划时间: 'Scheduled time',
   参与医生: 'Participating doctors',
   会诊摘要: 'Consultation summary',
+  会诊讨论: 'Consultation discussion',
+  '建议先核对近期指标和当前用药，再形成联合意见。':
+    'Review recent indicators and current medication before forming a joint opinion.',
+  '已打开本次会诊材料，等待各专科补充意见。':
+    'The consultation materials are open. Waiting for each specialty to add comments.',
+  进入视频会议: 'Join video meeting',
+  发送讨论消息: 'Send discussion message',
+  导出会诊材料: 'Export materials',
   '报告编辑、专科意见与签署 · 尚未上线':
     'Report editing, specialist opinions, and signatures · Coming soon',
   报告预留内容: 'Planned report contents',

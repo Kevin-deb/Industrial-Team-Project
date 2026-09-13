@@ -3,10 +3,13 @@ import { useCallback, useMemo, useState } from 'react';
 import {
   CalendarClock,
   ClipboardList,
+  Download,
   FileCheck2,
+  MessageSquare,
   Network,
   Plus,
   ShieldCheck,
+  Video,
   UsersRound,
 } from 'lucide-react';
 import type { Consultation } from '@doctor/contracts';
@@ -24,13 +27,140 @@ import {
 
 const statuses = { requested: '申请中', scheduled: '已安排', completed: '已完成' };
 const tones = { requested: 'amber', scheduled: 'blue', completed: 'teal' } as const;
+type ConsultationSetup = {
+  materials: string[];
+  access: string;
+  accessUntil: string;
+  report: string;
+};
+const setups: Record<string, ConsultationSetup> = {
+  'CON-001': {
+    materials: ['近三个月血压趋势', '心电图摘要', '当前用药清单'],
+    access: '共享基础档案、健康监测与本次会诊材料',
+    accessUntil: '2026-09-12T18:00:00+08:00',
+    report: '报告草稿待联合讨论后生成',
+  },
+  'CON-002': {
+    materials: ['血糖监测记录', '饮食运动记录', '既往随访摘要'],
+    access: '仅共享糖尿病随访相关资料',
+    accessUntil: '2026-09-11T18:00:00+08:00',
+    report: '待专家确认后建立报告模板',
+  },
+};
+
+function setupFor(item: Consultation) {
+  return (
+    setups[item.id] ?? {
+      materials: ['病情摘要', '检查结果', '用药记录'],
+      access: '按本次会诊任务共享必要资料',
+      accessUntil: item.scheduledAt,
+      report: '会诊结束后生成联合报告',
+    }
+  );
+}
+
+function ConsultationRoom({ item, onBack }: { item: Consultation; onBack: () => void }) {
+  const { t, formatDate, language } = useI18n();
+  const setup = setupFor(item);
+  return (
+    <div className="consultation-room-page">
+      <header className="encounter-room-header">
+        <button className="feature-icon-button" onClick={onBack} aria-label={t('返回会诊列表')}>
+          <Network size={18} />
+        </button>
+        <div>
+          <strong>{t(item.title)}</strong>
+          <small>
+            {item.patientName} · {item.patientId} · {item.id}
+          </small>
+        </div>
+        <div className="encounter-room-header-meta">
+          <Badge tone={tones[item.status]}>{t(statuses[item.status])}</Badge>
+          <span>{formatDate(item.scheduledAt, { dateStyle: 'medium', timeStyle: 'short' })}</span>
+        </div>
+      </header>
+      <div className="consultation-room-layout">
+        <aside className="consultation-room-sidebar">
+          <section className="consultation-setting-panel">
+            <h3>
+              <ClipboardList size={16} />
+              {t('会诊材料')}
+            </h3>
+            <ul>
+              {setup.materials.map((material) => (
+                <li key={material}>{t(material)}</li>
+              ))}
+            </ul>
+          </section>
+          <section className="consultation-setting-panel">
+            <h3>
+              <ShieldCheck size={16} />
+              {t('临时访问授权')}
+            </h3>
+            <p>{t(setup.access)}</p>
+            <span>
+              {t('有效期至')}{' '}
+              {formatDate(setup.accessUntil, { dateStyle: 'medium', timeStyle: 'short' })}
+            </span>
+          </section>
+          <section className="consultation-setting-panel">
+            <h3>
+              <FileCheck2 size={16} />
+              {t('联合会诊报告')}
+            </h3>
+            <p>{t(setup.report)}</p>
+          </section>
+        </aside>
+        <main className="consultation-room-main">
+          <section className="consultation-stage">
+            <div className="consultation-video-strip">
+              {[t('我'), ...item.participants].slice(0, 4).map((name, index) => (
+                <div className="consultation-participant" key={`${name}-${index}`}>
+                  <UsersRound size={24} />
+                  <span>{name}</span>
+                </div>
+              ))}
+            </div>
+            <div className="consultation-discussion">
+              <h3>{t('会诊讨论')}</h3>
+              <div className="consultation-message consultation-message--expert">
+                <strong>{item.participants.join(language === 'en' ? ', ' : '、')}</strong>
+                <p>{t('建议先核对近期指标和当前用药，再形成联合意见。')}</p>
+              </div>
+              <div className="consultation-message consultation-message--doctor">
+                <strong>{t('我')}</strong>
+                <p>{t('已打开本次会诊材料，等待各专科补充意见。')}</p>
+              </div>
+            </div>
+            <div className="consultation-room-controls">
+              <Button>
+                <Video size={16} />
+                {t('进入视频会议')}
+              </Button>
+              <Button variant="secondary">
+                <MessageSquare size={16} />
+                {t('发送讨论消息')}
+              </Button>
+              <Button variant="secondary">
+                <Download size={16} />
+                {t('导出会诊材料')}
+              </Button>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+  );
+}
 
 export function ConsultationsPage() {
   const { t, formatDate, language } = useI18n();
   const { data, loading, error, reload } = useApi<Consultation[]>('/consultations');
   const [status, setStatus] = useState('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [roomId, setRoomId] = useState<string | null>(null);
   const selected = data?.find((item) => item.id === selectedId) ?? null;
+  const activeRoom = data?.find((item) => item.id === roomId) ?? null;
   const [planned, setPlanned] = useState<string | null>(null);
   const close = useCallback(() => setSelectedId(null), []);
   const closePlanned = useCallback(() => setPlanned(null), []);
@@ -38,6 +168,7 @@ export function ConsultationsPage() {
     () => (data ?? []).filter((item) => status === 'all' || item.status === status),
     [data, status],
   );
+  if (activeRoom) return <ConsultationRoom item={activeRoom} onBack={() => setRoomId(null)} />;
   return (
     <div className="feature-page">
       <PageHeader
@@ -81,33 +212,55 @@ export function ConsultationsPage() {
             <span className="feature-mini-label">{t('当前医生相关的会诊安排')}</span>
           </div>
           <div className="feature-card-grid">
-            {cases.map((item) => (
-              <Card className="mdt-case" key={item.id}>
-                <div className="mdt-case-heading">
-                  <span className="feature-symbol blue">
-                    <UsersRound size={20} />
-                  </span>
-                  <Badge tone={tones[item.status]}>{t(statuses[item.status])}</Badge>
-                </div>
-                <span className="feature-eyebrow">{item.id}</span>
-                <h3>{t(item.title)}</h3>
-                <p>
-                  {item.patientName} · {item.patientId}
-                </p>
-                <div className="mdt-specialties">
-                  <span>{item.specialty}</span>
-                  <span>{t('{count} 位参与医生', { count: item.participants.length })}</span>
-                </div>
-                <p className="feature-inline-icon">
-                  <CalendarClock size={13} />
-                  {formatDate(item.scheduledAt, { dateStyle: 'medium', timeStyle: 'short' })}
-                </p>
-                <div className="mdt-footer" style={{ marginTop: 18 }}>
-                  <span>{t('演示会诊')}</span>
-                  <LinkAction onClick={() => setSelectedId(item.id)}>{t('查看详情')}</LinkAction>
-                </div>
-              </Card>
-            ))}
+            {cases.map((item) => {
+              const setup = setupFor(item);
+              return (
+                <Card className="mdt-case" key={item.id}>
+                  <div className="mdt-case-heading">
+                    <span className="feature-symbol blue">
+                      <UsersRound size={20} />
+                    </span>
+                    <Badge tone={tones[item.status]}>{t(statuses[item.status])}</Badge>
+                  </div>
+                  <span className="feature-eyebrow">{item.id}</span>
+                  <h3>{t(item.title)}</h3>
+                  <p>
+                    {item.patientName} · {item.patientId}
+                  </p>
+                  <div className="mdt-specialties">
+                    <span>{item.specialty}</span>
+                    <span>{t('{count} 位参与医生', { count: item.participants.length })}</span>
+                  </div>
+                  <p className="feature-inline-icon">
+                    <CalendarClock size={13} />
+                    {formatDate(item.scheduledAt, { dateStyle: 'medium', timeStyle: 'short' })}
+                  </p>
+                  <div className="consultation-card-settings">
+                    <div>
+                      <strong>{t('会诊材料')}</strong>
+                      <span>{setup.materials.map((material) => t(material)).join('、')}</span>
+                    </div>
+                    <div>
+                      <strong>{t('临时访问授权')}</strong>
+                      <span>{t(setup.access)}</span>
+                    </div>
+                    <div>
+                      <strong>{t('联合会诊报告')}</strong>
+                      <span>{t(setup.report)}</span>
+                    </div>
+                  </div>
+                  <div className="mdt-footer" style={{ marginTop: 18 }}>
+                    <span>{t('演示会诊')}</span>
+                    <div className="consultation-card-actions">
+                      <LinkAction onClick={() => setSelectedId(item.id)}>
+                        {t('查看详情')}
+                      </LinkAction>
+                      <LinkAction onClick={() => setRoomId(item.id)}>{t('进入诊室')}</LinkAction>
+                    </div>
+                  </div>
+                </Card>
+              );
+            })}
           </div>
           {!cases.length && (
             <EmptyState
@@ -138,37 +291,6 @@ export function ConsultationsPage() {
               </div>
             </div>
           </Card>
-          <div className="feature-card-grid" style={{ marginTop: 20 }}>
-            {[
-              {
-                icon: ClipboardList,
-                title: '会诊材料',
-                copy: '按会诊任务共享必要材料，附件访问单独授权。',
-              },
-              {
-                icon: ShieldCheck,
-                title: '临时访问授权',
-                copy: '仅参与专家可查看授权范围内的患者信息。',
-              },
-              {
-                icon: FileCheck2,
-                title: '联合会诊报告',
-                copy: '整合专科意见，审核签署后关联患者病历。',
-              },
-            ].map((item) => (
-              <Card className="feature-service-card" key={item.title}>
-                <div className="feature-service-top">
-                  <span className="feature-symbol">
-                    <item.icon size={19} />
-                  </span>
-                  <Badge tone="slate">{t('规划中')}</Badge>
-                </div>
-                <h3>{t(item.title)}</h3>
-                <p>{t(item.copy)}</p>
-                <LinkAction onClick={() => setPlanned(item.title)}>{t('了解设计')}</LinkAction>
-              </Card>
-            ))}
-          </div>
           <ReadOnlyNote />
         </>
       )}
@@ -198,6 +320,31 @@ export function ConsultationsPage() {
           />
           <h4 className="feature-small-heading">{t('会诊摘要')}</h4>
           <p className="feature-prose">{selected.summary}</p>
+          <div className="consultation-card-settings consultation-card-settings--detail">
+            <div>
+              <strong>{t('会诊材料')}</strong>
+              <span>
+                {setupFor(selected)
+                  .materials.map((material) => t(material))
+                  .join('、')}
+              </span>
+            </div>
+            <div>
+              <strong>{t('临时访问授权')}</strong>
+              <span>{t(setupFor(selected).access)}</span>
+            </div>
+          </div>
+          <div className="encounter-room-action">
+            <Button
+              onClick={() => {
+                setRoomId(selected.id);
+                close();
+              }}
+            >
+              <Network size={16} />
+              {t('进入诊室')}
+            </Button>
+          </div>
           <div className="feature-document">
             <div className="feature-document-head">
               <h3>{t('联合会诊报告')}</h3>
