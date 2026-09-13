@@ -268,7 +268,7 @@ export function App() {
             <Route path="/consultations" element={<ConsultationsPage />} />
             <Route path="/health" element={<HealthPage />} />
             <Route path="/audit" element={<AuditPage />} />
-            <Route path="/community" element={<CommunityPage />} />
+            <Route path="/community/*" element={<CommunityPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route
               path="*"
