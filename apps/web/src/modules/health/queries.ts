@@ -14,14 +14,20 @@ import type {
   ReminderTask,
   UpdateCarePlanInput,
 } from '@doctor/contracts';
-import { requestEApi } from '../e-shared/api';
+import { requestEApi } from '../e-shared';
 
-export interface ObservationFilters { metric?: Observation['metric']; from?: string; to?: string; page?: number }
+export interface ObservationFilters {
+  metric?: Observation['metric'];
+  from?: string;
+  to?: string;
+  page?: number;
+}
 
 export const healthKeys = {
   all: ['health'] as const,
   overview: (patientId: string) => ['health', 'overview', patientId] as const,
-  observations: (patientId: string, filters: ObservationFilters) => ['health', 'observations', patientId, filters] as const,
+  observations: (patientId: string, filters: ObservationFilters) =>
+    ['health', 'observations', patientId, filters] as const,
   plans: (patientId: string) => ['health', 'plans', patientId] as const,
   assessments: (patientId: string) => ['health', 'assessments', patientId] as const,
   reminders: (patientId: string) => ['health', 'reminders', patientId] as const,
@@ -30,7 +36,10 @@ export const healthKeys = {
 export function usePatientSearch(query: string) {
   return useQuery({
     queryKey: ['health', 'patient-search', query],
-    queryFn: () => requestEApi<Patient[]>(`/patients?${query ? `q=${encodeURIComponent(query)}&` : ''}pageSize=8`),
+    queryFn: () =>
+      requestEApi<Patient[]>(
+        `/patients?${query ? `q=${encodeURIComponent(query)}&` : ''}pageSize=8`,
+      ),
     placeholderData: keepPreviousData,
   });
 }
@@ -38,7 +47,8 @@ export function usePatientSearch(query: string) {
 export function useHealthOverview(patientId: string) {
   return useQuery({
     queryKey: healthKeys.overview(patientId),
-    queryFn: () => requestEApi<HealthOverview>(`/health/overview?patientId=${encodeURIComponent(patientId)}`),
+    queryFn: () =>
+      requestEApi<HealthOverview>(`/health/overview?patientId=${encodeURIComponent(patientId)}`),
     enabled: Boolean(patientId),
   });
 }
@@ -60,7 +70,8 @@ export function useObservations(patientId: string, filters: ObservationFilters) 
 export function useCreateObservation(patientId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: CreateObservationInput) => requestEApi<Observation>('/health/observations', { method: 'POST', body: input }),
+    mutationFn: (input: CreateObservationInput) =>
+      requestEApi<Observation>('/health/observations', { method: 'POST', body: input }),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: healthKeys.overview(patientId) }),
@@ -71,50 +82,110 @@ export function useCreateObservation(patientId: string) {
 }
 
 export function usePlans(patientId: string) {
-  return useQuery({ queryKey: healthKeys.plans(patientId), queryFn: () => requestEApi<CarePlanDetail[]>(`/health/plans?patientId=${encodeURIComponent(patientId)}`), enabled: Boolean(patientId) });
+  return useQuery({
+    queryKey: healthKeys.plans(patientId),
+    queryFn: () =>
+      requestEApi<CarePlanDetail[]>(`/health/plans?patientId=${encodeURIComponent(patientId)}`),
+    enabled: Boolean(patientId),
+  });
 }
 
 export function usePlanVersions(planId: string) {
-  return useQuery({ queryKey: ['health', 'plan-versions', planId], queryFn: () => requestEApi<CarePlanVersion[]>(`/health/plans/${encodeURIComponent(planId)}/versions`), enabled: Boolean(planId) });
+  return useQuery({
+    queryKey: ['health', 'plan-versions', planId],
+    queryFn: () =>
+      requestEApi<CarePlanVersion[]>(`/health/plans/${encodeURIComponent(planId)}/versions`),
+    enabled: Boolean(planId),
+  });
 }
 
 export function useCreatePlan(patientId: string) {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (input: CreateCarePlanInput) => requestEApi<CarePlanDetail>('/health/plans', { method: 'POST', body: input }),
-    onSuccess: async () => Promise.all([client.invalidateQueries({ queryKey: healthKeys.plans(patientId) }), client.invalidateQueries({ queryKey: healthKeys.overview(patientId) })]),
+    mutationFn: (input: CreateCarePlanInput) =>
+      requestEApi<CarePlanDetail>('/health/plans', { method: 'POST', body: input }),
+    onSuccess: async () =>
+      Promise.all([
+        client.invalidateQueries({ queryKey: healthKeys.plans(patientId) }),
+        client.invalidateQueries({ queryKey: healthKeys.overview(patientId) }),
+      ]),
   });
 }
 
 export function useUpdatePlan(patientId: string) {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, input }: { id: string; input: UpdateCarePlanInput }) => requestEApi<CarePlanDetail>(`/health/plans/${encodeURIComponent(id)}`, { method: 'PATCH', body: input }),
-    onSuccess: async (_, variables) => Promise.all([client.invalidateQueries({ queryKey: healthKeys.plans(patientId) }), client.invalidateQueries({ queryKey: ['health', 'plan-versions', variables.id] }), client.invalidateQueries({ queryKey: healthKeys.overview(patientId) })]),
+    mutationFn: ({ id, input }: { id: string; input: UpdateCarePlanInput }) =>
+      requestEApi<CarePlanDetail>(`/health/plans/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: input,
+      }),
+    onSuccess: async (_, variables) =>
+      Promise.all([
+        client.invalidateQueries({ queryKey: healthKeys.plans(patientId) }),
+        client.invalidateQueries({ queryKey: ['health', 'plan-versions', variables.id] }),
+        client.invalidateQueries({ queryKey: healthKeys.overview(patientId) }),
+      ]),
   });
 }
 
 export function useAssessments(patientId: string) {
-  return useQuery({ queryKey: healthKeys.assessments(patientId), queryFn: () => requestEApi<HealthAssessment[]>(`/health/assessments?patientId=${encodeURIComponent(patientId)}`), enabled: Boolean(patientId) });
+  return useQuery({
+    queryKey: healthKeys.assessments(patientId),
+    queryFn: () =>
+      requestEApi<HealthAssessment[]>(
+        `/health/assessments?patientId=${encodeURIComponent(patientId)}`,
+      ),
+    enabled: Boolean(patientId),
+  });
 }
 
 export function useCreateAssessment(patientId: string) {
   const client = useQueryClient();
-  return useMutation({ mutationFn: (input: CreateAssessmentInput) => requestEApi<HealthAssessment>('/health/assessments', { method: 'POST', body: input }), onSuccess: async () => client.invalidateQueries({ queryKey: healthKeys.assessments(patientId) }) });
+  return useMutation({
+    mutationFn: (input: CreateAssessmentInput) =>
+      requestEApi<HealthAssessment>('/health/assessments', { method: 'POST', body: input }),
+    onSuccess: async () =>
+      client.invalidateQueries({ queryKey: healthKeys.assessments(patientId) }),
+  });
 }
 
 export function useReminders(patientId: string) {
-  return useQuery({ queryKey: healthKeys.reminders(patientId), queryFn: () => requestEApi<ReminderTask[]>(`/health/reminders?patientId=${encodeURIComponent(patientId)}`), enabled: Boolean(patientId) });
+  return useQuery({
+    queryKey: healthKeys.reminders(patientId),
+    queryFn: () =>
+      requestEApi<ReminderTask[]>(`/health/reminders?patientId=${encodeURIComponent(patientId)}`),
+    enabled: Boolean(patientId),
+  });
 }
 
 export function useCreateReminder(patientId: string) {
   const client = useQueryClient();
-  return useMutation({ mutationFn: (input: CreateReminderInput) => requestEApi<ReminderTask>('/health/reminders', { method: 'POST', body: input }), onSuccess: async () => Promise.all([client.invalidateQueries({ queryKey: healthKeys.reminders(patientId) }), client.invalidateQueries({ queryKey: healthKeys.overview(patientId) })]) });
+  return useMutation({
+    mutationFn: (input: CreateReminderInput) =>
+      requestEApi<ReminderTask>('/health/reminders', { method: 'POST', body: input }),
+    onSuccess: async () =>
+      Promise.all([
+        client.invalidateQueries({ queryKey: healthKeys.reminders(patientId) }),
+        client.invalidateQueries({ queryKey: healthKeys.overview(patientId) }),
+      ]),
+  });
 }
 
 function useReminderAction(patientId: string, action: 'cancel' | 'retry') {
   const client = useQueryClient();
-  return useMutation({ mutationFn: ({ id, commandId }: { id: string; commandId: string }) => requestEApi<ReminderTask>(`/health/reminders/${encodeURIComponent(id)}/${action}`, { method: 'POST', body: { commandId } }), onSuccess: async () => Promise.all([client.invalidateQueries({ queryKey: healthKeys.reminders(patientId) }), client.invalidateQueries({ queryKey: healthKeys.overview(patientId) })]) });
+  return useMutation({
+    mutationFn: ({ id, commandId }: { id: string; commandId: string }) =>
+      requestEApi<ReminderTask>(`/health/reminders/${encodeURIComponent(id)}/${action}`, {
+        method: 'POST',
+        body: { commandId },
+      }),
+    onSuccess: async () =>
+      Promise.all([
+        client.invalidateQueries({ queryKey: healthKeys.reminders(patientId) }),
+        client.invalidateQueries({ queryKey: healthKeys.overview(patientId) }),
+      ]),
+  });
 }
 
 export const useCancelReminder = (patientId: string) => useReminderAction(patientId, 'cancel');

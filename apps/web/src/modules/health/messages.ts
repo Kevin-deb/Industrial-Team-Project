@@ -9,7 +9,8 @@ export const healthMessages: Record<string, string> = {
   '正在查找…': 'Searching…',
   岁: 'years',
   没有找到匹配的患者: 'No matching patients found',
-  '患者列表暂时无法加载，请稍后重试。': 'The patient list is temporarily unavailable. Please try again.',
+  '患者列表暂时无法加载，请稍后重试。':
+    'The patient list is temporarily unavailable. Please try again.',
   基本信息: 'Basic details',
   联系电话: 'Phone',
   当前诊断: 'Current diagnosis',
@@ -55,7 +56,8 @@ export const healthMessages: Record<string, string> = {
   '计划已被其他操作更新，请关闭后重新打开最新版本。':
     'The plan was updated elsewhere. Close this editor and reopen the latest version.',
   保存计划: 'Save plan',
-  '记录医生评估，不自动生成临床结论': 'Record the doctor assessment without generating clinical conclusions',
+  '记录医生评估，不自动生成临床结论':
+    'Record the doctor assessment without generating clinical conclusions',
   新增评估: 'Add assessment',
   关联计划: 'Linked plan',
   建议复核: 'Suggested review',

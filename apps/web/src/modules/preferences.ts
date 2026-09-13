@@ -20,10 +20,16 @@ export function useCommunityPreference() {
     try {
       localStorage.setItem(COMMUNITY_STORAGE_KEY, String(preferences.data.data.enabled));
       window.dispatchEvent(new CustomEvent(PREFERENCES_EVENT));
-    } catch { /* The server remains the source of truth. */ }
+    } catch {
+      /* The server remains the source of truth. */
+    }
   }, [preferences.data]);
   function toggle() {
     update.mutate({ enabled: !enabled, notificationsEnabled: !enabled });
   }
-  return { enabled, toggle, saveError: update.error?.message ?? preferences.error?.message ?? null };
+  return {
+    enabled,
+    toggle,
+    saveError: update.error?.message ?? preferences.error?.message ?? null,
+  };
 }

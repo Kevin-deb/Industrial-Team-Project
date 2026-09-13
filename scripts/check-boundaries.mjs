@@ -54,6 +54,14 @@ async function visit(directory) {
           !/^index(?:\.[cm]?[jt]sx?)?$/.test(apiTarget[2])
         )
           failures.push(`${relative}: use another backend domain's public index (${specifier})`);
+        if (
+          relative.startsWith('apps/api/src/social/') &&
+          apiTarget &&
+          ['patients', 'encounters', 'clinical', 'health'].includes(apiTarget[1])
+        )
+          failures.push(
+            `${relative}: community must remain isolated from patient and clinical domains (${specifier})`,
+          );
         const current = relative.match(/^apps\/(web|api)\/src\/modules\/([^/]+)\//);
         const target = resolved.match(/^apps\/(web|api)\/src\/modules\/([^/]+)(?:\/(.*))?$/);
         if (
@@ -63,7 +71,8 @@ async function visit(directory) {
           current[2] !== target[2] &&
           target[2] !== 'shared' &&
           target[3] &&
-          !/^index(?:\.[cm]?[jt]sx?)?$/.test(target[3])
+          !/^index(?:\.[cm]?[jt]sx?)?$/.test(target[3]) &&
+          !(relative.includes('.test.') && target[3] === 'test-utils')
         )
           failures.push(
             `${relative}: consume a module's public index, not its internal file (${specifier})`,

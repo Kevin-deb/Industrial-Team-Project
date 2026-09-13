@@ -1,14 +1,16 @@
 /** Owned by the community module. Keep source keys stable and translate at render time. */
 export const communityMessages: Record<string, string> = {
   同行社区: 'Peer community',
-  '面向医生的专业论坛与同行私信，和患者临床资料严格分开。': 'Professional forums and direct messages for doctors, kept separate from patient clinical data.',
+  '面向医生的专业论坛与同行私信，和患者临床资料严格分开。':
+    'Professional forums and direct messages for doctors, kept separate from patient clinical data.',
   社区首页: 'Community home',
   专科圈子: 'Specialty groups',
   我的社区: 'My community',
   同行私信: 'Direct messages',
   社区设置: 'Community settings',
   同行社区导航: 'Peer community navigation',
-  '请勿发布可识别患者身份的信息；社区讨论不能直接用于临床决策。': 'Do not publish identifiable patient information. Community discussions must not be used directly for clinical decisions.',
+  '请勿发布可识别患者身份的信息；社区讨论不能直接用于临床决策。':
+    'Do not publish identifiable patient information. Community discussions must not be used directly for clinical decisions.',
   查看已加入圈子中的最新主题和回复: 'See the latest topics and replies from joined groups',
   搜索社区帖子: 'Search community posts',
   搜索标题或内容: 'Search titles or content',
@@ -18,7 +20,8 @@ export const communityMessages: Record<string, string> = {
   收藏: 'Bookmark',
   取消收藏: 'Remove bookmark',
   查看评论: 'View comments',
-  '圈子是按专科组织的论坛，每个圈子都有独立主题列表': 'Groups are specialty-based forums, each with its own topic list',
+  '圈子是按专科组织的论坛，每个圈子都有独立主题列表':
+    'Groups are specialty-based forums, each with its own topic list',
   位成员: 'members',
   个主题: 'topics',
   已加入: 'Joined',
@@ -34,7 +37,8 @@ export const communityMessages: Record<string, string> = {
   '用逗号分隔，最多 5 个': 'Separate with commas, up to 5',
   匿名发布: 'Post anonymously',
   内容包含病例材料: 'Contains case material',
-  我已手工去除患者身份及可重新识别的信息: 'I manually removed patient identity and re-identifiable information',
+  我已手工去除患者身份及可重新识别的信息:
+    'I manually removed patient identity and re-identifiable information',
   '正在发布…': 'Publishing…',
   确认发布: 'Publish',
   返回论坛: 'Back to forum',
@@ -57,7 +61,8 @@ export const communityMessages: Record<string, string> = {
   我的帖子: 'My posts',
   我的消息: 'My activity',
   集中查看自己在社区中的内容与互动: 'Review your community content and interactions in one place',
-  '查看别人对你内容的评论、回复、点赞和收藏': 'See comments, replies, likes, and bookmarks on your content',
+  '查看别人对你内容的评论、回复、点赞和收藏':
+    'See comments, replies, likes, and bookmarks on your content',
   进入完整列表: 'Open full list',
   评论了你的帖子: 'commented on your post',
   回复了你的评论: 'replied to your comment',
@@ -65,13 +70,15 @@ export const communityMessages: Record<string, string> = {
   收藏了你的帖子: 'bookmarked your post',
   返回我的社区: 'Back to my community',
   这里显示完整记录: 'Complete history appears here',
-  '私信是独立的一对一交流，不属于圈子论坛': 'Direct messages are separate one-to-one conversations, not group forums',
+  '私信是独立的一对一交流，不属于圈子论坛':
+    'Direct messages are separate one-to-one conversations, not group forums',
   选择一位同行: 'Select a colleague',
   私信内容: 'Direct message',
   '输入私信内容…': 'Type a direct message…',
   发送: 'Send',
   '正在加载设置…': 'Loading settings…',
-  '社区为自愿参与，关闭后不影响诊疗工作': 'Community participation is optional and does not affect clinical work',
+  '社区为自愿参与，关闭后不影响诊疗工作':
+    'Community participation is optional and does not affect clinical work',
   使用同行社区: 'Use peer community',
   关闭后将同时关闭社区互动通知: 'Turning it off also disables community interaction notifications',
   社区互动通知: 'Community interaction notifications',

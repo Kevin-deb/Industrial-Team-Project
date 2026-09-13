@@ -66,9 +66,14 @@ test('global search, scoped detail and upcoming actions behave honestly', async 
   await expect(page.getByText('未找到符合条件的患者')).toBeVisible();
 });
 
-test('community visibility is an actual persistent preference', async ({ page }) => {
+test('community is a forum workspace with persistent opt-in', async ({ page }) => {
   await page.goto('/community');
-  const control = page.getByRole('switch');
+  await expect(page.getByRole('heading', { name: '社区首页' })).toBeVisible();
+  await expect(page.getByRole('link', { name: '专科圈子' })).toBeVisible();
+  await expect(page.getByRole('link', { name: '我的社区' })).toBeVisible();
+  await expect(page.getByRole('link', { name: '同行私信' })).toBeVisible();
+  await page.getByRole('link', { name: '社区设置' }).click();
+  const control = page.getByRole('switch').first();
   await expect(control).toHaveAttribute('aria-checked', 'true');
   await control.click();
   await expect(page.locator('nav').getByRole('link', { name: /同行协作/ })).toHaveCount(0);
@@ -77,6 +82,84 @@ test('community visibility is an actual persistent preference', async ({ page })
   await page.goto('/settings');
   await page.getByRole('switch').click();
   await expect(page.locator('nav').getByRole('link', { name: /同行协作/ })).toBeVisible();
+});
+
+test('E health workflow searches one patient and updates only its local panel', async ({
+  page,
+  request,
+}) => {
+  const patient = (await (await request.get('/api/v1/patients?pageSize=1')).json()).data[0];
+  let navigations = 0;
+  page.on('framenavigated', (frame) => {
+    if (frame === page.mainFrame()) navigations += 1;
+  });
+  await page.goto('/health');
+  navigations = 0;
+  await page.getByRole('searchbox', { name: '搜索健康管理患者' }).fill(patient.id);
+  await page.getByRole('button', { name: new RegExp(patient.id) }).click();
+  await expect(page.getByText(patient.name, { exact: true }).first()).toBeVisible();
+  await expect(page.getByText(`${patient.age} 岁 · ${patient.gender}`)).toBeVisible();
+  await page.getByRole('button', { name: '管理计划' }).click();
+  await expect(page.getByRole('heading', { name: '管理计划' })).toBeVisible();
+  await page.getByRole('button', { name: '新建计划' }).click();
+  await page.getByLabel('计划名称').fill('E2E 居家记录计划');
+  await page.getByLabel('计划目标').fill('每天记录一次\n下次随访时复核');
+  await page.getByRole('button', { name: '保存计划' }).click();
+  await expect(page.getByRole('heading', { name: 'E2E 居家记录计划' })).toBeVisible();
+  expect(navigations).toBe(0);
+});
+
+test('E community separates feed, forum, personal activity and scrollable direct messages', async ({
+  page,
+}) => {
+  await page.goto('/community');
+  await expect(page.locator('.community-post-row')).toHaveCount(20);
+  await page.getByRole('link', { name: '专科圈子' }).click();
+  await page.getByRole('link', { name: '进入论坛' }).first().click();
+  await expect(page.getByRole('button', { name: '发布主题' })).toBeVisible();
+  await page.getByRole('button', { name: '发布主题' }).click();
+  await page.getByLabel('主题标题').fill('E2E 社区流程测试主题');
+  await page.getByLabel('讨论内容').fill('这是一段不含真实患者资料的合成讨论内容。');
+  await page.getByLabel('标签').fill('流程测试, 同行交流');
+  await page.getByRole('button', { name: '确认发布' }).click();
+  await page.getByRole('heading', { name: 'E2E 社区流程测试主题' }).click();
+  await expect(page).toHaveURL(/\/community\/posts\//);
+  const thread = page.locator('.community-thread-post');
+  await thread.getByRole('button', { name: /^点赞/ }).click();
+  await expect(thread.getByRole('button', { name: /^取消点赞/ })).toBeVisible();
+  await thread.getByRole('button', { name: /^收藏/ }).click();
+  await expect(thread.getByRole('button', { name: /^取消收藏/ })).toBeVisible();
+  await expect(thread.getByRole('button', { name: '举报' })).toBeVisible();
+  await page.getByRole('textbox', { name: '回复内容' }).fill('已核对流程，建议保留复核记录。');
+  await page.getByRole('button', { name: '发表回复' }).click();
+  await expect(page.getByText('已核对流程，建议保留复核记录。')).toBeVisible();
+  await thread.getByRole('button', { name: '举报' }).click();
+  await expect(page.getByRole('dialog', { name: '举报主题' })).toBeVisible();
+  await page.getByRole('button', { name: '提交举报' }).click();
+  await expect(page.getByRole('dialog', { name: '举报主题' })).toHaveCount(0);
+  await page.getByRole('link', { name: '我的社区' }).click();
+  for (const label of ['我的点赞', '我的收藏', '我的帖子', '我的消息']) {
+    await expect(page.getByRole('button', { name: new RegExp(label) })).toBeVisible();
+  }
+  for (const entry of [
+    ['我的点赞', 'likes'],
+    ['我的收藏', 'bookmarks'],
+    ['我的帖子', 'posts'],
+  ] as const) {
+    await page.getByRole('button', { name: new RegExp(entry[0]) }).click();
+    await expect(page).toHaveURL(new RegExp(`/community/me/${entry[1]}$`));
+    await expect(page.getByRole('heading', { name: entry[0] })).toBeVisible();
+    await page.getByRole('link', { name: '返回我的社区' }).click();
+  }
+  await page.getByRole('button', { name: /我的消息/ }).click();
+  await expect(page.getByRole('dialog', { name: '我的消息' })).toBeVisible();
+  await page.getByRole('button', { name: '关闭' }).click();
+  await page.getByRole('link', { name: '同行私信' }).click();
+  await expect(page.locator('.community-message-scroll')).toHaveCSS('overflow-y', 'auto');
+  await expect(page.locator('.community-message-scroll article')).toHaveCount(24);
+  await page.getByRole('textbox', { name: '私信内容' }).fill('E2E 私信发送测试');
+  await page.getByRole('button', { name: '发送' }).click();
+  await expect(page.getByText('E2E 私信发送测试')).toBeVisible();
 });
 
 test('API failure is visible and recoverable', async ({ page }) => {
