@@ -503,8 +503,8 @@ export function seedDemo(db: DatabaseSync): void {
     );
     db.prepare('INSERT INTO social_preferences VALUES(?,?,?,?)').run(
       DEMO_DOCTOR_ID,
-      0,
-      0,
+      1,
+      1,
       '2026-09-10T00:00:00+08:00',
     );
     for (const id of ['community', 'rtc', 'identity', 'notifications', 'hospital-sync'])

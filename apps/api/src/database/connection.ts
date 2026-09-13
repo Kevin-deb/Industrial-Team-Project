@@ -9,6 +9,7 @@ import { healthEvolutionMigration, healthMigration, seedHealthDemo } from '../he
 import { socialMigration } from '../social/index.js';
 import { seedSocialDemo, socialEvolutionMigration } from '../social/index.js';
 import { seedDemo } from './seed.js';
+import { eModuleHardeningMigration } from './e-module-hardening-migration.js';
 
 export const migrations = [
   platformMigration,
@@ -19,6 +20,7 @@ export const migrations = [
   socialMigration,
   healthEvolutionMigration,
   socialEvolutionMigration,
+  eModuleHardeningMigration,
 ];
 
 /** Refuse a newer or inconsistent migration history instead of silently running incompatible code. */

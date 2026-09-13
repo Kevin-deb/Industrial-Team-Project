@@ -1,6 +1,6 @@
 import { Search, UserRound } from 'lucide-react';
 import { useEffect, useId, useState } from 'react';
-import type { Patient } from '@doctor/contracts';
+import type { HealthPatientSummary } from '@doctor/contracts';
 import { useI18n } from '../../shared/i18n';
 import { usePatientSearch } from './queries';
 
@@ -8,8 +8,8 @@ export function PatientSearch({
   selected,
   onSelect,
 }: {
-  selected: Patient | null;
-  onSelect: (patient: Patient) => void;
+  selected: HealthPatientSummary | null;
+  onSelect: (patient: HealthPatientSummary) => void;
 }) {
   const { t } = useI18n();
   const [input, setInput] = useState('');
@@ -60,7 +60,7 @@ export function PatientSearch({
               }}
             >
               <span className="health-result-avatar">
-                <UserRound size={17} />
+                {patient.avatarInitials || <UserRound size={17} />}
               </span>
               <span>
                 <strong>{patient.name}</strong>
@@ -81,7 +81,7 @@ export function PatientSearch({
       )}
       {selected && (
         <div className="health-patient-summary">
-          <span className="health-patient-avatar">{selected.name.slice(0, 1)}</span>
+          <span className="health-patient-avatar">{selected.avatarInitials}</span>
           <div className="health-patient-name">
             <strong>{selected.name}</strong>
             <span>{selected.id}</span>
@@ -90,12 +90,8 @@ export function PatientSearch({
             <div>
               <dt>{t('基本信息')}</dt>
               <dd>
-                {selected.age} {t('岁')} · {selected.gender}
+                {selected.age} {t('岁')} · {t(selected.gender)}
               </dd>
-            </div>
-            <div>
-              <dt>{t('联系电话')}</dt>
-              <dd>{selected.phone}</dd>
             </div>
             <div>
               <dt>{t('当前诊断')}</dt>

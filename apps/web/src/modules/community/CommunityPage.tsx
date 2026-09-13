@@ -10,9 +10,11 @@ import { PersonalListPage } from './PersonalListPage';
 import { PostPage } from './PostPage';
 import { SpecialtyGroups } from './SpecialtyGroups';
 import './community.css';
+import { useSocialPreferences } from './queries';
 
 export function CommunityPage() {
   const { t } = useI18n();
+  const preferences = useSocialPreferences();
   const links = [
     { to: '/community', label: '社区首页', icon: BookOpen, end: true },
     { to: '/community/groups', label: '专科圈子', icon: UserRound },
@@ -20,6 +22,17 @@ export function CommunityPage() {
     { to: '/community/messages', label: '同行私信', icon: MessageCircle },
     { to: '/community/settings', label: '社区设置', icon: Settings },
   ] as const;
+  if (!preferences.data) return <div className="community-loading">{t('正在加载设置…')}</div>;
+  if (!preferences.data.data.enabled)
+    return (
+      <div className="community-workspace">
+        <header className="community-page-heading">
+          <h1>{t('同行社区')}</h1>
+          <p>{t('社区入口已关闭，可在下方重新开启，不影响诊疗工作。')}</p>
+        </header>
+        <CommunityPreferences />
+      </div>
+    );
   return (
     <div className="community-workspace">
       <header className="community-page-heading">

@@ -7,14 +7,14 @@ import type {
   CreateObservationInput,
   CreateReminderInput,
   HealthAssessment,
+  HealthPatientSummary,
   HealthOverview,
   Observation,
   Paginated,
-  Patient,
   ReminderTask,
   UpdateCarePlanInput,
 } from '@doctor/contracts';
-import { requestEApi } from '../e-shared';
+import { EApiError, requestEApi, useLocalizedEQuery } from '../e-shared';
 
 export interface ObservationFilters {
   metric?: Observation['metric'];
@@ -34,23 +34,27 @@ export const healthKeys = {
 };
 
 export function usePatientSearch(query: string) {
-  return useQuery({
-    queryKey: ['health', 'patient-search', query],
-    queryFn: () =>
-      requestEApi<Patient[]>(
-        `/patients?${query ? `q=${encodeURIComponent(query)}&` : ''}pageSize=8`,
-      ),
-    placeholderData: keepPreviousData,
-  });
+  return useLocalizedEQuery(
+    useQuery({
+      queryKey: ['health', 'patient-search', query],
+      queryFn: () =>
+        requestEApi<HealthPatientSummary[]>(
+          `/health/patients${query ? `?q=${encodeURIComponent(query)}` : ''}`,
+        ),
+      placeholderData: keepPreviousData,
+    }),
+  );
 }
 
 export function useHealthOverview(patientId: string) {
-  return useQuery({
-    queryKey: healthKeys.overview(patientId),
-    queryFn: () =>
-      requestEApi<HealthOverview>(`/health/overview?patientId=${encodeURIComponent(patientId)}`),
-    enabled: Boolean(patientId),
-  });
+  return useLocalizedEQuery(
+    useQuery({
+      queryKey: healthKeys.overview(patientId),
+      queryFn: () =>
+        requestEApi<HealthOverview>(`/health/overview?patientId=${encodeURIComponent(patientId)}`),
+      enabled: Boolean(patientId),
+    }),
+  );
 }
 
 export function useObservations(patientId: string, filters: ObservationFilters) {
@@ -59,12 +63,14 @@ export function useObservations(patientId: string, filters: ObservationFilters) 
   if (filters.from) search.set('from', filters.from);
   if (filters.to) search.set('to', filters.to);
   if (filters.page) search.set('page', String(filters.page));
-  return useQuery({
-    queryKey: healthKeys.observations(patientId, filters),
-    queryFn: () => requestEApi<Paginated<Observation>>(`/health/observations?${search}`),
-    enabled: Boolean(patientId),
-    placeholderData: keepPreviousData,
-  });
+  return useLocalizedEQuery(
+    useQuery({
+      queryKey: healthKeys.observations(patientId, filters),
+      queryFn: () => requestEApi<Paginated<Observation>>(`/health/observations?${search}`),
+      enabled: Boolean(patientId),
+      placeholderData: keepPreviousData,
+    }),
+  );
 }
 
 export function useCreateObservation(patientId: string) {
@@ -82,21 +88,25 @@ export function useCreateObservation(patientId: string) {
 }
 
 export function usePlans(patientId: string) {
-  return useQuery({
-    queryKey: healthKeys.plans(patientId),
-    queryFn: () =>
-      requestEApi<CarePlanDetail[]>(`/health/plans?patientId=${encodeURIComponent(patientId)}`),
-    enabled: Boolean(patientId),
-  });
+  return useLocalizedEQuery(
+    useQuery({
+      queryKey: healthKeys.plans(patientId),
+      queryFn: () =>
+        requestEApi<CarePlanDetail[]>(`/health/plans?patientId=${encodeURIComponent(patientId)}`),
+      enabled: Boolean(patientId),
+    }),
+  );
 }
 
 export function usePlanVersions(planId: string) {
-  return useQuery({
-    queryKey: ['health', 'plan-versions', planId],
-    queryFn: () =>
-      requestEApi<CarePlanVersion[]>(`/health/plans/${encodeURIComponent(planId)}/versions`),
-    enabled: Boolean(planId),
-  });
+  return useLocalizedEQuery(
+    useQuery({
+      queryKey: ['health', 'plan-versions', planId],
+      queryFn: () =>
+        requestEApi<CarePlanVersion[]>(`/health/plans/${encodeURIComponent(planId)}/versions`),
+      enabled: Boolean(planId),
+    }),
+  );
 }
 
 export function useCreatePlan(patientId: string) {
@@ -126,18 +136,27 @@ export function useUpdatePlan(patientId: string) {
         client.invalidateQueries({ queryKey: ['health', 'plan-versions', variables.id] }),
         client.invalidateQueries({ queryKey: healthKeys.overview(patientId) }),
       ]),
+    onError: async (error, variables) => {
+      if (!(error instanceof EApiError) || error.code !== 'STALE_VERSION') return;
+      await Promise.all([
+        client.invalidateQueries({ queryKey: healthKeys.plans(patientId) }),
+        client.invalidateQueries({ queryKey: ['health', 'plan-versions', variables.id] }),
+      ]);
+    },
   });
 }
 
 export function useAssessments(patientId: string) {
-  return useQuery({
-    queryKey: healthKeys.assessments(patientId),
-    queryFn: () =>
-      requestEApi<HealthAssessment[]>(
-        `/health/assessments?patientId=${encodeURIComponent(patientId)}`,
-      ),
-    enabled: Boolean(patientId),
-  });
+  return useLocalizedEQuery(
+    useQuery({
+      queryKey: healthKeys.assessments(patientId),
+      queryFn: () =>
+        requestEApi<HealthAssessment[]>(
+          `/health/assessments?patientId=${encodeURIComponent(patientId)}`,
+        ),
+      enabled: Boolean(patientId),
+    }),
+  );
 }
 
 export function useCreateAssessment(patientId: string) {
@@ -151,12 +170,14 @@ export function useCreateAssessment(patientId: string) {
 }
 
 export function useReminders(patientId: string) {
-  return useQuery({
-    queryKey: healthKeys.reminders(patientId),
-    queryFn: () =>
-      requestEApi<ReminderTask[]>(`/health/reminders?patientId=${encodeURIComponent(patientId)}`),
-    enabled: Boolean(patientId),
-  });
+  return useLocalizedEQuery(
+    useQuery({
+      queryKey: healthKeys.reminders(patientId),
+      queryFn: () =>
+        requestEApi<ReminderTask[]>(`/health/reminders?patientId=${encodeURIComponent(patientId)}`),
+      enabled: Boolean(patientId),
+    }),
+  );
 }
 
 export function useCreateReminder(patientId: string) {

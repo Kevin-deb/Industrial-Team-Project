@@ -1,4 +1,4 @@
-import { Plus, X } from 'lucide-react';
+import { Plus, RefreshCw, X } from 'lucide-react';
 import { useMemo, useState, type FormEvent } from 'react';
 import type { CreateObservationInput, HealthMetric } from '@doctor/contracts';
 import { useI18n } from '../../shared/i18n';
@@ -16,8 +16,19 @@ const metricOptions: Array<{ value: HealthMetric; label: string; unit: string }>
 export function ObservationsPanel({ patientId }: { patientId: string }) {
   const { t, formatDate } = useI18n();
   const [metric, setMetric] = useState<HealthMetric | ''>('');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [page, setPage] = useState(1);
   const [adding, setAdding] = useState(false);
-  const filters = useMemo<ObservationFilters>(() => (metric ? { metric } : {}), [metric]);
+  const filters = useMemo<ObservationFilters>(
+    () => ({
+      ...(metric ? { metric } : {}),
+      ...(from ? { from: `${from}T00:00:00+08:00` } : {}),
+      ...(to ? { to: `${to}T23:59:59+08:00` } : {}),
+      page,
+    }),
+    [from, metric, page, to],
+  );
   const query = useObservations(patientId, filters);
   const create = useCreateObservation(patientId);
   const items = query.data?.data.items ?? [];
@@ -38,7 +49,10 @@ export function ObservationsPanel({ patientId }: { patientId: string }) {
           {t('指标')}
           <select
             value={metric}
-            onChange={(event) => setMetric(event.target.value as HealthMetric | '')}
+            onChange={(event) => {
+              setMetric(event.target.value as HealthMetric | '');
+              setPage(1);
+            }}
           >
             <option value="">{t('全部指标')}</option>
             {metricOptions.map((option) => (
@@ -48,14 +62,56 @@ export function ObservationsPanel({ patientId }: { patientId: string }) {
             ))}
           </select>
         </label>
+        <label>
+          {t('开始日期')}
+          <input
+            type="date"
+            value={from}
+            onChange={(event) => {
+              setFrom(event.target.value);
+              setPage(1);
+            }}
+          />
+        </label>
+        <label>
+          {t('结束日期')}
+          <input
+            type="date"
+            value={to}
+            onChange={(event) => {
+              setTo(event.target.value);
+              setPage(1);
+            }}
+          />
+        </label>
+        <button
+          type="button"
+          className="health-refresh-button"
+          onClick={() => void query.refetch()}
+          disabled={query.isFetching}
+        >
+          <RefreshCw size={13} />
+          {t('刷新')}
+        </button>
         <span>
           {query.data
             ? t('共 {count} 条记录', { count: query.data.data.total })
             : t('正在加载记录…')}
         </span>
       </div>
+      {metric && items.length > 1 && (
+        <ObservationTrend
+          label={t(metricOptions.find((option) => option.value === metric)?.label ?? metric)}
+          values={items.map((item) => item.value).reverse()}
+        />
+      )}
       {query.isError ? (
-        <div className="health-inline-error">{t('观测记录加载失败，请重试。')}</div>
+        <div className="health-inline-error">
+          {t('观测记录加载失败，请重试。')}{' '}
+          <button type="button" onClick={() => void query.refetch()}>
+            {t('重试')}
+          </button>
+        </div>
       ) : (
         <div
           className={`health-table-wrap ${query.isFetching ? 'is-refreshing' : ''}`}
@@ -67,7 +123,9 @@ export function ObservationsPanel({ patientId }: { patientId: string }) {
                 <th>{t('指标')}</th>
                 <th>{t('数值')}</th>
                 <th>{t('测量时间')}</th>
+                <th>{t('接收时间')}</th>
                 <th>{t('数据来源')}</th>
+                <th>{t('数据状态')}</th>
               </tr>
             </thead>
             <tbody>
@@ -86,8 +144,12 @@ export function ObservationsPanel({ patientId }: { patientId: string }) {
                     {formatDate(item.measuredAt, { dateStyle: 'medium', timeStyle: 'short' })}
                   </td>
                   <td>
+                    {formatDate(item.receivedAt, { dateStyle: 'medium', timeStyle: 'short' })}
+                  </td>
+                  <td>
                     <span className="health-source">{item.sourceLabel}</span>
                   </td>
+                  <td>{t(qualityText(item.qualityStatus))}</td>
                 </tr>
               ))}
             </tbody>
@@ -96,6 +158,33 @@ export function ObservationsPanel({ patientId }: { patientId: string }) {
             <div className="health-empty">{t('当前筛选条件下没有观测记录')}</div>
           )}
           {query.isLoading && <TableSkeleton />}
+        </div>
+      )}
+      {query.data && query.data.data.total > query.data.data.pageSize && (
+        <div className="health-pagination">
+          <Button
+            variant="secondary"
+            disabled={page <= 1 || query.isFetching}
+            onClick={() => setPage((current) => Math.max(1, current - 1))}
+          >
+            {t('上一页')}
+          </Button>
+          <span>
+            {t('第 {page} / {pages} 页', {
+              page,
+              pages: Math.ceil(query.data.data.total / query.data.data.pageSize),
+            })}
+          </span>
+          <Button
+            variant="secondary"
+            disabled={
+              page >= Math.ceil(query.data.data.total / query.data.data.pageSize) ||
+              query.isFetching
+            }
+            onClick={() => setPage((current) => current + 1)}
+          >
+            {t('下一页')}
+          </Button>
         </div>
       )}
       <p className="health-safety-note">
@@ -115,6 +204,33 @@ export function ObservationsPanel({ patientId }: { patientId: string }) {
       )}
     </section>
   );
+}
+
+function ObservationTrend({ label, values }: { label: string; values: number[] }) {
+  const { t } = useI18n();
+  const minimum = Math.min(...values);
+  const maximum = Math.max(...values);
+  const span = maximum - minimum || 1;
+  const points = values
+    .map((value, index) => {
+      const x = values.length === 1 ? 0 : (index / (values.length - 1)) * 100;
+      const y = 30 - ((value - minimum) / span) * 24;
+      return `${x},${y}`;
+    })
+    .join(' ');
+  return (
+    <div className="health-observation-trend">
+      <span>{t('{label}趋势', { label })}</span>
+      <svg viewBox="0 0 100 36" role="img" aria-label={t('{label}观测趋势', { label })}>
+        <polyline points={points} fill="none" stroke="currentColor" strokeWidth="1.8" />
+      </svg>
+      <small>{t('当前页最低 {minimum}，最高 {maximum}', { minimum, maximum })}</small>
+    </div>
+  );
+}
+
+function qualityText(status: 'demo' | 'unreviewed' | 'reviewed') {
+  return status === 'demo' ? '合成演示' : status === 'reviewed' ? '已复核' : '待复核';
 }
 
 function ObservationForm({

@@ -1,4 +1,5 @@
 import { Bell, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useI18n } from '../../shared/i18n';
 import { useNotifications, useReadNotification } from './queries';
 
@@ -6,6 +7,7 @@ export function CommunityNotifications({ onClose }: { onClose: () => void }) {
   const { t, formatDate } = useI18n();
   const notices = useNotifications();
   const read = useReadNotification();
+  const navigate = useNavigate();
   return (
     <div className="community-dialog-backdrop">
       <section
@@ -26,7 +28,11 @@ export function CommunityNotifications({ onClose }: { onClose: () => void }) {
               key={item.id}
               className={item.readAt ? '' : 'unread'}
               onClick={() => {
-                if (!item.readAt) read.mutate(item.id);
+                void (async () => {
+                  if (!item.readAt) await read.mutateAsync(item.id).catch(() => undefined);
+                  onClose();
+                  navigate(`/community/posts/${item.postId}`);
+                })();
               }}
             >
               <Bell size={16} />

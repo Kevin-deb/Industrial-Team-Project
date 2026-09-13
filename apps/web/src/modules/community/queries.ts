@@ -1,5 +1,12 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  keepPreviousData,
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import type {
+  ApiResponse,
   CreateCommentInput,
   CreateMessageInput,
   CreatePostInput,
@@ -14,14 +21,15 @@ import type {
   SocialPreferences,
   UpdateSocialPreferencesInput,
 } from '@doctor/contracts';
-import { requestEApi } from '../e-shared';
+import { requestEApi, useLocalizedEQuery } from '../e-shared';
 
 export const socialKeys = {
   all: ['social'] as const,
   preferences: ['social', 'preferences'] as const,
   feed: (q = '') => ['social', 'feed', q] as const,
-  groups: ['social', 'groups'] as const,
-  groupPosts: (id: string) => ['social', 'group-posts', id] as const,
+  groups: (q = '') => ['social', 'groups', q] as const,
+  groupPosts: (id: string, sort = 'latest-reply', tag = '') =>
+    ['social', 'group-posts', id, sort, tag] as const,
   post: (id: string) => ['social', 'post', id] as const,
   personal: (kind: string) => ['social', 'personal', kind] as const,
   notifications: ['social', 'notifications'] as const,
@@ -30,10 +38,12 @@ export const socialKeys = {
 };
 const commandId = () => globalThis.crypto?.randomUUID?.() ?? `cmd-${Date.now()}-${Math.random()}`;
 export const useSocialPreferences = () =>
-  useQuery({
-    queryKey: socialKeys.preferences,
-    queryFn: () => requestEApi<SocialPreferences>('/social/preferences'),
-  });
+  useLocalizedEQuery(
+    useQuery({
+      queryKey: socialKeys.preferences,
+      queryFn: () => requestEApi<SocialPreferences>('/social/preferences'),
+    }),
+  );
 export function useUpdateSocialPreferences() {
   const client = useQueryClient();
   return useMutation({
@@ -42,38 +52,78 @@ export function useUpdateSocialPreferences() {
         method: 'PATCH',
         body: { ...input, commandId: commandId() },
       }),
-    onSuccess: (result) => client.setQueryData(socialKeys.preferences, result),
+    onMutate: async (input) => {
+      await client.cancelQueries({ queryKey: socialKeys.preferences });
+      const previous = client.getQueryData<ApiResponse<SocialPreferences>>(socialKeys.preferences);
+      client.setQueryData<ApiResponse<SocialPreferences>>(socialKeys.preferences, {
+        data: {
+          enabled: input.enabled,
+          notificationsEnabled: input.enabled && input.notificationsEnabled,
+          updatedAt: new Date().toISOString(),
+        },
+        meta: previous?.meta ?? { requestId: 'local-optimistic', mode: 'demo' },
+      });
+      return { previous };
+    },
+    onError: (_error, _input, context) => {
+      if (context?.previous) client.setQueryData(socialKeys.preferences, context.previous);
+    },
+    onSuccess: async (result) => {
+      client.setQueryData(socialKeys.preferences, result);
+      if (!result.data.enabled) {
+        await client.cancelQueries({
+          predicate: (query) =>
+            query.queryKey[0] === 'social' && query.queryKey[1] !== 'preferences',
+        });
+        client.removeQueries({
+          predicate: (query) =>
+            query.queryKey[0] === 'social' && query.queryKey[1] !== 'preferences',
+        });
+      }
+    },
+    onSettled: async () => client.invalidateQueries({ queryKey: socialKeys.preferences }),
   });
 }
 export const useFeed = (q = '') =>
-  useQuery({
-    queryKey: socialKeys.feed(q),
-    queryFn: () =>
-      requestEApi<SocialPage<SocialPostSummary>>(
-        `/social/feed?sort=latest-reply${q ? `&q=${encodeURIComponent(q)}` : ''}`,
-      ),
-    placeholderData: keepPreviousData,
-  });
-export const useGroups = () =>
-  useQuery({
-    queryKey: socialKeys.groups,
-    queryFn: () => requestEApi<SocialPage<SocialGroup>>('/social/groups'),
-  });
-export const useGroupPosts = (id: string) =>
-  useQuery({
-    queryKey: socialKeys.groupPosts(id),
-    queryFn: () =>
-      requestEApi<SocialPage<SocialPostSummary>>(
-        `/social/groups/${encodeURIComponent(id)}/posts?sort=latest-reply`,
-      ),
-    enabled: Boolean(id),
-  });
+  useLocalizedEQuery(
+    useQuery({
+      queryKey: socialKeys.feed(q),
+      queryFn: () =>
+        requestEApi<SocialPage<SocialPostSummary>>(
+          `/social/feed?sort=latest-reply${q ? `&q=${encodeURIComponent(q)}` : ''}`,
+        ),
+      placeholderData: keepPreviousData,
+    }),
+  );
+export const useGroups = (q = '') =>
+  useLocalizedEQuery(
+    useQuery({
+      queryKey: socialKeys.groups(q),
+      queryFn: () =>
+        requestEApi<SocialPage<SocialGroup>>(
+          `/social/groups${q ? `?q=${encodeURIComponent(q)}` : ''}`,
+        ),
+    }),
+  );
+export const useGroupPosts = (id: string, sort: 'latest' | 'latest-reply', tag = '') =>
+  useLocalizedEQuery(
+    useQuery({
+      queryKey: socialKeys.groupPosts(id, sort, tag),
+      queryFn: () =>
+        requestEApi<SocialPage<SocialPostSummary>>(
+          `/social/groups/${encodeURIComponent(id)}/posts?sort=${sort}${tag ? `&tag=${encodeURIComponent(tag)}` : ''}`,
+        ),
+      enabled: Boolean(id),
+    }),
+  );
 export const usePost = (id: string) =>
-  useQuery({
-    queryKey: socialKeys.post(id),
-    queryFn: () => requestEApi<SocialPostDetail>(`/social/posts/${encodeURIComponent(id)}`),
-    enabled: Boolean(id),
-  });
+  useLocalizedEQuery(
+    useQuery({
+      queryKey: socialKeys.post(id),
+      queryFn: () => requestEApi<SocialPostDetail>(`/social/posts/${encodeURIComponent(id)}`),
+      enabled: Boolean(id),
+    }),
+  );
 export function useJoinGroup() {
   const client = useQueryClient();
   return useMutation({
@@ -82,7 +132,23 @@ export function useJoinGroup() {
         method: 'POST',
         body: { commandId: commandId() },
       }),
-    onSuccess: async () => client.invalidateQueries({ queryKey: socialKeys.groups }),
+    onSuccess: async () => client.invalidateQueries({ queryKey: ['social', 'groups'] }),
+  });
+}
+export function useLeaveGroup() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      requestEApi(`/social/groups/${encodeURIComponent(id)}/membership`, {
+        method: 'DELETE',
+        body: { commandId: commandId() },
+      }),
+    onSuccess: async (_, id) =>
+      Promise.all([
+        client.invalidateQueries({ queryKey: ['social', 'groups'] }),
+        client.invalidateQueries({ queryKey: ['social', 'feed'] }),
+        client.removeQueries({ queryKey: ['social', 'group-posts', id] }),
+      ]),
   });
 }
 export function useCreatePost(groupId: string) {
@@ -95,7 +161,7 @@ export function useCreatePost(groupId: string) {
       }),
     onSuccess: async (result) =>
       Promise.all([
-        client.invalidateQueries({ queryKey: socialKeys.groupPosts(groupId) }),
+        client.invalidateQueries({ queryKey: ['social', 'group-posts', groupId] }),
         client.invalidateQueries({ queryKey: ['social', 'feed'] }),
         client.setQueryData(socialKeys.post(result.data.id), result),
       ]),
@@ -120,10 +186,24 @@ export function usePostReaction(postId: string, kind: 'like' | 'bookmark') {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (value: boolean) =>
-      requestEApi<SocialPostDetail>(`/social/posts/${encodeURIComponent(postId)}/${kind}`, {
-        method: 'POST',
-        body: { commandId: commandId(), value },
-      }),
+      requestEApi<SocialPostDetail>(
+        `/social/posts/${encodeURIComponent(postId)}/${kind === 'like' ? 'likes' : 'bookmarks'}`,
+        {
+          method: value ? 'POST' : 'DELETE',
+          body: { commandId: commandId() },
+        },
+      ),
+    onMutate: async (value) => {
+      await client.cancelQueries({ queryKey: socialKeys.all });
+      const previous = client.getQueriesData({ queryKey: socialKeys.all });
+      client.setQueriesData({ queryKey: socialKeys.all }, (current) =>
+        updateReactionCache(current, postId, kind, value),
+      );
+      return { previous };
+    },
+    onError: (_error, _value, context) => {
+      for (const [key, value] of context?.previous ?? []) client.setQueryData(key, value);
+    },
     onSuccess: (result) => client.setQueryData(socialKeys.post(postId), result),
     onSettled: async () =>
       Promise.all([
@@ -132,16 +212,47 @@ export function usePostReaction(postId: string, kind: 'like' | 'bookmark') {
       ]),
   });
 }
+
+function updateReactionCache(
+  current: unknown,
+  postId: string,
+  kind: 'like' | 'bookmark',
+  value: boolean,
+): unknown {
+  if (!current || typeof current !== 'object' || !('data' in current)) return current;
+  const envelope = current as { data: unknown };
+  const updatePost = (post: unknown) => {
+    if (!post || typeof post !== 'object' || !('id' in post) || post.id !== postId) return post;
+    const item = post as SocialPostSummary;
+    const flag = kind === 'like' ? 'likedByMe' : 'bookmarkedByMe';
+    const count = kind === 'like' ? 'likeCount' : 'bookmarkCount';
+    if (item[flag] === value) return item;
+    return {
+      ...item,
+      [flag]: value,
+      [count]: Math.max(0, item[count] + (value ? 1 : -1)),
+    };
+  };
+  if (Array.isArray((envelope.data as { items?: unknown[] })?.items)) {
+    const page = envelope.data as { items: unknown[] };
+    return { ...current, data: { ...page, items: page.items.map(updatePost) } };
+  }
+  return { ...current, data: updatePost(envelope.data) };
+}
 export const usePersonalPosts = (kind: 'posts' | 'likes' | 'bookmarks') =>
-  useQuery({
-    queryKey: socialKeys.personal(kind),
-    queryFn: () => requestEApi<SocialPage<SocialPostSummary>>(`/social/me/${kind}`),
-  });
+  useLocalizedEQuery(
+    useQuery({
+      queryKey: socialKeys.personal(kind),
+      queryFn: () => requestEApi<SocialPage<SocialPostSummary>>(`/social/me/${kind}`),
+    }),
+  );
 export const useNotifications = () =>
-  useQuery({
-    queryKey: socialKeys.notifications,
-    queryFn: () => requestEApi<SocialNotification[]>('/social/notifications'),
-  });
+  useLocalizedEQuery(
+    useQuery({
+      queryKey: socialKeys.notifications,
+      queryFn: () => requestEApi<SocialNotification[]>('/social/me/notifications'),
+    }),
+  );
 export function useReadNotification() {
   const client = useQueryClient();
   return useMutation({
@@ -154,17 +265,25 @@ export function useReadNotification() {
   });
 }
 export const useConversations = () =>
-  useQuery({
-    queryKey: socialKeys.conversations,
-    queryFn: () => requestEApi<SocialConversation[]>('/social/conversations'),
-  });
+  useLocalizedEQuery(
+    useQuery({
+      queryKey: socialKeys.conversations,
+      queryFn: () => requestEApi<SocialConversation[]>('/social/conversations'),
+    }),
+  );
 export const useMessages = (id: string) =>
-  useQuery({
-    queryKey: socialKeys.messages(id),
-    queryFn: () =>
-      requestEApi<SocialMessagePage>(`/social/conversations/${encodeURIComponent(id)}/messages`),
-    enabled: Boolean(id),
-  });
+  useLocalizedEQuery(
+    useInfiniteQuery({
+      queryKey: socialKeys.messages(id),
+      initialPageParam: '',
+      queryFn: ({ pageParam }) =>
+        requestEApi<SocialMessagePage>(
+          `/social/conversations/${encodeURIComponent(id)}/messages${pageParam ? `?cursor=${encodeURIComponent(pageParam)}` : ''}`,
+        ),
+      getNextPageParam: (lastPage) => lastPage.data.nextCursor,
+      enabled: Boolean(id),
+    }),
+  );
 export function useSendMessage(conversationId: string, recipientId: string) {
   const client = useQueryClient();
   return useMutation({

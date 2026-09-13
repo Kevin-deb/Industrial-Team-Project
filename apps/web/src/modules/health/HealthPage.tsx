@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Patient } from '@doctor/contracts';
+import type { HealthPatientSummary } from '@doctor/contracts';
 import { useI18n } from '../../shared/i18n';
 import { PatientSearch } from './PatientSearch';
 import { ObservationsPanel } from './ObservationsPanel';
@@ -12,7 +12,7 @@ type HealthTab = 'observations' | 'plans' | 'assessments' | 'reminders';
 
 export function HealthPage() {
   const { t } = useI18n();
-  const [patient, setPatient] = useState<Patient | null>(null);
+  const [patient, setPatient] = useState<HealthPatientSummary | null>(null);
   const [tab, setTab] = useState<HealthTab>('observations');
   const tabs: Array<{ id: HealthTab; label: string }> = [
     { id: 'observations', label: '健康观测' },

@@ -10,6 +10,8 @@ export {
   HealthResourceNotFound,
   HealthService,
   NotificationUnavailable,
+  ReminderDeliveryInProgress,
+  InvalidReminderState,
   StaleVersion,
 } from './service.js';
 export type {

@@ -50,6 +50,11 @@ export function PostRow({ post }: { post: SocialPostSummary }) {
             {post.bookmarkCount}
           </button>
         </div>
+        {(like.isError || bookmark.isError) && (
+          <span className="community-action-error" role="alert">
+            {t('操作未保存，请重试。')}
+          </span>
+        )}
       </div>
     </article>
   );

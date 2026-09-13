@@ -10,8 +10,9 @@ const post = {
   groupId: 'GROUP-GERIATRICS',
   groupName: '老年医学与连续照护',
   author: { id: 'doctor-demo-002', displayName: '周明', anonymous: false, avatarInitials: '周' },
-  title: '门诊随访记录如何更清楚',
-  excerpt: '讨论记录结构。',
+  title: '门诊随访记录如何更清楚：老年医学',
+  excerpt:
+    '结合日常工作整理了一份老年医学交流提纲，主要想听听大家在记录、沟通和后续安排方面的做法。内容为合成讨论文本，不含真实患者资料。',
   tags: ['随访管理'],
   createdAt: '2026-09-01T09:00:00+08:00',
   lastActivityAt: '2026-09-10T09:00:00+08:00',
@@ -29,7 +30,8 @@ function envelope(data: unknown) {
 }
 
 describe('CommunityPage', () => {
-  beforeEach(() =>
+  beforeEach(() => {
+    localStorage.setItem('carelink-language', 'zh-CN');
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: RequestInfo | URL) => {
@@ -90,8 +92,8 @@ describe('CommunityPage', () => {
           return envelope({ items: [post], page: 1, pageSize: 20, total: 1 });
         return envelope(post);
       }),
-    ),
-  );
+    );
+  });
 
   it('separates the post feed, specialty groups, personal pages, notifications and private messages', async () => {
     renderWithEProviders(
@@ -104,7 +106,7 @@ describe('CommunityPage', () => {
       </I18nProvider>,
     );
     expect(await screen.findByRole('heading', { name: '社区首页' })).toBeInTheDocument();
-    expect(await screen.findByText('门诊随访记录如何更清楚')).toBeInTheDocument();
+    expect(await screen.findByText('门诊随访记录如何更清楚：老年医学')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('link', { name: '专科圈子' }));
     expect(await screen.findByRole('heading', { name: '专科圈子' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('link', { name: '我的社区' }));
@@ -116,5 +118,24 @@ describe('CommunityPage', () => {
     fireEvent.click(screen.getByRole('link', { name: '同行私信' }));
     expect(await screen.findByRole('heading', { name: '同行私信' })).toBeInTheDocument();
     expect(document.querySelector('.community-message-scroll')).toBeInTheDocument();
+  });
+
+  it('localizes synthetic community records when English is selected', async () => {
+    localStorage.setItem('carelink-language', 'en');
+    renderWithEProviders(
+      <I18nProvider>
+        <MemoryRouter initialEntries={['/community']}>
+          <Routes>
+            <Route path="/community/*" element={<CommunityPage />} />
+          </Routes>
+        </MemoryRouter>
+      </I18nProvider>,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Community home' })).toBeInTheDocument();
+    expect(
+      await screen.findByText('Clearer outpatient follow-up records: Geriatrics'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('门诊随访记录如何更清楚：老年医学')).not.toBeInTheDocument();
   });
 });

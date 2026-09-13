@@ -1,4 +1,4 @@
-import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
+import Fastify, { LogController, type FastifyReply, type FastifyRequest } from 'fastify';
 import fastifyStatic from '@fastify/static';
 import type { DatabaseSync } from 'node:sqlite';
 import type { Dashboard, PatientQuery } from '@doctor/contracts';
@@ -60,6 +60,7 @@ export async function createApp(options: AppOptions = {}) {
   const db = options.database ?? openDatabase(options.databasePath ?? ':memory:');
   const app = Fastify({
     logger: options.logger ?? false,
+    logController: new LogController({ disableRequestLogging: true }),
     bodyLimit: 1024 * 1024,
     genReqId: () => randomUUID(),
     requestIdHeader: false,
@@ -81,6 +82,32 @@ export async function createApp(options: AppOptions = {}) {
       find(patientId, requestContext) {
         const patient = patients.findById(patientId, requestContext);
         return patient ? { id: patient.id, name: patient.name } : undefined;
+      },
+      search(query, requestContext) {
+        return patients
+          .list({ q: query || undefined, pageSize: 8 }, requestContext)
+          .items.map((patient) => ({
+            id: patient.id,
+            name: patient.name,
+            gender: patient.gender,
+            age: patient.age,
+            diagnosis: patient.diagnosis,
+            nextFollowUp: patient.nextFollowUp,
+            avatarInitials: patient.name.slice(0, 1),
+          }));
+      },
+    },
+    {
+      record(event) {
+        if (event.outcome === 'failed') return;
+        platform.recordAccess({
+          actorId: event.actorId,
+          action: event.action,
+          targetType: event.resourceType,
+          targetId: event.resourceId,
+          outcome: event.outcome === 'denied' ? 'denied' : 'success',
+          description: `E health ${event.outcome} metadata event`,
+        });
       },
     },
   );
@@ -206,11 +233,23 @@ export async function createApp(options: AppOptions = {}) {
   app.get('/api/v1/consultations', async (request) =>
     envelope(request, encounters.listConsultations(context())),
   );
-  app.get('/api/v1/health/overview', async (request) =>
-    envelope(request, health.overview(context())),
-  );
   registerHealthRoutes(app, health, context);
-  registerSocialRoutes(app, new SocialService(new SqliteSocialRepository(db)), context);
+  registerSocialRoutes(
+    app,
+    new SocialService(new SqliteSocialRepository(db), {
+      record(event) {
+        platform.recordAccess({
+          actorId: event.actorId,
+          action: event.action,
+          targetType: event.resourceType,
+          targetId: event.resourceId,
+          outcome: 'success',
+          description: 'E social success metadata event',
+        });
+      },
+    }),
+    context,
+  );
   app.get('/api/v1/audit', async (request) => envelope(request, platform.ownAudit(DEMO_DOCTOR_ID)));
   app.get('/api/v1/features', async (request) => envelope(request, features));
   app.get('/api/v1/dashboard', async (request) => {

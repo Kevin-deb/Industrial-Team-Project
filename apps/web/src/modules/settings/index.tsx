@@ -105,7 +105,7 @@ export function SettingsPage() {
               <Card className="feature-card-pad">
                 <SectionTitle
                   title={t('工作台偏好')}
-                  subtitle={t('PREFERENCES · 当前设备本地保存')}
+                  subtitle={t('PREFERENCES · 本地服务持久保存')}
                 />
                 <div
                   className="settings-preference"
@@ -119,7 +119,7 @@ export function SettingsPage() {
                     <p>
                       {t('关闭后隐藏侧边栏入口，诊疗功能保持可用。')}
                       <br />
-                      {t('消息服务尚未启用。')}
+                      {t('同行私信可在本地演示，未连接外部消息服务。')}
                     </p>
                     {saveError && <p role="alert">{t(saveError)}</p>}
                   </div>
@@ -213,7 +213,7 @@ export function SettingsPage() {
             </Card>
           </div>
           <ReadOnlyNote>
-            {t('语言与社区入口偏好可以实际保存；医生资料、身份验证和通知设置均为规划入口。')}
+            {t('语言与社区入口偏好可以实际保存；医生资料、身份验证和外部通知设置均为规划入口。')}
           </ReadOnlyNote>
         </>
       )}

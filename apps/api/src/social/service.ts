@@ -19,6 +19,7 @@ import type {
 } from '@doctor/contracts';
 import type { RequestContext } from '../platform/index.js';
 import { SqliteSocialRepository, type SocialCommandReceipt } from './repository.js';
+import type { SocialAuditPort } from './ports.js';
 
 export class CommunityDisabled extends Error {}
 export class SocialNotFound extends Error {}
@@ -26,7 +27,10 @@ export class SocialConflict extends Error {}
 export class SocialValidationFailure extends Error {}
 
 export class SocialService {
-  constructor(private readonly repository: SqliteSocialRepository) {}
+  constructor(
+    private readonly repository: SqliteSocialRepository,
+    private readonly audit?: SocialAuditPort,
+  ) {}
   getPreferences(context: RequestContext) {
     return this.repository.getPreferences(context.actorId);
   }
@@ -93,12 +97,14 @@ export class SocialService {
   listGroupPosts(groupId: string, query: SocialListQuery, context: RequestContext) {
     this.assertEnabled(context);
     if (!this.repository.hasGroup(groupId)) throw new SocialNotFound();
+    if (!this.repository.isMember(groupId, context.actorId)) throw new SocialNotFound();
     return this.repository.listGroupPosts(groupId, query, context.actorId);
   }
   getPost(id: string, context: RequestContext) {
     this.assertEnabled(context);
     const item = this.repository.findPost(id, context.actorId);
     if (!item) throw new SocialNotFound();
+    if (!this.repository.isMember(item.groupId, context.actorId)) throw new SocialNotFound();
     return item;
   }
   createPost(input: CreatePostInput, context: RequestContext): SocialPostDetail {
@@ -148,8 +154,7 @@ export class SocialService {
   }
   createComment(input: CreateCommentInput, context: RequestContext): SocialComment {
     this.assertEnabled(context);
-    const post = this.repository.findPost(input.postId, context.actorId);
-    if (!post) throw new SocialNotFound();
+    const post = this.getPost(input.postId, context);
     if (input.parentCommentId && !post.comments.some((item) => item.id === input.parentCommentId))
       throw new SocialValidationFailure();
     return this.execute(
@@ -207,7 +212,7 @@ export class SocialService {
     kind: 'like' | 'bookmark',
   ): SocialPostDetail {
     this.assertEnabled(context);
-    if (!this.repository.findPost(postId, context.actorId)) throw new SocialNotFound();
+    this.getPost(postId, context);
     return this.execute(
       `social.${kind}.set`,
       commandId,
@@ -379,9 +384,13 @@ export class SocialService {
     resourceId: string,
   ): T {
     const digest = createHash('sha256').update(stableJson({ operation, input })).digest('hex');
-    return this.repository.transaction(() => {
+    let replayed = false;
+    const result = this.repository.transaction(() => {
       const receipt = this.repository.findReceipt(context.actorId, commandId);
-      if (receipt) return replay<T>(receipt, operation, digest);
+      if (receipt) {
+        replayed = true;
+        return replay<T>(receipt, operation, digest);
+      }
       const result = work();
       this.repository.saveReceipt({
         actorId: context.actorId,
@@ -394,6 +403,17 @@ export class SocialService {
       });
       return result;
     });
+    if (!replayed) {
+      void this.audit?.record({
+        actorId: context.actorId,
+        action: operation,
+        resourceType: resourceId,
+        resourceId: objectId(result, resourceId),
+        outcome: 'success',
+        occurredAt: context.now,
+      });
+    }
+    return result;
   }
 }
 

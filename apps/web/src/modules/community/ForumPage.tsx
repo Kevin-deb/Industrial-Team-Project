@@ -9,7 +9,9 @@ import { useCreatePost, useGroupPosts, useGroups } from './queries';
 export function ForumPage() {
   const { t } = useI18n();
   const { groupId = '' } = useParams();
-  const posts = useGroupPosts(groupId);
+  const [sort, setSort] = useState<'latest' | 'latest-reply'>('latest-reply');
+  const [tag, setTag] = useState('');
+  const posts = useGroupPosts(groupId, sort, tag.trim());
   const groups = useGroups();
   const group = groups.data?.data.items.find((item) => item.id === groupId);
   const create = useCreatePost(groupId);
@@ -30,10 +32,25 @@ export function ForumPage() {
           {t('发布主题')}
         </Button>
       </div>
+      <div className="community-forum-toolbar">
+        <label>
+          {t('主题排序')}
+          <select value={sort} onChange={(event) => setSort(event.target.value as typeof sort)}>
+            <option value="latest-reply">{t('最新回复')}</option>
+            <option value="latest">{t('最新发布')}</option>
+          </select>
+        </label>
+        <label>
+          {t('标签筛选')}
+          <input value={tag} onChange={(event) => setTag(event.target.value)} />
+        </label>
+        {posts.isFetching && <span>{t('正在更新主题…')}</span>}
+      </div>
       <div className="community-post-list">
         {(posts.data?.data.items ?? []).map((post) => (
           <PostRow key={post.id} post={post} />
         ))}
+        {posts.isError && <div className="community-error">{t('主题加载失败，请重试。')}</div>}
       </div>
       {open && (
         <PostComposer

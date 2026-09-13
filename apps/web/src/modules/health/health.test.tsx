@@ -9,16 +9,9 @@ const patient = {
   name: '陈建国',
   gender: '男',
   age: 68,
-  phone: '138****0021',
   diagnosis: '高血压',
-  tags: ['慢病管理'],
-  status: 'attention',
-  lastVisit: '2026-09-08',
   nextFollowUp: '2026-09-10',
-  assignedDoctorId: 'doctor-demo-001',
-  allergies: ['青霉素'],
-  medicalHistory: ['高血压病史 8 年'],
-  careSummary: '合成演示资料。',
+  avatarInitials: '陈',
 };
 
 function response(data: unknown) {
@@ -67,11 +60,11 @@ describe('HealthPage', () => {
     expect(requested.some((url) => url.includes('q='))).toBe(false);
     await act(() => vi.advanceTimersByTimeAsync(1));
     await act(() => vi.advanceTimersByTimeAsync(0));
-    expect(requested.some((url) => url.includes('/patients?q='))).toBe(true);
+    expect(requested.some((url) => url.includes('/health/patients?q='))).toBe(true);
 
     fireEvent.click(screen.getByRole('button', { name: /陈建国.*PAT-001/ }));
     expect(screen.getByText('68 岁 · 男')).toBeInTheDocument();
-    expect(screen.getByText('138****0021')).toBeInTheDocument();
+    expect(screen.queryByText('138****0021')).not.toBeInTheDocument();
     expect(screen.getByText('高血压')).toBeInTheDocument();
   });
 

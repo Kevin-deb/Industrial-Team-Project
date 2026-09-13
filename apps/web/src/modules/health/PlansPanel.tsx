@@ -13,7 +13,8 @@ export function PlansPanel({ patientId }: { patientId: string }) {
   const create = useCreatePlan(patientId);
   const update = useUpdatePlan(patientId);
   const [adding, setAdding] = useState(false);
-  const [editing, setEditing] = useState<CarePlanDetail | null>(null);
+  const [editingId, setEditingId] = useState('');
+  const editing = (plans.data?.data ?? []).find((plan) => plan.id === editingId) ?? null;
   const [historyId, setHistoryId] = useState('');
   const history = usePlanVersions(historyId);
   return (
@@ -54,7 +55,7 @@ export function PlansPanel({ patientId }: { patientId: string }) {
               </span>
             </div>
             <footer>
-              <button type="button" onClick={() => setEditing(plan)}>
+              <button type="button" onClick={() => setEditingId(plan.id)}>
                 <Pencil size={14} />
                 {t('编辑')}
               </button>
@@ -90,7 +91,7 @@ export function PlansPanel({ patientId }: { patientId: string }) {
           busy={create.isPending}
           error={create.error}
           onClose={() => setAdding(false)}
-          onSubmit={async (input) => {
+          onSubmit={async ({ status: _status, completionPercent: _completion, ...input }) => {
             await create.mutateAsync(input);
             setAdding(false);
           }}
@@ -102,18 +103,16 @@ export function PlansPanel({ patientId }: { patientId: string }) {
           plan={editing}
           busy={update.isPending}
           error={update.error}
-          onClose={() => setEditing(null)}
+          onClose={() => setEditingId('')}
           onSubmit={async ({ patientId: _patientId, ...input }) => {
             await update.mutateAsync({
               id: editing.id,
               input: {
                 ...input,
                 expectedVersion: editing.version,
-                status: editing.status,
-                completionPercent: editing.completionPercent,
               },
             });
-            setEditing(null);
+            setEditingId('');
           }}
         />
       )}
@@ -140,12 +139,16 @@ function PlanForm({
     title: string;
     goals: string[];
     nextReview: string;
+    status: CarePlanDetail['status'];
+    completionPercent: number;
   }) => Promise<void>;
 }) {
   const { t } = useI18n();
   const [title, setTitle] = useState(plan?.title ?? '');
   const [goals, setGoals] = useState(plan?.goals.join('\n') ?? '');
   const [nextReview, setNextReview] = useState(plan?.nextReview ?? '2026-09-24');
+  const [status, setStatus] = useState<CarePlanDetail['status']>(plan?.status ?? 'draft');
+  const [completionPercent, setCompletionPercent] = useState(plan?.completionPercent ?? 0);
   const stale = error instanceof EApiError && error.code === 'STALE_VERSION';
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -158,6 +161,8 @@ function PlanForm({
         .map((item) => item.trim())
         .filter(Boolean),
       nextReview,
+      status,
+      completionPercent,
     }).catch(() => undefined);
   }
   return (
@@ -172,6 +177,34 @@ function PlanForm({
             onChange={(event) => setTitle(event.target.value)}
           />
         </label>
+        {plan && (
+          <div className="health-plan-form-row">
+            <label>
+              {t('计划状态')}
+              <select
+                value={status}
+                onChange={(event) => setStatus(event.target.value as CarePlanDetail['status'])}
+              >
+                <option value="draft">{t('草稿')}</option>
+                <option value="active">{t('进行中')}</option>
+              </select>
+            </label>
+            <label>
+              {t('完成度')}
+              <div className="health-completion-control">
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="5"
+                  value={completionPercent}
+                  onChange={(event) => setCompletionPercent(Number(event.target.value))}
+                />
+                <span>{completionPercent}%</span>
+              </div>
+            </label>
+          </div>
+        )}
         <label>
           {t('计划目标')}
           <textarea
@@ -193,7 +226,7 @@ function PlanForm({
         </label>
         {error && (
           <div className="health-inline-error">
-            {stale ? t('计划已被其他操作更新，请关闭后重新打开最新版本。') : error.message}
+            {stale ? t('计划已刷新到最新版本，已填写内容仍保留，请再次保存。') : error.message}
           </div>
         )}
         <footer>

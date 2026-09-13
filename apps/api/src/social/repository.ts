@@ -125,7 +125,7 @@ export class SqliteSocialRepository {
       .run(groupId, actorId);
   }
   listFeed(query: SocialListQuery, actorId: string) {
-    return this.listPosts(undefined, query, actorId);
+    return this.listPosts(undefined, query, actorId, true);
   }
   listGroupPosts(groupId: string, query: SocialListQuery, actorId: string) {
     return this.listPosts(groupId, query, actorId);
@@ -134,6 +134,7 @@ export class SqliteSocialRepository {
     groupId: string | undefined,
     query: SocialListQuery,
     actorId: string,
+    joinedOnly = false,
   ): SocialPage<SocialPostSummary> {
     const page = query.page ?? 1,
       pageSize = query.pageSize ?? 20;
@@ -143,6 +144,10 @@ export class SqliteSocialRepository {
       limit: pageSize,
       offset: (page - 1) * pageSize,
     };
+    if (joinedOnly)
+      conditions.push(
+        'EXISTS(SELECT 1 FROM social_memberships joined WHERE joined.group_id=p.group_id AND joined.identity_id=:actorId)',
+      );
     if (groupId) {
       conditions.push('p.group_id=:groupId');
       params.groupId = groupId;
@@ -157,6 +162,7 @@ export class SqliteSocialRepository {
     }
     const where = conditions.join(' AND ');
     const countParams: Record<string, SQLInputValue> = {};
+    if (joinedOnly) countParams.actorId = actorId;
     if (groupId) countParams.groupId = groupId;
     if (query.q) countParams.q = query.q;
     if (query.tag) countParams.tag = `\"${query.tag}\"`;
@@ -354,8 +360,14 @@ export class SqliteSocialRepository {
     )
       return { items: [] };
     const params: Record<string, SQLInputValue> = { conversationId, limit: 30 };
-    const condition = cursor ? 'AND (sent_at < :cursor)' : '';
-    if (cursor) params.cursor = cursor;
+    const parsedCursor = cursor ? parseMessageCursor(cursor) : undefined;
+    const condition = parsedCursor
+      ? 'AND (sent_at < :cursorTime OR (sent_at = :cursorTime AND id < :cursorId))'
+      : '';
+    if (parsedCursor) {
+      params.cursorTime = parsedCursor.sentAt;
+      params.cursorId = parsedCursor.id;
+    }
     const rows = this.db
       .prepare(
         `SELECT * FROM social_direct_messages WHERE conversation_id=:conversationId ${condition} ORDER BY sent_at DESC,id DESC LIMIT :limit`,
@@ -367,12 +379,23 @@ export class SqliteSocialRepository {
       ? Boolean(
           this.db
             .prepare(
-              'SELECT 1 FROM social_direct_messages WHERE conversation_id=? AND sent_at<? LIMIT 1',
+              `SELECT 1 FROM social_direct_messages
+               WHERE conversation_id=? AND (sent_at<? OR (sent_at=? AND id<?)) LIMIT 1`,
             )
-            .get(conversationId, oldest.sent_at as SQLInputValue),
+            .get(
+              conversationId,
+              oldest.sent_at as SQLInputValue,
+              oldest.sent_at as SQLInputValue,
+              oldest.id as SQLInputValue,
+            ),
         )
       : false;
-    return { items, ...(hasOlder && oldest ? { nextCursor: String(oldest.sent_at) } : {}) };
+    return {
+      items,
+      ...(hasOlder && oldest
+        ? { nextCursor: `${String(oldest.sent_at)}::${String(oldest.id)}` }
+        : {}),
+    };
   }
   findDirectConversation(actorId: string, recipientId: string) {
     const row = this.db
@@ -447,7 +470,11 @@ function commentSelect() {
   return `SELECT c.*,i.display_name author_name,i.avatar_initials author_avatar FROM social_comments c JOIN identities i ON i.id=c.author_id`;
 }
 function notificationSelect() {
-  return `SELECT n.*,COALESCE(i.display_name,'系统') actor_name FROM social_notifications n LEFT JOIN identities i ON i.id=n.actor_id`;
+  return `SELECT n.*,
+    CASE WHEN c.display_mode='anonymous' THEN '匿名医生' ELSE COALESCE(i.display_name,'系统') END actor_name
+    FROM social_notifications n
+    LEFT JOIN identities i ON i.id=n.actor_id
+    LEFT JOIN social_comments c ON c.id=n.comment_id`;
 }
 function mapGroup(r: Row): SocialGroup {
   return {
@@ -529,4 +556,10 @@ function mapReceipt(r: Row): SocialCommandReceipt {
     responseJson: String(r.response_json),
     createdAt: String(r.created_at),
   };
+}
+
+function parseMessageCursor(cursor: string): { sentAt: string; id: string } | undefined {
+  const separator = cursor.lastIndexOf('::');
+  if (separator < 1 || separator === cursor.length - 2) return undefined;
+  return { sentAt: cursor.slice(0, separator), id: cursor.slice(separator + 2) };
 }

@@ -89,6 +89,7 @@ test('E health workflow searches one patient and updates only its local panel', 
   request,
 }) => {
   const patient = (await (await request.get('/api/v1/patients?pageSize=1')).json()).data[0];
+  const planTitle = `E2E 居家记录计划 ${Date.now()}`;
   let navigations = 0;
   page.on('framenavigated', (frame) => {
     if (frame === page.mainFrame()) navigations += 1;
@@ -102,27 +103,34 @@ test('E health workflow searches one patient and updates only its local panel', 
   await page.getByRole('button', { name: '管理计划' }).click();
   await expect(page.getByRole('heading', { name: '管理计划' })).toBeVisible();
   await page.getByRole('button', { name: '新建计划' }).click();
-  await page.getByLabel('计划名称').fill('E2E 居家记录计划');
+  await page.getByLabel('计划名称').fill(planTitle);
   await page.getByLabel('计划目标').fill('每天记录一次\n下次随访时复核');
   await page.getByRole('button', { name: '保存计划' }).click();
-  await expect(page.getByRole('heading', { name: 'E2E 居家记录计划' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: planTitle })).toBeVisible();
   expect(navigations).toBe(0);
 });
 
 test('E community separates feed, forum, personal activity and scrollable direct messages', async ({
   page,
 }) => {
+  const suffix = Date.now();
+  const postTitle = `E2E 社区流程测试主题 ${suffix}`;
+  const replyBody = `已核对流程，建议保留复核记录。${suffix}`;
+  const messageBody = `E2E 私信发送测试 ${suffix}`;
   await page.goto('/community');
   await expect(page.locator('.community-post-row')).toHaveCount(20);
   await page.getByRole('link', { name: '专科圈子' }).click();
+  await expect(page.getByRole('button', { name: '加入圈子' })).toHaveCount(1);
+  await page.getByRole('button', { name: '加入圈子' }).click();
+  await expect(page.getByRole('button', { name: '退出圈子' })).toHaveCount(6);
   await page.getByRole('link', { name: '进入论坛' }).first().click();
   await expect(page.getByRole('button', { name: '发布主题' })).toBeVisible();
   await page.getByRole('button', { name: '发布主题' }).click();
-  await page.getByLabel('主题标题').fill('E2E 社区流程测试主题');
+  await page.getByLabel('主题标题').fill(postTitle);
   await page.getByLabel('讨论内容').fill('这是一段不含真实患者资料的合成讨论内容。');
-  await page.getByLabel('标签').fill('流程测试, 同行交流');
+  await page.getByLabel('标签', { exact: true }).fill('流程测试, 同行交流');
   await page.getByRole('button', { name: '确认发布' }).click();
-  await page.getByRole('heading', { name: 'E2E 社区流程测试主题' }).click();
+  await page.getByRole('heading', { name: postTitle }).click();
   await expect(page).toHaveURL(/\/community\/posts\//);
   const thread = page.locator('.community-thread-post');
   await thread.getByRole('button', { name: /^点赞/ }).click();
@@ -130,9 +138,9 @@ test('E community separates feed, forum, personal activity and scrollable direct
   await thread.getByRole('button', { name: /^收藏/ }).click();
   await expect(thread.getByRole('button', { name: /^取消收藏/ })).toBeVisible();
   await expect(thread.getByRole('button', { name: '举报' })).toBeVisible();
-  await page.getByRole('textbox', { name: '回复内容' }).fill('已核对流程，建议保留复核记录。');
+  await page.getByRole('textbox', { name: '回复内容' }).fill(replyBody);
   await page.getByRole('button', { name: '发表回复' }).click();
-  await expect(page.getByText('已核对流程，建议保留复核记录。')).toBeVisible();
+  await expect(page.getByText(replyBody, { exact: true })).toBeVisible();
   await thread.getByRole('button', { name: '举报' }).click();
   await expect(page.getByRole('dialog', { name: '举报主题' })).toBeVisible();
   await page.getByRole('button', { name: '提交举报' }).click();
@@ -156,10 +164,12 @@ test('E community separates feed, forum, personal activity and scrollable direct
   await page.getByRole('button', { name: '关闭' }).click();
   await page.getByRole('link', { name: '同行私信' }).click();
   await expect(page.locator('.community-message-scroll')).toHaveCSS('overflow-y', 'auto');
-  await expect(page.locator('.community-message-scroll article')).toHaveCount(24);
-  await page.getByRole('textbox', { name: '私信内容' }).fill('E2E 私信发送测试');
+  await expect(page.locator('.community-message-scroll article')).toHaveCount(30);
+  await page.getByRole('button', { name: '加载更早消息' }).click();
+  await expect(page.locator('.community-message-scroll article')).toHaveCount(36);
+  await page.getByRole('textbox', { name: '私信内容' }).fill(messageBody);
   await page.getByRole('button', { name: '发送' }).click();
-  await expect(page.getByText('E2E 私信发送测试')).toBeVisible();
+  await expect(page.getByText(messageBody, { exact: true })).toBeVisible();
 });
 
 test('API failure is visible and recoverable', async ({ page }) => {

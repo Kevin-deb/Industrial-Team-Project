@@ -66,6 +66,11 @@ export function PostPage() {
             {t('举报')}
           </button>
         </div>
+        {(like.isError || bookmark.isError) && (
+          <span className="community-action-error" role="alert">
+            {t('操作未保存，请重试。')}
+          </span>
+        )}
       </article>
       <section className="community-comments">
         <h3>

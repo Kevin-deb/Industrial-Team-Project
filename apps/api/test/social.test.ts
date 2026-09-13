@@ -12,10 +12,10 @@ import {
 import { DEMO_DOCTOR_ID } from '../src/database/seed.js';
 import { createApp } from '../src/app.js';
 
-test('social migration 8 remains clinically isolated and fixtures are idempotent', () => {
+test('social migrations remain clinically isolated and fixtures are idempotent', () => {
   const db = openDatabase(':memory:');
   try {
-    assert.equal(db.prepare('SELECT COUNT(*) count FROM schema_migrations').get()!.count, 8);
+    assert.equal(db.prepare('SELECT COUNT(*) count FROM schema_migrations').get()!.count, 9);
     const tables = db
       .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'social_%'")
       .all();
@@ -33,11 +33,19 @@ test('social migration 8 remains clinically isolated and fixtures are idempotent
       Number(db.prepare('SELECT COUNT(*) count FROM social_direct_messages').get()!.count) >= 72,
     );
     const before = Number(db.prepare('SELECT COUNT(*) count FROM social_posts').get()!.count);
+    db.prepare(
+      'UPDATE social_preferences SET enabled=0,notifications_enabled=0 WHERE identity_id=?',
+    ).run(DEMO_DOCTOR_ID);
     seedSocialDemo(db);
     assert.equal(
       Number(db.prepare('SELECT COUNT(*) count FROM social_posts').get()!.count),
       before,
     );
+    const preserved = db
+      .prepare('SELECT enabled,notifications_enabled FROM social_preferences WHERE identity_id=?')
+      .get(DEMO_DOCTOR_ID);
+    assert.equal(preserved?.enabled, 0);
+    assert.equal(preserved?.notifications_enabled, 0);
   } finally {
     db.close();
   }
@@ -81,8 +89,8 @@ test('social HTTP routes expose distinct forum, personal, notification and messa
       (
         await app.inject({
           method: 'POST',
-          url: `/api/v1/social/posts/${post.json().data.id}/like`,
-          payload: { commandId: 'cmd-route-like', value: true },
+          url: `/api/v1/social/posts/${post.json().data.id}/likes`,
+          payload: { commandId: 'cmd-route-like' },
         })
       ).json().data.likedByMe,
       true,
@@ -92,8 +100,8 @@ test('social HTTP routes expose distinct forum, personal, notification and messa
       (
         await app.inject({
           method: 'POST',
-          url: `/api/v1/social/posts/${post.json().data.id}/bookmark`,
-          payload: { commandId: 'cmd-route-bookmark', value: true },
+          url: `/api/v1/social/posts/${post.json().data.id}/bookmarks`,
+          payload: { commandId: 'cmd-route-bookmark' },
         })
       ).json().data.bookmarkedByMe,
       true,
@@ -150,7 +158,13 @@ test('social HTTP routes expose distinct forum, personal, notification and messa
 test('social service enforces opt-in, membership, de-identification, interactions and private-message scope', async () => {
   const db = openDatabase(':memory:');
   try {
-    const service = new SocialService(new SqliteSocialRepository(db));
+    const repository = new SqliteSocialRepository(db);
+    const auditEvents: unknown[] = [];
+    const service = new SocialService(repository, {
+      record(event) {
+        auditEvents.push(event);
+      },
+    });
     const context = { actorId: DEMO_DOCTOR_ID, now: '2026-09-13T10:00:00+08:00' };
     const disabled = service.updatePreferences(
       { commandId: 'cmd-pref-off', enabled: false, notificationsEnabled: true },
@@ -167,9 +181,31 @@ test('social service enforces opt-in, membership, de-identification, interaction
       context,
     );
 
-    const membership = service.joinGroup('GROUP-GERIATRICS', 'cmd-join-1', context);
+    const anonymousComment = service.createComment(
+      {
+        commandId: 'cmd-anonymous-notification',
+        postId: 'POST-003',
+        displayMode: 'anonymous',
+        body: '匿名回复不应在消息中心暴露身份。',
+      },
+      { actorId: 'doctor-demo-002', now: '2026-09-13T10:01:00+08:00' },
+    );
     assert.equal(
-      service.joinGroup('GROUP-GERIATRICS', 'cmd-join-1', context).joinedAt,
+      service.listNotifications(context).find((item) => item.commentId === anonymousComment.id)
+        ?.actorDisplayName,
+      '匿名医生',
+    );
+    const secondDoctorFeed = service.listFeed({}, { actorId: 'doctor-demo-002', now: context.now });
+    assert.equal(secondDoctorFeed.total, 16);
+    assert.ok(
+      secondDoctorFeed.items.every(
+        (item) => item.groupId !== 'GROUP-RESPIRATORY' && item.groupId !== 'GROUP-REHAB',
+      ),
+    );
+
+    const membership = service.joinGroup('GROUP-REHAB', 'cmd-join-1', context);
+    assert.equal(
+      service.joinGroup('GROUP-REHAB', 'cmd-join-1', context).joinedAt,
       membership.joinedAt,
     );
     assert.throws(
@@ -237,6 +273,25 @@ test('social service enforces opt-in, membership, de-identification, interaction
         .listMessages(message.conversationId, undefined, context)
         .items.some((item) => item.id === message.id),
     );
+    for (let index = 1; index <= 35; index += 1) {
+      repository.createMessage({
+        id: `DM-SAME-${String(index).padStart(2, '0')}`,
+        conversationId: 'CONVERSATION-1',
+        senderId: DEMO_DOCTOR_ID,
+        recipientId: 'doctor-demo-002',
+        body: `同一时间消息 ${index}`,
+        sentAt: '2026-09-13T11:00:00+08:00',
+      });
+    }
+    const newestPage = service.listMessages('CONVERSATION-1', undefined, context);
+    assert.equal(newestPage.items.length, 30);
+    assert.ok(newestPage.nextCursor);
+    const olderPage = service.listMessages('CONVERSATION-1', newestPage.nextCursor, context);
+    const sameTimeIds = [...newestPage.items, ...olderPage.items]
+      .filter((item) => item.id.startsWith('DM-SAME-'))
+      .map((item) => item.id);
+    assert.equal(sameTimeIds.length, 35);
+    assert.equal(new Set(sameTimeIds).size, 35);
     await assert.rejects(
       service.sendMessage(
         {
@@ -261,6 +316,8 @@ test('social service enforces opt-in, membership, de-identification, interaction
         ),
       SocialNotFound,
     );
+    assert.ok(auditEvents.length > 0);
+    assert.ok(!JSON.stringify(auditEvents).includes('方便交流一下科室工作安排吗？'));
   } finally {
     db.close();
   }

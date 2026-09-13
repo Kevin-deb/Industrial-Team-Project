@@ -27,6 +27,19 @@ export interface Observation {
   receivedAt: string;
   source: ObservationSource;
   sourceLabel: string;
+  externalObservationId?: string;
+  qualityStatus: 'demo' | 'unreviewed' | 'reviewed';
+}
+
+/** Deliberately narrow B-to-E patient directory projection. */
+export interface HealthPatientSummary {
+  id: string;
+  name: string;
+  gender: '男' | '女';
+  age: number;
+  diagnosis: string;
+  nextFollowUp: string;
+  avatarInitials: string;
 }
 
 export interface ObservationQuery {

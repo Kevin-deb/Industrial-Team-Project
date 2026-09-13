@@ -13,19 +13,41 @@ export function DirectMessages() {
   const messages = useMessages(active);
   const send = useSendMessage(active, conversation?.peer.id ?? '');
   const [body, setBody] = useState('');
+  const [saved, setSaved] = useState(false);
   const messageScroll = useRef<HTMLDivElement>(null);
+  const loadingEarlier = useRef(false);
+  const messageItems = messages.data
+    ? [...messages.data.pages].reverse().flatMap((page) => page.data.items)
+    : [];
   useEffect(() => {
     if (!selected && conversations.data?.data[0]) setSelected(conversations.data.data[0].id);
   }, [conversations.data, selected]);
   useEffect(() => {
     const container = messageScroll.current;
-    if (container) container.scrollTop = container.scrollHeight;
-  }, [active, messages.data?.data.items.length]);
+    if (!container) return;
+    if (!loadingEarlier.current) container.scrollTop = container.scrollHeight;
+  }, [active, messageItems.length]);
+  async function loadEarlier() {
+    const container = messageScroll.current;
+    const previousHeight = container?.scrollHeight ?? 0;
+    loadingEarlier.current = true;
+    await messages.fetchNextPage();
+    requestAnimationFrame(() => {
+      if (container) container.scrollTop += container.scrollHeight - previousHeight;
+      loadingEarlier.current = false;
+    });
+  }
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!body.trim()) return;
-    await send.mutateAsync(body.trim());
-    setBody('');
+    setSaved(false);
+    await send
+      .mutateAsync(body.trim())
+      .then(() => {
+        setBody('');
+        setSaved(true);
+      })
+      .catch(() => undefined);
   }
   return (
     <section className="community-view">
@@ -57,7 +79,25 @@ export function DirectMessages() {
             <strong>{conversation?.peer.displayName ?? t('选择一位同行')}</strong>
           </header>
           <div className="community-message-scroll" ref={messageScroll}>
-            {(messages.data?.data.items ?? []).map((item) => (
+            {messages.hasNextPage && (
+              <button
+                className="community-load-earlier"
+                type="button"
+                disabled={messages.isFetchingNextPage}
+                onClick={() => void loadEarlier()}
+              >
+                {messages.isFetchingNextPage ? t('正在加载更早消息…') : t('加载更早消息')}
+              </button>
+            )}
+            {messages.isError && (
+              <div className="community-error" role="alert">
+                {t('私信加载失败，请重试。')}{' '}
+                <button type="button" onClick={() => void messages.refetch()}>
+                  {t('重试')}
+                </button>
+              </div>
+            )}
+            {messageItems.map((item) => (
               <article
                 key={item.id}
                 className={item.senderId === conversation?.peer.id ? 'received' : 'sent'}
@@ -83,8 +123,14 @@ export function DirectMessages() {
             />
             <Button type="submit" disabled={!conversation || send.isPending}>
               <Send size={15} />
-              {t('发送')}
+              {t(send.isPending ? '正在发送…' : '发送')}
             </Button>
+            {send.isError && (
+              <span className="community-send-state error">{t('发送失败，请重试。')}</span>
+            )}
+            {saved && !send.isPending && !send.isError && (
+              <span className="community-send-state">{t('已保存')}</span>
+            )}
           </form>
         </div>
       </div>

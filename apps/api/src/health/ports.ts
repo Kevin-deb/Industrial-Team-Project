@@ -1,4 +1,4 @@
-import type { ReminderTask } from '@doctor/contracts';
+import type { HealthPatientSummary, ReminderTask } from '@doctor/contracts';
 import type { PatientAccessPort, RequestContext } from '../platform/index.js';
 
 export interface HealthAuditEvent {
@@ -15,11 +15,15 @@ export interface HealthAuditPort {
 }
 
 export interface HealthNotificationPort {
-  send(task: ReminderTask): Promise<{ providerMessageId: string }>;
+  send(
+    task: ReminderTask,
+    options: { idempotencyKey: string },
+  ): Promise<{ providerMessageId: string }>;
 }
 
 export interface PatientSummaryPort {
   find(patientId: string, context: RequestContext): { id: string; name: string } | undefined;
+  search(query: string, context: RequestContext): HealthPatientSummary[];
 }
 
 export type { PatientAccessPort, RequestContext };

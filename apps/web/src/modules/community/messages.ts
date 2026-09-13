@@ -1,5 +1,104 @@
+const demoGroups = [
+  [
+    '老年医学与连续照护',
+    'Geriatrics and continuity of care',
+    '老年医学',
+    'Geriatrics',
+    '讨论多病共存、综合评估与连续照护工作方法。',
+    'Discuss multimorbidity, comprehensive assessment, and continuity-of-care workflows.',
+  ],
+  [
+    '心血管临床交流',
+    'Cardiovascular clinical exchange',
+    '心血管内科',
+    'Cardiology',
+    '交流随访管理、检查解读与常见临床问题。',
+    'Exchange approaches to follow-up, test interpretation, and common clinical questions.',
+  ],
+  [
+    '内分泌与代谢',
+    'Endocrinology and metabolism',
+    '内分泌科',
+    'Endocrinology',
+    '围绕糖代谢、生活方式支持和长期随访展开讨论。',
+    'Discuss glucose metabolism, lifestyle support, and long-term follow-up.',
+  ],
+  [
+    '全科与基层实践',
+    'General and primary care practice',
+    '全科医学',
+    'General medicine',
+    '分享全科门诊、转诊衔接和基层工作经验。',
+    'Share experience from general clinics, referral coordination, and primary care.',
+  ],
+  [
+    '呼吸健康管理',
+    'Respiratory health management',
+    '呼吸内科',
+    'Respiratory medicine',
+    '讨论慢病随访、健康教育与协作照护。',
+    'Discuss chronic-care follow-up, health education, and collaborative care.',
+  ],
+  [
+    '康复医学同行圈',
+    'Rehabilitation medicine peer group',
+    '康复医学',
+    'Rehabilitation medicine',
+    '交流功能评估、康复计划与患者沟通经验。',
+    'Exchange experience in functional assessment, rehabilitation plans, and patient communication.',
+  ],
+] as const;
+
+const demoTopicStems = [
+  ['门诊随访记录如何更清楚', 'Clearer outpatient follow-up records'],
+  ['长期管理中的沟通经验', 'Communication in long-term care'],
+  ['跨科协作流程讨论', 'Cross-specialty collaboration workflows'],
+  ['健康教育材料怎么写', 'Writing health education materials'],
+] as const;
+
+const demoCommunityMessages: Record<string, string> = {
+  周: 'Z',
+  许: 'X',
+  匿: 'A',
+  匿名医生: 'Anonymous doctor',
+  随访管理: 'Follow-up management',
+  同行经验: 'Peer experience',
+  '第 1 条同行回复：这个做法在日常工作中比较容易执行。':
+    'Peer reply 1: This approach is practical in day-to-day work.',
+  '第 2 条同行回复：这个做法在日常工作中比较容易执行。':
+    'Peer reply 2: This approach is practical in day-to-day work.',
+  '回复上面的观点：可以把流程再拆成记录、确认和复核三步。':
+    'Replying to the point above: the workflow can be split into recording, confirmation, and review.',
+};
+
+for (const [
+  groupName,
+  groupEnglish,
+  specialty,
+  specialtyEnglish,
+  description,
+  descriptionEnglish,
+] of demoGroups) {
+  demoCommunityMessages[groupName] = groupEnglish;
+  demoCommunityMessages[specialty] = specialtyEnglish;
+  demoCommunityMessages[description] = descriptionEnglish;
+  for (const [stem, stemEnglish] of demoTopicStems) {
+    demoCommunityMessages[`${stem}：${specialty}`] = `${stemEnglish}: ${specialtyEnglish}`;
+  }
+  demoCommunityMessages[
+    `结合日常工作整理了一份${specialty}交流提纲，主要想听听大家在记录、沟通和后续安排方面的做法。内容为合成讨论文本，不含真实患者资料。`
+  ] =
+    `I put together a ${specialtyEnglish.toLowerCase()} discussion outline from day-to-day practice and would like to hear how colleagues handle records, communication, and follow-up. This is synthetic discussion text with no real patient data.`;
+}
+
+for (let index = 1; index <= 36; index += 1) {
+  demoCommunityMessages[`第 ${index} 条同行私信演示：围绕科室工作安排进行沟通。`] =
+    `Demo peer message ${index}: discussing departmental work arrangements.`;
+}
+
 /** Owned by the community module. Keep source keys stable and translate at render time. */
 export const communityMessages: Record<string, string> = {
+  ...demoCommunityMessages,
   同行社区: 'Peer community',
   '面向医生的专业论坛与同行私信，和患者临床资料严格分开。':
     'Professional forums and direct messages for doctors, kept separate from patient clinical data.',
@@ -26,10 +125,19 @@ export const communityMessages: Record<string, string> = {
   个主题: 'topics',
   已加入: 'Joined',
   加入圈子: 'Join group',
+  退出圈子: 'Leave group',
   进入论坛: 'Open forum',
+  搜索专科圈子: 'Search specialty groups',
+  输入圈子名称或专科: 'Enter a group name or specialty',
   返回专科圈子: 'Back to specialty groups',
   专科论坛: 'Specialty forum',
   按主题发帖并进行同行回复: 'Publish topics and reply to peers',
+  主题排序: 'Topic order',
+  最新回复: 'Latest reply',
+  最新发布: 'Newest post',
+  标签筛选: 'Filter by tag',
+  '正在更新主题…': 'Updating topics…',
+  '主题加载失败，请重试。': 'Topics could not be loaded. Please retry.',
   发布主题: 'Publish topic',
   主题标题: 'Topic title',
   讨论内容: 'Discussion content',
@@ -76,9 +184,18 @@ export const communityMessages: Record<string, string> = {
   私信内容: 'Direct message',
   '输入私信内容…': 'Type a direct message…',
   发送: 'Send',
+  '正在发送…': 'Sending…',
+  已保存: 'Saved',
+  '发送失败，请重试。': 'Send failed. Please retry.',
+  加载更早消息: 'Load earlier messages',
+  '正在加载更早消息…': 'Loading earlier messages…',
+  '私信加载失败，请重试。': 'Messages could not be loaded. Please retry.',
   '正在加载设置…': 'Loading settings…',
   '社区为自愿参与，关闭后不影响诊疗工作':
     'Community participation is optional and does not affect clinical work',
+  '社区入口已关闭，可在下方重新开启，不影响诊疗工作。':
+    'The community entry is off. You can turn it on below without affecting clinical work.',
+  '操作未保存，请重试。': 'The action was not saved. Please retry.',
   使用同行社区: 'Use peer community',
   关闭后将同时关闭社区互动通知: 'Turning it off also disables community interaction notifications',
   社区互动通知: 'Community interaction notifications',
