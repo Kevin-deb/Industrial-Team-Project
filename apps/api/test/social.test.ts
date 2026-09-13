@@ -5,6 +5,7 @@ import { seedSocialDemo } from '../src/social/fixtures.js';
 import { SqliteSocialRepository } from '../src/social/repository.js';
 import { CommunityDisabled, SocialService, SocialValidationFailure } from '../src/social/service.js';
 import { DEMO_DOCTOR_ID } from '../src/database/seed.js';
+import { createApp } from '../src/app.js';
 
 test('social migration 8 remains clinically isolated and fixtures are idempotent', () => {
   const db = openDatabase(':memory:');
@@ -22,6 +23,33 @@ test('social migration 8 remains clinically isolated and fixtures are idempotent
     seedSocialDemo(db);
     assert.equal(Number(db.prepare('SELECT COUNT(*) count FROM social_posts').get()!.count), before);
   } finally { db.close(); }
+});
+
+test('social HTTP routes expose distinct forum, personal, notification and message workflows', async () => {
+  const app = await createApp({ now: () => '2026-09-13T10:30:00+08:00' });
+  try {
+    const feed = await app.inject('/api/v1/social/feed?pageSize=5');
+    assert.equal(feed.statusCode, 200);
+    assert.equal(feed.json().data.items.length, 5);
+    const groups = await app.inject('/api/v1/social/groups');
+    assert.equal(groups.statusCode, 200);
+    assert.ok(groups.json().data.items.length >= 6);
+    const post = await app.inject({ method: 'POST', url: '/api/v1/social/posts', payload: {
+      commandId: 'cmd-route-post', groupId: 'GROUP-GERIATRICS', displayMode: 'named',
+      title: '门诊健康教育资料如何整理', body: '想和同行交流一下资料结构与复核流程。',
+      tags: ['健康教育'], containsCaseMaterial: false, deidentificationConfirmed: false,
+    } });
+    assert.equal(post.statusCode, 201, post.body);
+    const comment = await app.inject({ method: 'POST', url: `/api/v1/social/posts/${post.json().data.id}/comments`, payload: { commandId: 'cmd-route-comment', displayMode: 'named', body: '可以按主题和使用场景分开整理。' } });
+    assert.equal(comment.statusCode, 201, comment.body);
+    assert.equal((await app.inject({ method: 'POST', url: `/api/v1/social/posts/${post.json().data.id}/like`, payload: { commandId: 'cmd-route-like', value: true } })).json().data.likedByMe, true);
+    assert.equal((await app.inject('/api/v1/social/me/likes')).statusCode, 200);
+    assert.equal((await app.inject('/api/v1/social/notifications')).statusCode, 200);
+    const conversations = await app.inject('/api/v1/social/conversations');
+    assert.equal(conversations.statusCode, 200);
+    const conversationId = conversations.json().data[0].id;
+    assert.equal((await app.inject(`/api/v1/social/conversations/${conversationId}/messages`)).statusCode, 200);
+  } finally { await app.close(); }
 });
 
 test('social service enforces opt-in, membership, de-identification, interactions and private-message scope', async () => {

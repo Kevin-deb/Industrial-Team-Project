@@ -20,7 +20,7 @@ export class SqliteSocialRepository {
     const params: Record<string, SQLInputValue> = { actorId, limit: pageSize, offset: (page - 1) * pageSize };
     const where = query.q ? 'WHERE instr(lower(g.name||\' \'||g.specialty||\' \'||g.description),lower(:q))>0' : '';
     if (query.q) params.q = query.q;
-    const total = Number(this.db.prepare(`SELECT COUNT(*) count FROM social_groups g ${where}`).get(params)!.count);
+    const total = Number(this.db.prepare(`SELECT COUNT(*) count FROM social_groups g ${where}`).get(query.q ? { q: query.q } : {})!.count);
     const items = this.db.prepare(`SELECT g.*,(SELECT COUNT(*) FROM social_memberships m WHERE m.group_id=g.id) member_count,(SELECT COUNT(*) FROM social_posts p WHERE p.group_id=g.id AND p.moderation_status='published') post_count,EXISTS(SELECT 1 FROM social_memberships me WHERE me.group_id=g.id AND me.identity_id=:actorId) joined_by_me FROM social_groups g ${where} ORDER BY joined_by_me DESC,g.name LIMIT :limit OFFSET :offset`).all(params).map((row) => mapGroup(row as Row));
     return { items, page, pageSize, total };
   }
@@ -38,7 +38,11 @@ export class SqliteSocialRepository {
     if (query.q) { conditions.push("instr(lower(p.title||' '||p.body),lower(:q))>0"); params.q = query.q; }
     if (query.tag) { conditions.push("instr(p.tags_json,:tag)>0"); params.tag = `\"${query.tag}\"`; }
     const where = conditions.join(' AND ');
-    const total = Number(this.db.prepare(`SELECT COUNT(*) count FROM social_posts p WHERE ${where}`).get(params)!.count);
+    const countParams: Record<string, SQLInputValue> = {};
+    if (groupId) countParams.groupId = groupId;
+    if (query.q) countParams.q = query.q;
+    if (query.tag) countParams.tag = `\"${query.tag}\"`;
+    const total = Number(this.db.prepare(`SELECT COUNT(*) count FROM social_posts p WHERE ${where}`).get(countParams)!.count);
     const order = query.sort === 'latest' ? 'p.created_at DESC,p.id DESC' : 'p.last_activity_at DESC,p.id DESC';
     const items = this.db.prepare(`${postSelect()} WHERE ${where} ORDER BY ${order} LIMIT :limit OFFSET :offset`).all(params).map((row) => mapPost(row as Row));
     return { items, page, pageSize, total };
@@ -62,7 +66,7 @@ export class SqliteSocialRepository {
     const page = query.page ?? 1, pageSize = query.pageSize ?? 20;
     const condition = kind === 'author' ? 'p.author_id=:actorId' : kind === 'like' ? 'EXISTS(SELECT 1 FROM social_likes mine WHERE mine.post_id=p.id AND mine.identity_id=:actorId)' : 'EXISTS(SELECT 1 FROM social_bookmarks mine WHERE mine.post_id=p.id AND mine.identity_id=:actorId)';
     const params = { actorId, limit: pageSize, offset: (page - 1) * pageSize };
-    const total = Number(this.db.prepare(`SELECT COUNT(*) count FROM social_posts p WHERE p.moderation_status='published' AND ${condition}`).get(params)!.count);
+    const total = Number(this.db.prepare(`SELECT COUNT(*) count FROM social_posts p WHERE p.moderation_status='published' AND ${condition}`).get({ actorId })!.count);
     const items = this.db.prepare(`${postSelect()} WHERE p.moderation_status='published' AND ${condition} ORDER BY p.last_activity_at DESC LIMIT :limit OFFSET :offset`).all(params).map((row) => mapPost(row as Row));
     return { items, page, pageSize, total };
   }

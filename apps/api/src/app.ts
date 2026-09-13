@@ -13,6 +13,7 @@ import { HealthService, registerHealthRoutes, SqliteHealthRepository } from './h
 import { SqlitePatientAccess, SqlitePlatformRepository } from './platform/index.js';
 import { features } from './platform/index.js';
 import { registerPlannedCommands } from './platform/index.js';
+import { registerSocialRoutes, SocialService, SqliteSocialRepository } from './social/index.js';
 
 export interface AppOptions {
   /** Desktop packages remain synthetic demos even when packaged with NODE_ENV=production. */
@@ -209,6 +210,7 @@ export async function createApp(options: AppOptions = {}) {
     envelope(request, health.overview(context())),
   );
   registerHealthRoutes(app, health, context);
+  registerSocialRoutes(app, new SocialService(new SqliteSocialRepository(db)), context);
   app.get('/api/v1/audit', async (request) => envelope(request, platform.ownAudit(DEMO_DOCTOR_ID)));
   app.get('/api/v1/features', async (request) => envelope(request, features));
   app.get('/api/v1/dashboard', async (request) => {
