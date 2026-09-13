@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import type { Encounter } from '@doctor/contracts';
 import { useApi } from '../../shared/api';
-import { Badge, Button, Card, EmptyState, LoadingState, PageHeader } from '../../shared/ui';
+import { Badge, Button, EmptyState, LoadingState, PageHeader } from '../../shared/ui';
 import {
   DetailGrid,
   FeatureDialog,
@@ -23,8 +23,39 @@ import {
   ReadOnlyNote,
 } from '../ui';
 
-const statuses = { waiting: '待接诊', scheduled: '已预约', completed: '已完成' };
-const tones = { waiting: 'amber', scheduled: 'blue', completed: 'teal' } as const;
+const statuses = { waiting: '待接诊', scheduled: '待接诊', completed: '已完成' };
+const tones = { waiting: 'amber', scheduled: 'amber', completed: 'teal' } as const;
+const isPendingEncounter = (status: Encounter['status']) =>
+  status === 'waiting' || status === 'scheduled';
+
+function addMinutes(value: string, minutes: number) {
+  const date = new Date(value);
+  date.setMinutes(date.getMinutes() + minutes);
+  return date.toISOString();
+}
+
+function encounterDate(
+  encounter: Encounter,
+  formatDate: (value: string, options?: Intl.DateTimeFormatOptions) => string,
+) {
+  return formatDate(encounter.scheduledAt, {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+}
+
+function encounterTime(
+  encounter: Encounter,
+  formatDate: (value: string, options?: Intl.DateTimeFormatOptions) => string,
+) {
+  if (encounter.type === 'text') return '48h';
+  const end = addMinutes(encounter.scheduledAt, encounter.durationMinutes);
+  return `${formatDate(encounter.scheduledAt, {
+    hour: '2-digit',
+    minute: '2-digit',
+  })}-${formatDate(end, { hour: '2-digit', minute: '2-digit' })}`;
+}
 
 export function EncountersPage() {
   const { t, formatDate } = useI18n();
@@ -40,8 +71,9 @@ export function EncountersPage() {
     () =>
       (data ?? []).filter(
         (item) =>
-          (status === 'all' || item.status === status) &&
-          `${item.patientName} ${item.reason}`.includes(query.trim()),
+          (status === 'all' ||
+            (status === 'pending' ? isPendingEncounter(item.status) : item.status === status)) &&
+          `${item.patientName} ${item.patientId} ${item.id}`.includes(query.trim()),
       ),
     [data, query, status],
   );
@@ -72,8 +104,8 @@ export function EncountersPage() {
             <Metric
               icon={Clock3}
               label={t('等待接诊')}
-              value={data?.filter((item) => item.status === 'waiting').length ?? 0}
-              detail={t('接诊功能尚未接入')}
+              value={data?.filter((item) => isPendingEncounter(item.status)).length ?? 0}
+              detail={t('包含待响应与已约定时段')}
               tone="amber"
             />
             <Metric
@@ -96,74 +128,55 @@ export function EncountersPage() {
               onChange={setStatus}
               options={[
                 { value: 'all', label: '全部接诊', count: data?.length },
-                { value: 'waiting', label: '待接诊' },
-                { value: 'scheduled', label: '已预约' },
+                {
+                  value: 'pending',
+                  label: '待接诊',
+                  count: data?.filter((item) => isPendingEncounter(item.status)).length,
+                },
                 { value: 'completed', label: '已完成' },
               ]}
             />
             <label className="feature-search">
               <Search size={16} />
               <input
-                aria-label={t('搜索患者或就诊原因')}
+                aria-label={t('搜索患者或接诊编号')}
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder={t('搜索患者或就诊原因')}
+                placeholder={t('搜索患者或接诊编号')}
               />
             </label>
           </div>
           <div className="encounter-grid">
             {encounters.map((encounter, index) => (
-              <Card className="encounter-card" key={encounter.id}>
-                <div className="encounter-card-top">
-                  <div className="feature-person">
-                    <PersonAvatar name={encounter.patientName} tone={index} />
-                    <div>
-                      <strong>{encounter.patientName}</strong>
-                      <small>
-                        {encounter.patientId} · {encounter.id}
-                      </small>
-                    </div>
+              <article className="encounter-row" key={encounter.id}>
+                <div className="feature-person encounter-row-person">
+                  <PersonAvatar name={encounter.patientName} tone={index} />
+                  <div>
+                    <strong>{encounter.patientName}</strong>
+                    <small>
+                      {encounter.patientId} · {encounter.id}
+                    </small>
                   </div>
-                  <Badge tone={tones[encounter.status]}>{t(statuses[encounter.status])}</Badge>
                 </div>
-                <DetailGrid
-                  items={[
-                    {
-                      label: '就诊方式',
-                      value: (
-                        <span className="feature-inline-icon">
-                          {encounter.type === 'video' ? (
-                            <Video size={14} />
-                          ) : (
-                            <MessageSquare size={14} />
-                          )}
-                          {encounter.type === 'video' ? t('视频问诊') : t('图文问诊')}
-                        </span>
-                      ),
-                    },
-                    {
-                      label: '预约时间',
-                      value: formatDate(encounter.scheduledAt, {
-                        dateStyle: 'medium',
-                        timeStyle: 'short',
-                      }),
-                    },
-                  ]}
-                />
-                <p className="encounter-note">
-                  {t('就诊事由：')}
-                  {encounter.reason}
-                </p>
-                <div className="encounter-card-bottom">
-                  <span>
-                    <Clock3 size={13} />
-                    {t('预计 {minutes} 分钟', { minutes: encounter.durationMinutes })}
+                <div className="encounter-row-meta">
+                  <span className="encounter-row-type">
+                    {encounter.type === 'video' ? <Video size={14} /> : <MessageSquare size={14} />}
+                    {encounter.type === 'video' ? t('视频问诊') : t('图文问诊')}
                   </span>
-                  <LinkAction onClick={() => setSelectedId(encounter.id)}>
-                    {t('查看接诊详情')}
-                  </LinkAction>
+                  <span>
+                    <small>{t('接诊日期')}</small>
+                    {encounterDate(encounter, formatDate)}
+                  </span>
+                  <span>
+                    <small>{t('接诊时间')}</small>
+                    {encounterTime(encounter, formatDate)}
+                  </span>
                 </div>
-              </Card>
+                <Badge tone={tones[encounter.status]}>{t(statuses[encounter.status])}</Badge>
+                <LinkAction onClick={() => setSelectedId(encounter.id)}>
+                  {t('查看接诊详情')}
+                </LinkAction>
+              </article>
             ))}
           </div>
           {!encounters.length && (
@@ -207,18 +220,15 @@ export function EncountersPage() {
                 value: selected.type === 'video' ? t('视频问诊') : t('图文问诊'),
               },
               {
-                label: '预约时长',
-                value: t('{value0} 分钟', { value0: selected.durationMinutes }),
+                label: '接诊日期',
+                value: encounterDate(selected, formatDate),
               },
-              { label: '预约日期', value: formatDate(selected.scheduledAt) },
               {
-                label: '预约时间',
-                value: formatDate(selected.scheduledAt, { hour: '2-digit', minute: '2-digit' }),
+                label: '接诊时间',
+                value: encounterTime(selected, formatDate),
               },
             ]}
           />
-          <h4 className="feature-small-heading">{t('就诊事由')}</h4>
-          <p className="feature-prose">{selected.reason}</p>
           <div className="feature-coming-panel">
             {selected.type === 'video' ? <Video size={25} /> : <MessageSquare size={25} />}
             <div>
@@ -240,12 +250,12 @@ export function EncountersPage() {
         <PlannedDialog title={planned} iteration="Iteration 1–3" onClose={closePlanned}>
           <p>
             {t(
-              'Iteration 1 实现基础图文接诊，Iteration 3 接入图像、视频与会诊协作。预约管理将支持设置可接诊时段、确认预约、调整排班和患者通知。',
+              'Iteration 1 实现基础图文接诊，Iteration 3 接入图像、视频与会诊协作。预约管理聚焦设置可接诊时段、患者通知与改期确认；医生不确认预约人选。',
             )}
           </p>
           <p>
             {t(
-              '图文与视频诊疗使用统一接诊编号，与病历、知情同意及审计记录关联。第三方通信服务通过独立适配器接入。',
+              '医生发起改期通知后，由患者确认是否接受；双方达成一致后，平台自动调整接诊时段并留下审计记录。',
             )}
           </p>
         </PlannedDialog>

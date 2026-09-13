@@ -209,7 +209,9 @@ export async function createApp(options: AppOptions = {}) {
     const data: Dashboard = {
       stats: {
         patients: people.total,
-        pendingEncounters: schedule.filter((e) => e.status === 'waiting').length,
+        pendingEncounters: schedule.filter(
+          (e) => e.status === 'waiting' || e.status === 'scheduled',
+        ).length,
         pendingReviews: records.filter((r) => r.status === 'pending-review').length,
         healthAlerts: healthData.alerts.length,
       },

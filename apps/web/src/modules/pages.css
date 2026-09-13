@@ -644,42 +644,57 @@
   line-height: 1.8;
 }
 .encounter-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
-}
-.encounter-card {
-  padding: 22px !important;
-}
-.encounter-card-top {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 23px;
+  flex-direction: column;
   gap: 10px;
 }
-.encounter-note {
-  font-size: 11px;
-  line-height: 1.9;
-  color: #899da4;
-  background: #f8fafb;
-  border-radius: 9px;
-  padding: 12px 14px;
-  margin: 17px 0;
-}
-.encounter-card-bottom {
-  display: flex;
+.encounter-row {
+  display: grid;
+  grid-template-columns: minmax(190px, 1.15fr) minmax(360px, 2fr) auto auto;
   align-items: center;
-  justify-content: space-between;
-  border-top: 1px solid #edf2f2;
-  padding-top: 15px;
+  gap: 18px;
+  min-height: 72px;
+  padding: 14px 18px;
+  background: #fff;
+  border: 1px solid #e8eef0;
+  border-radius: 8px;
+  box-shadow: 0 10px 28px #2548520a;
 }
-.encounter-card-bottom > span {
+.encounter-row:hover {
+  background: #fbfdfc;
+  border-color: #d7e8e4;
+}
+.encounter-row-person {
+  min-width: 0;
+}
+.encounter-row-meta {
+  display: grid;
+  grid-template-columns: minmax(105px, 0.75fr) minmax(140px, 1fr) minmax(90px, 0.8fr);
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+.encounter-row-meta > span {
+  color: #536d76;
+  font-size: 12px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.encounter-row-meta small {
+  display: block;
+  color: #98a7ab;
   font-size: 10px;
-  color: #97a8ad;
+  margin-bottom: 3px;
+}
+.encounter-row-type {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
+  color: #496b76 !important;
+  font-weight: 500;
+}
+.encounter-row > .feature-link {
+  justify-self: end;
 }
 .feature-hero-note {
   border-radius: 15px;
@@ -1265,9 +1280,17 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px;
   }
-  .feature-card-grid,
-  .encounter-grid {
+  .feature-card-grid {
     grid-template-columns: 1fr;
+  }
+  .encounter-row {
+    grid-template-columns: 1fr auto;
+    gap: 12px;
+  }
+  .encounter-row-meta {
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    order: 3;
   }
   .feature-card-pad {
     padding: 18px !important;
@@ -1349,8 +1372,7 @@
 }
 .feature-section-title,
 .feature-table-footer,
-.encounter-card-top,
-.encounter-card-bottom,
+.encounter-row,
 .mdt-specialties,
 .settings-preference {
   flex-wrap: wrap;
