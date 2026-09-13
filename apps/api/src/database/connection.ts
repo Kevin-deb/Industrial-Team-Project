@@ -5,7 +5,7 @@ import { platformMigration } from '../platform/index.js';
 import { patientsMigration } from '../patients/index.js';
 import { encountersMigration } from '../encounters/index.js';
 import { clinicalMigration } from '../clinical/index.js';
-import { healthMigration } from '../health/index.js';
+import { healthEvolutionMigration, healthMigration, seedHealthDemo } from '../health/index.js';
 import { socialMigration } from '../social/index.js';
 import { seedDemo } from './seed.js';
 
@@ -16,6 +16,7 @@ export const migrations = [
   clinicalMigration,
   healthMigration,
   socialMigration,
+  healthEvolutionMigration,
 ];
 
 /** Refuse a newer or inconsistent migration history instead of silently running incompatible code. */
@@ -60,6 +61,7 @@ export function openDatabase(path: string): DatabaseSync {
       }
     }
     seedDemo(database);
+    seedHealthDemo(database);
     return database;
   } catch (error) {
     database.close();

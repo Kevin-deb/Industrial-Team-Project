@@ -415,7 +415,9 @@ export function seedDemo(db: DatabaseSync): void {
       '模拟患者上传 · 合成数据',
       '演示待复核项，不构成自动诊断或治疗建议。',
     );
-    const plan = db.prepare('INSERT INTO care_plans VALUES(?,?,?,?,?,?,?,?)');
+    const plan = db.prepare(`INSERT INTO care_plans(
+      id,patient_id,doctor_id,title,status,goals_json,next_review,completion_percent
+    ) VALUES(?,?,?,?,?,?,?,?)`);
     plan.run(
       'PLAN-001',
       'PAT-001',
