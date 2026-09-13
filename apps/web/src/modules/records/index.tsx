@@ -13,53 +13,19 @@ import {
 import type { MedicalRecord } from '@doctor/contracts';
 import { useApi } from '../../shared/api';
 import { Badge, Button, Card, EmptyState, LoadingState, PageHeader } from '../../shared/ui';
-import {
-  DetailGrid,
-  FeatureDialog,
-  FilterTabs,
-  LinkAction,
-  Metric,
-  PlannedDialog,
-  ReadOnlyNote,
-  SectionTitle,
-} from '../ui';
+import { FilterTabs, LinkAction, Metric, PlannedDialog, ReadOnlyNote, SectionTitle } from '../ui';
+import { RecordEditor } from './RecordEditor';
+import { recordTemplates as templates } from './templates';
 
 const labels = { draft: '草稿', 'pending-review': '待审核', archived: '已归档' };
 const tones = { draft: 'slate', 'pending-review': 'amber', archived: 'teal' } as const;
-const templates = [
-  {
-    id: 'outpatient',
-    title: '门诊病历',
-    subtitle: '主诉 · 病史 · 诊疗计划',
-    fields: ['主诉', '现病史', '既往史与过敏史', '查体与辅助检查', '评估及诊疗计划'],
-  },
-  {
-    id: 'followup',
-    title: '慢病随访记录',
-    subtitle: '健康指标 · 依从性 · 随访',
-    fields: [
-      '本次随访目的',
-      '健康监测数据',
-      '当前用药与依从性',
-      '生活方式与照护情况',
-      '下次随访安排',
-    ],
-  },
-  {
-    id: 'consult',
-    title: '会诊记录',
-    subtitle: '会诊目的 · 讨论 · 结论',
-    fields: ['会诊申请与目的', '参与科室与医生', '病情摘要', '会诊讨论记录', '综合意见与后续安排'],
-  },
-];
-
 export function RecordsPage() {
   const { t, formatDate } = useI18n();
   const { data, loading, error, reload } = useApi<MedicalRecord[]>('/records');
   const [status, setStatus] = useState('all');
   const [query, setQuery] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const selected = data?.find((item) => item.id === selectedId) ?? null;
+  const [creating, setCreating] = useState(false);
   const [template, setTemplate] = useState('outpatient');
   const [tab, setTab] = useState('records');
   const [planned, setPlanned] = useState<string | null>(null);
@@ -82,7 +48,7 @@ export function RecordsPage() {
         title={t('电子病历')}
         description={t('规范记录每一次诊疗，让患者照护连贯、清晰且可追溯。')}
         action={
-          <Button onClick={() => setPlanned('新建电子病历')}>
+          <Button onClick={() => setCreating(true)}>
             <FilePlus2 size={16} />
             {t('新建病历')}
           </Button>
@@ -103,7 +69,7 @@ export function RecordsPage() {
               icon={FileClock}
               label={t('草稿病历')}
               value={data?.filter((record) => record.status === 'draft').length ?? 0}
-              detail={t('正式编辑功能尚未上线')}
+              detail={t('可编辑并保存到本地')}
               tone="blue"
             />
             <Metric
@@ -132,7 +98,7 @@ export function RecordsPage() {
                 ]}
                 label={t('病历模块视图')}
               />
-              <Badge tone="slate">{t('只读演示')}</Badge>
+              <Badge tone="blue">{t('本地草稿')}</Badge>
             </div>
             {tab === 'records' && (
               <>
@@ -236,8 +202,8 @@ export function RecordsPage() {
                     <p>{t('结构预览 · 文本录入、保存及签名尚未上线')}</p>
                   </div>
                   {currentTemplate.fields.map((field) => (
-                    <div className="feature-document-field" key={field}>
-                      <span>{t(field)}</span>
+                    <div className="feature-document-field" key={field.key}>
+                      <span>{t(field.label)}</span>
                       <p>{t('正式开发后，由具备权限的医生在此填写并审核相关信息。')}</p>
                     </div>
                   ))}
@@ -310,45 +276,8 @@ export function RecordsPage() {
           <ReadOnlyNote />
         </>
       )}
-      {selected && (
-        <FeatureDialog
-          title={t(selected.title)}
-          subtitle={t('{value0} · 演示病历元数据', { value0: selected.id })}
-          onClose={close}
-        >
-          <Badge tone={tones[selected.status]}>{t(labels[selected.status])}</Badge>
-          <DetailGrid
-            items={[
-              { label: '患者', value: selected.patientName },
-              { label: '病历作者', value: selected.authorName },
-              { label: '记录分类', value: selected.diagnosis },
-              { label: '当前版本', value: `v${selected.version}.0` },
-              {
-                label: '更新时间',
-                value: formatDate(selected.updatedAt, { dateStyle: 'medium', timeStyle: 'short' }),
-              },
-              {
-                label: '关联医嘱数量',
-                value: t('{value0} 条演示记录', { value0: selected.orderCount }),
-              },
-            ]}
-          />
-          <div className="feature-document">
-            <div className="feature-document-head">
-              <h3>{t('病历正文区域')}</h3>
-              <p>{t('开发占位 · 尚未开放')}</p>
-            </div>
-            <p className="feature-prose">
-              {t(
-                '此版本展示病历目录与状态。病历正文编辑、附件、处方明细及签署功能将在后续迭代接入。',
-              )}
-            </p>
-          </div>
-          <ReadOnlyNote>
-            {t('页面所示病历与患者均为虚构，不生成可用于诊疗的处方或医嘱。')}
-          </ReadOnlyNote>
-        </FeatureDialog>
-      )}
+      {selectedId && <RecordEditor recordId={selectedId} onClose={close} onSaved={reload} />}
+      {creating && <RecordEditor onClose={() => setCreating(false)} onSaved={reload} />}
       {planned && (
         <PlannedDialog title={planned} iteration="Iteration 2" onClose={closePlanned}>
           <p>

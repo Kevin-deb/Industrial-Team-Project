@@ -786,6 +786,132 @@
   border-radius: 7px;
   margin: 0;
 }
+
+.record-editor {
+  display: grid;
+  gap: 20px;
+}
+
+.record-editor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.record-editor label {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.record-editor input,
+.record-editor select,
+.record-editor textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--ink);
+  padding: 11px 12px;
+}
+
+.record-editor textarea {
+  resize: vertical;
+  min-height: 92px;
+  line-height: 1.6;
+}
+
+.record-editor input:disabled,
+.record-editor select:disabled,
+.record-editor textarea:disabled {
+  background: #f6f8f8;
+  color: var(--muted);
+}
+
+.record-editor-span {
+  grid-column: 1 / -1;
+}
+
+.record-editor-fields {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #fbfcfc;
+}
+
+.record-editor-section-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.record-editor-section-title div {
+  display: grid;
+  gap: 4px;
+}
+
+.record-editor-section-title strong {
+  color: var(--ink);
+  font-size: 17px;
+}
+
+.record-editor-section-title span:not(.badge) {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.record-editor-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 13px;
+}
+
+.record-editor-notice.success {
+  background: #eaf7f3;
+  color: #15745f;
+}
+
+.record-editor-notice.error {
+  background: #fff0ee;
+  color: #a53c32;
+}
+
+.record-editor-notice button {
+  color: inherit;
+  text-decoration: underline;
+  white-space: nowrap;
+}
+
+.record-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+@media (max-width: 720px) {
+  .record-editor-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .record-editor-span {
+    grid-column: auto;
+  }
+
+  .record-editor-section-title,
+  .record-editor-notice {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
 .mdt-case {
   padding: 22px !important;
 }

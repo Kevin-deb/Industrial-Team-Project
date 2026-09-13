@@ -1,5 +1,42 @@
 /** Owned by the records module. Keep source keys stable and translate at render time. */
 export const recordsMessages: Record<string, string> = {
+  结构化病历草稿: 'Structured medical record draft',
+  选择患者: 'Select patient',
+  请选择患者: 'Choose a patient',
+  关联问诊: 'Linked encounter',
+  选择关联问诊: 'Select linked encounter',
+  不关联问诊: 'No linked encounter',
+  病历模板: 'Record template',
+  选择病历模板: 'Select record template',
+  病历标题: 'Record title',
+  诊断: 'Diagnosis',
+  可编辑草稿: 'Editable draft',
+  只读病历: 'Read-only record',
+  保存草稿: 'Save draft',
+  '正在保存…': 'Saving…',
+  '草稿已保存到本地数据库。': 'Draft saved to the local database.',
+  '请填写患者、病历标题和诊断。': 'Select a patient and enter a record title and diagnosis.',
+  '尚有未保存的更改，确定要关闭吗？': 'You have unsaved changes. Are you sure you want to close?',
+  '该病历已有新版本。你的输入已保留，请重新加载后再编辑。':
+    'A newer version exists. Your input is preserved; reload before editing again.',
+  重新加载服务器版本: 'Reload server version',
+  '保存失败，请稍后重试。': 'Save failed. Please try again.',
+  无法加载病历: 'Unable to load the medical record',
+  '当前仅保存虚构演示病历，不可用于真实诊疗。':
+    'Only fictional demonstration records are stored. They must not be used for real care.',
+  '未找到病历，或该病历不在当前医生的授权范围。':
+    "The record was not found or is outside the current doctor's authorized scope.",
+  '未找到患者，或该患者不在当前医生的授权范围。':
+    "The patient was not found or is outside the current doctor's authorized scope.",
+  '未找到可关联的问诊，或问诊与所选患者不匹配。':
+    'The encounter was not found or does not belong to the selected patient.',
+  '病历正文与所选模板不匹配。': 'The record content does not match the selected template.',
+  '请填写病历标题和诊断。': 'Enter a record title and diagnosis.',
+  '保存病历前必须携带当前版本。': 'The current record version is required before saving.',
+  '未找到可编辑的病历草稿。': 'No editable record draft was found.',
+  '只能修改草稿状态的病历。': 'Only draft records can be edited.',
+  '病历已被其他保存更新，请重新加载。':
+    'The record was updated by another save. Reload the latest version.',
   待审核: 'Pending review',
   已归档: 'Archived',
   门诊病历: 'Outpatient record',
@@ -39,6 +76,8 @@ export const recordsMessages: Record<string, string> = {
   诊疗流程: 'Care workflow',
   病历模块视图: 'Medical record views',
   只读演示: 'Read-only demo',
+  本地草稿: 'Local drafts',
+  可编辑并保存到本地: 'Editable and saved locally',
   全部: 'All',
   '搜索患者、病历编号或标题': 'Search patient, record ID, or title',
   病历名称: 'Record title',
