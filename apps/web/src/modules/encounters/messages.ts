@@ -56,6 +56,8 @@ export const encountersMessages: Record<string, string> = {
   '48h服务窗口 · 最多20条消息': '48h service window · up to 20 messages',
   进行中: 'In progress',
   输入回复患者的内容: 'Type a reply to the patient',
+  图片: 'Image',
+  图片消息: 'Image message',
   发送: 'Send',
   我: 'Me',
   医生画面: 'Doctor video',

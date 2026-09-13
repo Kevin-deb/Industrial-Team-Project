@@ -11,6 +11,7 @@ import {
   FileText,
   FolderOpen,
   History,
+  ImagePlus,
   Mic,
   MessageSquare,
   PhoneCall,
@@ -19,6 +20,7 @@ import {
   Send,
   Square,
   Video,
+  X,
 } from 'lucide-react';
 import type { Encounter } from '@doctor/contracts';
 import { useApi } from '../../shared/api';
@@ -195,6 +197,8 @@ type RoomMessage = {
   sender: 'patient' | 'doctor' | 'system';
   body: string;
   time: string;
+  imageUrl?: string;
+  imageName?: string;
 };
 
 function initialMessages(encounter: Encounter, brief: ClinicalBrief): RoomMessage[] {
@@ -373,6 +377,7 @@ function EncounterRoom({ encounter, onBack }: { encounter: Encounter; onBack: ()
   const [folderOpen, setFolderOpen] = useState(true);
   const [recordsOpen, setRecordsOpen] = useState(false);
   const [savedRecords, setSavedRecords] = useState<SavedEncounterRecord[]>([]);
+  const [previewImage, setPreviewImage] = useState<{ url: string; name?: string } | null>(null);
   const isVideo = encounter.type === 'video';
   const priorRecords = useMemo(() => historyRecords(encounter), [encounter]);
   const sendMessage = useCallback(() => {
@@ -389,6 +394,24 @@ function EncounterRoom({ encounter, onBack }: { encounter: Encounter; onBack: ()
     ]);
     setDraft('');
   }, [draft, encounter.id, formatDate]);
+  const sendImage = useCallback(
+    (files: FileList | null) => {
+      const file = files?.[0];
+      if (!file) return;
+      setMessages((current) => [
+        ...current,
+        {
+          id: `${encounter.id}-doctor-image-${current.length + 1}`,
+          sender: 'doctor',
+          body: file.name,
+          imageUrl: URL.createObjectURL(file),
+          imageName: file.name,
+          time: formatDate(new Date().toISOString(), { hour: '2-digit', minute: '2-digit' }),
+        },
+      ]);
+    },
+    [encounter.id, formatDate],
+  );
   const endEncounter = useCallback(() => {
     setCallStarted(false);
     setSavedRecords((current) => {
@@ -553,12 +576,43 @@ function EncounterRoom({ encounter, onBack }: { encounter: Encounter; onBack: ()
                     {message.sender !== 'system' && (
                       <small>{t(message.sender === 'doctor' ? '我' : encounter.patientName)}</small>
                     )}
-                    <p>{t(message.body)}</p>
+                    {message.imageUrl ? (
+                      <figure className="encounter-message-image">
+                        <button
+                          className="message-image-preview"
+                          type="button"
+                          onClick={() =>
+                            setPreviewImage({
+                              url: message.imageUrl as string,
+                              name: message.imageName,
+                            })
+                          }
+                          aria-label={t('查看大图')}
+                        >
+                          <img src={message.imageUrl} alt={message.imageName || t('图片消息')} />
+                        </button>
+                        <figcaption>{message.imageName}</figcaption>
+                      </figure>
+                    ) : (
+                      <p>{t(message.body)}</p>
+                    )}
                     <time>{message.time}</time>
                   </div>
                 ))}
               </div>
               <div className="encounter-compose">
+                <label className="message-image-button">
+                  <ImagePlus size={17} />
+                  {t('图片')}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(event) => {
+                      sendImage(event.target.files);
+                      event.currentTarget.value = '';
+                    }}
+                  />
+                </label>
                 <textarea
                   value={draft}
                   onChange={(event) => setDraft(event.target.value)}
@@ -580,6 +634,28 @@ function EncounterRoom({ encounter, onBack }: { encounter: Encounter; onBack: ()
           )}
         </main>
       </div>
+      {previewImage && (
+        <div
+          className="image-preview-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label={t('查看大图')}
+          onClick={() => setPreviewImage(null)}
+        >
+          <button
+            className="image-preview-close"
+            type="button"
+            onClick={() => setPreviewImage(null)}
+            aria-label={t('关闭')}
+          >
+            <X size={20} />
+          </button>
+          <figure className="image-preview-dialog" onClick={(event) => event.stopPropagation()}>
+            <img src={previewImage.url} alt={previewImage.name || t('图片消息')} />
+            {previewImage.name && <figcaption>{previewImage.name}</figcaption>}
+          </figure>
+        </div>
+      )}
     </div>
   );
 }
