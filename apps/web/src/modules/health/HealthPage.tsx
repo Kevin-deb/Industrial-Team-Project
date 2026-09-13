@@ -3,6 +3,9 @@ import type { Patient } from '@doctor/contracts';
 import { useI18n } from '../../shared/i18n';
 import { PatientSearch } from './PatientSearch';
 import { ObservationsPanel } from './ObservationsPanel';
+import { PlansPanel } from './PlansPanel';
+import { AssessmentsPanel } from './AssessmentsPanel';
+import { RemindersPanel } from './RemindersPanel';
 import './health.css';
 
 type HealthTab = 'observations' | 'plans' | 'assessments' | 'reminders';
@@ -20,7 +23,10 @@ export function HealthPage() {
     <PatientSearch selected={patient} onSelect={(next) => { setPatient(next); setTab('observations'); }} />
     {patient ? <>
       <nav className="health-tabs" aria-label={t('健康管理内容')}>{tabs.map((item) => <button key={item.id} type="button" className={tab === item.id ? 'active' : ''} aria-current={tab === item.id ? 'page' : undefined} onClick={() => setTab(item.id)}>{t(item.label)}</button>)}</nav>
-      {tab === 'observations' ? <ObservationsPanel patientId={patient.id} /> : <section className="health-panel health-placeholder"><h2>{t(tabs.find((item) => item.id === tab)!.label)}</h2><p>{t('正在接入该工作区…')}</p></section>}
+      {tab === 'observations' && <ObservationsPanel patientId={patient.id} />}
+      {tab === 'plans' && <PlansPanel patientId={patient.id} />}
+      {tab === 'assessments' && <AssessmentsPanel patientId={patient.id} />}
+      {tab === 'reminders' && <RemindersPanel patientId={patient.id} />}
     </> : <section className="health-patient-prompt"><h2>{t('先查找并选择一位患者')}</h2><p>{t('选择后，页面会在同一位置显示该患者的健康管理资料。')}</p></section>}
   </div>;
 }

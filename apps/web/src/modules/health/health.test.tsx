@@ -53,4 +53,17 @@ describe('HealthPage', () => {
     expect(screen.getByText('138****0021')).toBeInTheDocument();
     expect(screen.getByText('高血压')).toBeInTheDocument();
   });
+
+  it('keeps plans, assessments, and reminders inside the same patient workspace', async () => {
+    renderWithEProviders(<I18nProvider><HealthPage /></I18nProvider>);
+    await act(() => vi.advanceTimersByTimeAsync(0));
+    fireEvent.click(screen.getByRole('button', { name: /陈建国.*PAT-001/ }));
+
+    fireEvent.click(screen.getByRole('button', { name: '管理计划' }));
+    expect(screen.getByRole('button', { name: '新建计划' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '健康评估' }));
+    expect(screen.getByRole('button', { name: '新增评估' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '随访提醒' }));
+    expect(screen.getByRole('button', { name: '新增提醒' })).toBeInTheDocument();
+  });
 });
