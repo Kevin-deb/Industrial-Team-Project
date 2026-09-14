@@ -17,6 +17,7 @@ export {
   SocialValidationFailure,
 } from './service.js';
 export { registerSocialRoutes } from './routes.js';
+export { SocialRealtimeHub } from './realtime.js';
 export { socialCommands } from './commands.js';
 export type {
   SocialAuditEvent,
@@ -24,3 +25,4 @@ export type {
   SocialMedicalMetricCardSourcePort,
   SocialPeerDirectoryPort,
 } from './ports.js';
+export type { SocialRealtimeListener, SocialRealtimePort } from './realtime.js';

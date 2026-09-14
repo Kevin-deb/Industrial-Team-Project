@@ -70,7 +70,6 @@ test('community is a forum workspace with persistent opt-in', async ({ page }) =
   await page.goto('/community');
   await expect(page.getByRole('heading', { name: '社区首页' })).toBeVisible();
   await expect(page.getByRole('link', { name: '专科圈子' })).toBeVisible();
-  await expect(page.getByRole('link', { name: '我的社区' })).toBeVisible();
   await expect(page.getByRole('link', { name: '同行私信' })).toBeVisible();
   await page.getByRole('link', { name: '社区设置' }).click();
   const control = page.getByRole('switch').first();
@@ -118,13 +117,14 @@ test('E community separates feed, forum, personal activity and scrollable direct
   const replyBody = `已核对流程，建议保留复核记录。${suffix}`;
   const messageBody = `E2E 私信发送测试 ${suffix}`;
   await page.goto('/community');
-  await expect(page.locator('.community-post-row')).toHaveCount(20);
+  await expect(page.getByRole('button', { name: /我的帖子/ })).toBeVisible();
   await page.getByRole('link', { name: '专科圈子' }).click();
   await expect(page.getByRole('button', { name: '加入圈子' })).toHaveCount(1);
   await page.getByRole('button', { name: '加入圈子' }).click();
   await expect(page.getByRole('button', { name: '退出圈子' })).toHaveCount(6);
   await page.getByRole('link', { name: '进入论坛' }).first().click();
   await expect(page.getByRole('button', { name: '发布主题' })).toBeVisible();
+  await expect(page.getByRole('group', { name: '标签筛选' })).toBeVisible();
   await page.getByRole('button', { name: '发布主题' }).click();
   await page.getByLabel('主题标题').fill(postTitle);
   await page.getByLabel('讨论内容').fill('这是一段不含真实患者资料的合成讨论内容。');
@@ -145,7 +145,7 @@ test('E community separates feed, forum, personal activity and scrollable direct
   await expect(page.getByRole('dialog', { name: '举报主题' })).toBeVisible();
   await page.getByRole('button', { name: '提交举报' }).click();
   await expect(page.getByRole('dialog', { name: '举报主题' })).toHaveCount(0);
-  await page.getByRole('link', { name: '我的社区' }).click();
+  await page.getByRole('link', { name: '社区首页' }).click();
   for (const label of ['我的点赞', '我的收藏', '我的帖子', '我的消息']) {
     await expect(page.getByRole('button', { name: new RegExp(label) })).toBeVisible();
   }
@@ -157,7 +157,7 @@ test('E community separates feed, forum, personal activity and scrollable direct
     await page.getByRole('button', { name: new RegExp(entry[0]) }).click();
     await expect(page).toHaveURL(new RegExp(`/community/me/${entry[1]}$`));
     await expect(page.getByRole('heading', { name: entry[0] })).toBeVisible();
-    await page.getByRole('link', { name: '返回我的社区' }).click();
+    await page.getByRole('link', { name: '返回社区首页' }).click();
   }
   await page.getByRole('button', { name: /我的消息/ }).click();
   await expect(page.getByRole('dialog', { name: '我的消息' })).toBeVisible();
@@ -202,7 +202,7 @@ test('medical record drafts create, version and remain bilingual', async ({ page
   await page.getByTestId('language-select').selectOption('en', { force: true });
   await expect(dialog.getByLabel('Follow-up purpose')).toHaveValue('验证第二个版本');
   await expect(dialog.getByRole('button', { name: 'Save draft' })).toBeDisabled();
-  await dialog.getByRole('button', { name: 'Close' }).click();
+  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
   await expect(page.getByText('端到端演示草稿')).toBeVisible();
 });
 

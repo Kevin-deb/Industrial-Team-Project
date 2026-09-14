@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type {
   CreateMessageInput,
+  MarkConversationReadInput,
   CreatePostInput,
   CreateReportInput,
   SocialListQuery,
@@ -259,6 +260,24 @@ export function registerSocialRoutes(
     async (request, reply) =>
       socialReply(request, reply, () =>
         service.listMessages(request.params.id, request.query.cursor, context()),
+      ),
+  );
+  app.post<{ Params: { id: string }; Body: MarkConversationReadInput }>(
+    '/api/v1/social/conversations/:id/read',
+    {
+      schema: {
+        params: idParams,
+        body: {
+          type: 'object',
+          required: ['commandId'],
+          additionalProperties: false,
+          properties: { commandId },
+        },
+      },
+    },
+    async (request, reply) =>
+      socialReply(request, reply, () =>
+        service.markConversationRead(request.params.id, request.body.commandId, context()),
       ),
   );
   app.post<{ Body: CreateMessageInput }>(

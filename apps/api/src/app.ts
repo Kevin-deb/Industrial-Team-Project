@@ -1,6 +1,7 @@
 import Fastify, { LogController, type FastifyReply, type FastifyRequest } from 'fastify';
 import fastifyStatic from '@fastify/static';
 import fastifyMultipart from '@fastify/multipart';
+import fastifyWebsocket from '@fastify/websocket';
 import type { DatabaseSync } from 'node:sqlite';
 import type { Dashboard, PatientQuery } from '@doctor/contracts';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
@@ -23,6 +24,8 @@ import {
   SqliteSocialRepository,
   AttachmentService,
   LocalAttachmentStorage,
+  SocialRealtimeHub,
+  type SocialRealtimePort,
 } from './social/index.js';
 
 export interface AppOptions {
@@ -34,6 +37,12 @@ export interface AppOptions {
   logger?: boolean;
   now?: () => string;
   mediaRoot?: string;
+  socialRealtime?: SocialRealtimePort & {
+    subscribe(
+      identityId: string,
+      listener: (event: import('@doctor/contracts').SocialRealtimeEvent) => void,
+    ): () => void;
+  };
 }
 const envelope = <T>(request: FastifyRequest, data: T, extra: Record<string, number> = {}) => ({
   data,
@@ -80,6 +89,7 @@ export async function createApp(options: AppOptions = {}) {
   await app.register(fastifyMultipart, {
     limits: { files: 1, fileSize: 10 * 1024 * 1024, parts: 1 },
   });
+  await app.register(fastifyWebsocket, { options: { maxPayload: 1024 } });
   const patients = new SqlitePatientRepository(db);
   const encounters = new SqliteEncounterRepository(db);
   const clinical = new SqliteClinicalRepository(db);
@@ -94,6 +104,7 @@ export async function createApp(options: AppOptions = {}) {
     ephemeralMediaRoot ??
     resolve(dirname(options.databasePath!), 'social-media');
   const socialRepository = new SqliteSocialRepository(db);
+  const socialRealtime = options.socialRealtime ?? new SocialRealtimeHub();
   const context = () => ({
     actorId: DEMO_DOCTOR_ID,
     now: options.now?.() ?? new Date().toISOString(),
@@ -285,10 +296,18 @@ export async function createApp(options: AppOptions = {}) {
         },
       },
       new SqliteSocialPeerDirectory(db),
+      socialRealtime,
     ),
     context,
     new AttachmentService(socialRepository, new LocalAttachmentStorage(mediaRoot)),
   );
+  app.get('/api/v1/social/events', { websocket: true }, (socket) => {
+    const unsubscribe = socialRealtime.subscribe(DEMO_DOCTOR_ID, (event) => {
+      if (socket.readyState === 1) socket.send(JSON.stringify(event));
+    });
+    socket.on('close', unsubscribe);
+    socket.on('error', unsubscribe);
+  });
   app.get('/api/v1/audit', async (request) => envelope(request, platform.ownAudit(DEMO_DOCTOR_ID)));
   app.get('/api/v1/features', async (request) => envelope(request, features));
   app.get('/api/v1/dashboard', async (request) => {

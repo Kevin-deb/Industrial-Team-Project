@@ -1,9 +1,18 @@
 import { Search, Send, X } from 'lucide-react';
 import type { SocialPeer } from '@doctor/contracts';
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useI18n } from '../../shared/i18n';
 import { Button } from '../../shared/ui';
-import { useConversations, useMessages, usePeerSearch, useSendMessage } from './queries';
+import {
+  socialKeys,
+  useConversations,
+  useMarkConversationRead,
+  useMessages,
+  usePeerSearch,
+  useSendMessage,
+} from './queries';
+import { useSocialRealtime } from './realtime';
 import { ContentBlocks } from './ContentBlocks';
 import {
   MixedContentComposer,
@@ -15,28 +24,53 @@ import {
 export function DirectMessages() {
   const { t, formatDate } = useI18n();
   const conversations = useConversations();
+  const queryClient = useQueryClient();
   const [selected, setSelected] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [draftPeer, setDraftPeer] = useState<SocialPeer | null>(null);
   const peerSearch = usePeerSearch(search.trim());
-  const active = draftPeer ? '' : (selected ?? conversations.data?.data[0]?.id ?? '');
+  const active = draftPeer ? '' : (selected ?? '');
   const conversation = conversations.data?.data.find((item) => item.id === active);
   const peer = draftPeer ?? conversation?.peer;
   const messages = useMessages(active);
   const send = useSendMessage(active, peer?.id ?? '');
+  const markRead = useMarkConversationRead();
   const [content, setContent] = useState<ComposerValue>({ body: '', items: [] });
   const [draftCommandId, setDraftCommandId] = useState(() => crypto.randomUUID());
   const [saved, setSaved] = useState(false);
   const messageScroll = useRef<HTMLDivElement>(null);
   const loadingEarlier = useRef(false);
+  const readRequests = useRef(new Set<string>());
   const messageItems = messages.data
     ? [...messages.data.pages].reverse().flatMap((page) => page.data.items)
     : [];
+  useEffect(() => {
+    const firstConversationId = conversations.data?.data[0]?.id;
+    if (!draftPeer && !selected && firstConversationId) setSelected(firstConversationId);
+  }, [conversations.data, draftPeer, selected]);
   useEffect(() => {
     const container = messageScroll.current;
     if (!container) return;
     if (!loadingEarlier.current) container.scrollTop = container.scrollHeight;
   }, [active, messageItems.length]);
+  useEffect(() => {
+    if (!active || !conversation?.unreadCount || readRequests.current.has(active)) return;
+    readRequests.current.add(active);
+    void markRead.mutateAsync(active).finally(() => readRequests.current.delete(active));
+  }, [active, conversation?.unreadCount, markRead]);
+  const handleRealtime = useCallback(
+    (event: import('@doctor/contracts').SocialRealtimeEvent) => {
+      void queryClient.invalidateQueries({ queryKey: socialKeys.conversations });
+      if (event.conversationId === active)
+        void queryClient.invalidateQueries({ queryKey: socialKeys.messages(active) });
+    },
+    [active, queryClient],
+  );
+  const reconcileRealtime = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: socialKeys.conversations });
+    if (active) void queryClient.invalidateQueries({ queryKey: socialKeys.messages(active) });
+  }, [active, queryClient]);
+  useSocialRealtime(handleRealtime, reconcileRealtime);
   async function loadEarlier() {
     const container = messageScroll.current;
     const previousHeight = container?.scrollHeight ?? 0;
@@ -63,6 +97,10 @@ export function DirectMessages() {
         setSaved(true);
         setSelected(result.data.conversationId);
         setDraftPeer(null);
+        requestAnimationFrame(() => {
+          const container = messageScroll.current;
+          if (container) container.scrollTop = container.scrollHeight;
+        });
       })
       .catch(() => undefined);
   }

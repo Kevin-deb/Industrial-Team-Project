@@ -447,6 +447,21 @@ export class SqliteSocialRepository {
         : {}),
     };
   }
+  markConversationRead(conversationId: string, actorId: string, readAt: string): boolean {
+    const member = this.db
+      .prepare(
+        'SELECT 1 FROM social_conversation_members WHERE conversation_id=? AND identity_id=?',
+      )
+      .get(conversationId, actorId);
+    if (!member) return false;
+    this.db
+      .prepare(
+        `UPDATE social_direct_messages SET read_at=?
+         WHERE conversation_id=? AND recipient_id=? AND read_at IS NULL`,
+      )
+      .run(readAt, conversationId, actorId);
+    return true;
+  }
   findDirectConversation(actorId: string, recipientId: string) {
     const row = this.db
       .prepare(

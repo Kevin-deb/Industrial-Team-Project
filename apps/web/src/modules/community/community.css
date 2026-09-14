@@ -202,6 +202,7 @@
   min-height: 52px;
   padding: 9px 18px;
   display: flex;
+  flex-wrap: wrap;
   align-items: end;
   gap: 12px;
   border-top: 1px solid #edf1f2;
@@ -413,31 +414,37 @@
   border: 0;
 }
 .community-tag-filters {
-  min-width: 300px;
+  min-width: 0;
   padding: 0;
   border: 0;
 }
+.community-forum-tags-row {
+  flex: 0 0 100%;
+  padding-top: 7px;
+  border-top: 1px solid #e6edef;
+}
 .community-tag-filters legend {
-  margin-bottom: 5px;
+  margin-bottom: 6px;
   color: #71888f;
   font-size: 10px;
 }
 .community-tag-filters > div {
   display: flex;
   flex-wrap: wrap;
-  gap: 7px;
+  gap: 6px;
 }
 .community-tag-filters label {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 5px;
-  min-height: 32px;
-  padding: 5px 9px;
+  min-height: 25px;
+  padding: 3px 8px;
   border: 1px solid #d7e2e3;
   border-radius: 6px;
   background: #fff;
   color: #526b73;
   cursor: pointer;
+  font-size: 9px;
 }
 .community-tag-filters label.selected {
   border-color: #79bdb4;
@@ -445,7 +452,11 @@
   color: #147d73;
 }
 .community-tag-filters input {
-  width: auto;
+  width: 12px;
+  height: 12px;
+  min-width: 0;
+  padding: 0;
+  accent-color: #188d82;
 }
 .community-dialog > header {
   height: 56px;

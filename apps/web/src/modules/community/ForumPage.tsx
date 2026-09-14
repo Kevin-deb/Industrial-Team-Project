@@ -67,28 +67,30 @@ export function ForumPage() {
             <option value="latest-reply">{t('最新回复')}</option>
           </select>
         </label>
-        <fieldset className="community-tag-filters">
-          <legend>{t('标签筛选')}</legend>
-          <div>
-            {tagOptions.map((tag) => (
-              <label key={tag} className={tags.includes(tag) ? 'selected' : ''}>
-                <input
-                  type="checkbox"
-                  checked={tags.includes(tag)}
-                  onChange={() =>
-                    setTags((current) =>
-                      current.includes(tag)
-                        ? current.filter((item) => item !== tag)
-                        : [...current, tag],
-                    )
-                  }
-                />
-                {t(tag)}
-              </label>
-            ))}
-          </div>
-        </fieldset>
         {posts.isFetching && <span>{t('正在更新主题…')}</span>}
+        <div className="community-forum-tags-row">
+          <fieldset className="community-tag-filters">
+            <legend>{t('标签筛选')}</legend>
+            <div>
+              {tagOptions.map((tag) => (
+                <label key={tag} className={tags.includes(tag) ? 'selected' : ''}>
+                  <input
+                    type="checkbox"
+                    checked={tags.includes(tag)}
+                    onChange={() =>
+                      setTags((current) =>
+                        current.includes(tag)
+                          ? current.filter((item) => item !== tag)
+                          : [...current, tag],
+                      )
+                    }
+                  />
+                  {t(tag)}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        </div>
       </div>
       <div className="community-post-list">
         {(posts.data?.data.items ?? []).map((post) => (

@@ -7,6 +7,7 @@ import {
 } from '@tanstack/react-query';
 import type {
   ApiResponse,
+  ConversationReadResult,
   CreateCommentInput,
   CreateMessageInput,
   CreatePostInput,
@@ -333,11 +334,51 @@ export function useSendMessage(conversationId: string, recipientId: string) {
           contentBlocks: input.contentBlocks,
         } satisfies CreateMessageInput,
       }),
-    onSuccess: async (result) =>
-      Promise.all([
-        client.invalidateQueries({ queryKey: socialKeys.messages(result.data.conversationId) }),
-        client.invalidateQueries({ queryKey: socialKeys.conversations }),
-      ]),
+    onSuccess: async (result) => {
+      client.setQueryData(
+        socialKeys.messages(result.data.conversationId),
+        (
+          current:
+            | import('@tanstack/react-query').InfiniteData<ApiResponse<SocialMessagePage>>
+            | undefined,
+        ) => {
+          if (!current?.pages.length) return current;
+          if (
+            current.pages.some((page) => page.data.items.some((item) => item.id === result.data.id))
+          )
+            return current;
+          const pages = [...current.pages];
+          pages[0] = {
+            ...pages[0],
+            data: { ...pages[0].data, items: [...pages[0].data.items, result.data] },
+          };
+          return { ...current, pages };
+        },
+      );
+      await client.invalidateQueries({ queryKey: socialKeys.conversations });
+    },
+  });
+}
+export function useMarkConversationRead() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (conversationId: string) =>
+      requestEApi<ConversationReadResult>(
+        `/social/conversations/${encodeURIComponent(conversationId)}/read`,
+        { method: 'POST', body: { commandId: commandId() } },
+      ),
+    onSuccess: (result) => {
+      client.setQueryData<ApiResponse<SocialConversation[]>>(socialKeys.conversations, (current) =>
+        current
+          ? {
+              ...current,
+              data: current.data.map((item) =>
+                item.id === result.data.conversationId ? { ...item, unreadCount: 0 } : item,
+              ),
+            }
+          : current,
+      );
+    },
   });
 }
 export function useUploadSocialAttachment() {

@@ -99,6 +99,29 @@ export interface SocialDirectMessage {
   sentAt: string;
 }
 
+export interface MarkConversationReadInput {
+  commandId: string;
+}
+
+export interface ConversationReadResult {
+  conversationId: string;
+  unreadCount: 0;
+  readAt: string;
+}
+
+export type SocialRealtimeEvent =
+  | {
+      type: 'social.message.created';
+      conversationId: string;
+      messageId: string;
+      occurredAt: string;
+    }
+  | {
+      type: 'social.conversation.read';
+      conversationId: string;
+      occurredAt: string;
+    };
+
 export interface MedicalMetricItem {
   metricCode: string;
   displayName: string;

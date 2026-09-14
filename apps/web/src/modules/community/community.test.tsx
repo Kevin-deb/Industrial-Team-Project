@@ -1,4 +1,5 @@
-import { fireEvent, screen } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
+import type { SocialRealtimeEvent } from '@doctor/contracts';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../../shared/i18n';
@@ -253,5 +254,127 @@ describe('CommunityPage', () => {
     expect(await screen.findByRole('heading', { name: '梁若川' })).toBeInTheDocument();
     expect(screen.getByText('主任医师 · 老年医学科')).toBeInTheDocument();
     expect(screen.getByLabelText('私信内容')).toBeEnabled();
+  });
+
+  it('clears unread count when a conversation is opened and keeps new sends at the bottom', async () => {
+    let unreadCount = 8;
+    let readRequests = 0;
+    const realtime = {
+      listener: undefined as ((event: SocialRealtimeEvent) => void) | undefined,
+    };
+    Object.defineProperty(window, 'carelinkRealtime', {
+      configurable: true,
+      value: {
+        subscribe(listener: (event: SocialRealtimeEvent) => void) {
+          realtime.listener = listener;
+          return () => undefined;
+        },
+      },
+    });
+    let messages = [
+      {
+        id: 'DM-1',
+        conversationId: 'CONVERSATION-1',
+        senderId: 'doctor-demo-002',
+        recipientId: 'doctor-demo-001',
+        body: '原消息',
+        contentBlocks: [],
+        sentAt: '2026-09-10T08:00:00+08:00',
+      },
+    ];
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.includes('/preferences'))
+        return envelope({ enabled: true, notificationsEnabled: true, updatedAt: '2026-09-10' });
+      if (url.endsWith('/conversations/CONVERSATION-1/read')) {
+        readRequests += 1;
+        unreadCount = 0;
+        return envelope({
+          conversationId: 'CONVERSATION-1',
+          unreadCount: 0,
+          readAt: '2026-09-14T09:30:00+08:00',
+        });
+      }
+      if (url.includes('/conversations/CONVERSATION-1/messages'))
+        return envelope({ items: messages });
+      if (url.endsWith('/social/conversations'))
+        return envelope([
+          {
+            id: 'CONVERSATION-1',
+            peer: { id: 'doctor-demo-002', displayName: '周明', avatarInitials: '周' },
+            lastMessage: messages.at(-1)?.body ?? '',
+            updatedAt: messages.at(-1)?.sentAt ?? '',
+            unreadCount,
+          },
+        ]);
+      if (url.endsWith('/social/messages') && init?.method === 'POST') {
+        const sent = {
+          id: 'DM-SENT',
+          conversationId: 'CONVERSATION-1',
+          senderId: 'doctor-demo-001',
+          recipientId: 'doctor-demo-002',
+          body: '新消息',
+          contentBlocks: [],
+          sentAt: '2026-09-14T09:31:00+08:00',
+        };
+        messages = [...messages, sent];
+        return new Response(
+          JSON.stringify({ data: sent, meta: { requestId: 'test', mode: 'demo' } }),
+          { status: 201, headers: { 'content-type': 'application/json' } },
+        );
+      }
+      return envelope({ items: [], page: 1, pageSize: 20, total: 0 });
+    });
+
+    renderWithEProviders(
+      <I18nProvider>
+        <MemoryRouter initialEntries={['/community/messages']}>
+          <Routes>
+            <Route path="/community/*" element={<CommunityPage />} />
+          </Routes>
+        </MemoryRouter>
+      </I18nProvider>,
+    );
+
+    expect(await screen.findByRole('heading', { name: '周明' })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/v1/social/conversations/CONVERSATION-1/read',
+        expect.objectContaining({ method: 'POST' }),
+      ),
+    );
+    expect(screen.queryByText('8')).not.toBeInTheDocument();
+
+    unreadCount = 1;
+    realtime.listener?.({
+      type: 'social.message.created',
+      conversationId: 'CONVERSATION-1',
+      messageId: 'DM-INCOMING-2',
+      occurredAt: '2026-09-14T09:30:30+08:00',
+    });
+    await waitFor(() => expect(readRequests).toBe(2));
+
+    const scroll = document.querySelector('.community-message-scroll') as HTMLDivElement;
+    Object.defineProperty(scroll, 'scrollHeight', { configurable: true, value: 640 });
+    fireEvent.change(screen.getByLabelText('私信内容'), { target: { value: '新消息' } });
+    fireEvent.click(screen.getByRole('button', { name: '发送' }));
+    expect(await screen.findByText('新消息')).toBeInTheDocument();
+    await waitFor(() => expect(scroll.scrollTop).toBe(640));
+    delete window.carelinkRealtime;
+  });
+
+  it('places compact multi-select tags on their own toolbar row', async () => {
+    renderWithEProviders(
+      <I18nProvider>
+        <MemoryRouter initialEntries={['/community/groups/GROUP-GERIATRICS']}>
+          <Routes>
+            <Route path="/community/*" element={<CommunityPage />} />
+          </Routes>
+        </MemoryRouter>
+      </I18nProvider>,
+    );
+    const fieldset = await screen.findByRole('group', { name: '标签筛选' });
+    expect(fieldset).toHaveClass('community-tag-filters');
+    expect(fieldset.parentElement).toHaveClass('community-forum-tags-row');
   });
 });
