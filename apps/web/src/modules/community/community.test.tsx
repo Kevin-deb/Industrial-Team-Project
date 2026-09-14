@@ -360,6 +360,7 @@ describe('CommunityPage', () => {
     fireEvent.click(screen.getByRole('button', { name: '发送' }));
     expect(await screen.findByText('新消息')).toBeInTheDocument();
     await waitFor(() => expect(scroll.scrollTop).toBe(640));
+    expect(screen.queryByText('已保存')).not.toBeInTheDocument();
     delete window.carelinkRealtime;
   });
 

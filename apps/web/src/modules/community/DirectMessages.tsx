@@ -37,7 +37,6 @@ export function DirectMessages() {
   const markRead = useMarkConversationRead();
   const [content, setContent] = useState<ComposerValue>({ body: '', items: [] });
   const [draftCommandId, setDraftCommandId] = useState(() => crypto.randomUUID());
-  const [saved, setSaved] = useState(false);
   const messageScroll = useRef<HTMLDivElement>(null);
   const loadingEarlier = useRef(false);
   const readRequests = useRef(new Set<string>());
@@ -84,7 +83,6 @@ export function DirectMessages() {
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!content.body.trim() && !content.items.length) return;
-    setSaved(false);
     await send
       .mutateAsync({
         body: content.body.trim(),
@@ -94,7 +92,6 @@ export function DirectMessages() {
       .then((result) => {
         setContent({ body: '', items: [] });
         setDraftCommandId(crypto.randomUUID());
-        setSaved(true);
         setSelected(result.data.conversationId);
         setDraftPeer(null);
         requestAnimationFrame(() => {
@@ -148,7 +145,6 @@ export function DirectMessages() {
                       setSearch('');
                       setContent({ body: '', items: [] });
                       setDraftCommandId(crypto.randomUUID());
-                      setSaved(false);
                     }}
                   >
                     <span>{item.avatarInitials}</span>
@@ -172,7 +168,6 @@ export function DirectMessages() {
                 onClick={() => {
                   setDraftPeer(null);
                   setSelected(item.id);
-                  setSaved(false);
                 }}
               >
                 <span>{item.peer.avatarInitials}</span>
@@ -243,24 +238,21 @@ export function DirectMessages() {
               rows={2}
               disabled={!peer || send.isPending}
             />
-            <Button
-              type="submit"
-              disabled={
-                !peer ||
-                send.isPending ||
-                composerHasPending(content) ||
-                (!content.body.trim() && !content.items.length)
-              }
-            >
-              <Send size={15} />
-              {t(send.isPending ? '正在发送…' : '发送')}
-            </Button>
-            {send.isError && (
-              <span className="community-send-state error">{t('发送失败，请重试。')}</span>
-            )}
-            {saved && !send.isPending && !send.isError && (
-              <span className="community-send-state">{t('已保存')}</span>
-            )}
+            <div className="community-send-actions">
+              <Button
+                type="submit"
+                disabled={
+                  !peer ||
+                  send.isPending ||
+                  composerHasPending(content) ||
+                  (!content.body.trim() && !content.items.length)
+                }
+              >
+                <Send size={15} />
+                {t(send.isPending ? '正在发送…' : '发送')}
+              </Button>
+              {send.isError && <span>{t('发送失败，请重试。')}</span>}
+            </div>
           </form>
         </div>
       </div>

@@ -851,15 +851,17 @@
   min-width: 0;
   flex: 1;
 }
-.community-send-state {
-  position: absolute;
-  right: 12px;
-  bottom: 2px;
-  color: #71878d;
-  font-size: 8px;
+.community-send-actions {
+  min-width: 76px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
 }
-.community-send-state.error {
+.community-send-actions > span {
   color: #a04e46;
+  font-size: 8px;
+  text-align: center;
 }
 .community-chat textarea {
   flex: 1;
