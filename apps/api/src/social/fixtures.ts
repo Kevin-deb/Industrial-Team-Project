@@ -1,6 +1,15 @@
 import type { DatabaseSync } from 'node:sqlite';
 
 const DOCTORS = ['doctor-demo-001', 'doctor-demo-002', 'doctor-demo-003'] as const;
+const DIRECTORY_DOCTORS = [
+  ['doctor-demo-004', '梁若川', '主任医师', '老年医学科', '云栖医养示范中心', '梁'],
+  ['doctor-demo-005', '沈安宁', '副主任医师', '呼吸内科', '云栖医养示范中心', '沈'],
+  ['doctor-demo-006', '韩静', '主治医师', '康复医学科', '云栖医养示范中心', '韩'],
+  ['doctor-demo-007', '郑云峰', '副主任医师', '神经内科', '云栖医养示范中心', '郑'],
+  ['doctor-demo-008', '唐婉', '主治医师', '全科医学科', '云栖医养示范中心', '唐'],
+  ['doctor-demo-009', '贺立', '主任医师', '肾内科', '云栖医养示范中心', '贺'],
+  ['doctor-demo-010', '方嘉言', '主治医师', '风湿免疫科', '云栖医养示范中心', '方'],
+] as const;
 const GROUPS = [
   [
     'GROUP-GERIATRICS',
@@ -18,6 +27,10 @@ const GROUPS = [
 export function seedSocialDemo(db: DatabaseSync): void {
   db.exec('BEGIN IMMEDIATE');
   try {
+    const identity = db.prepare(
+      'INSERT OR IGNORE INTO identities(id,display_name,title,department,hospital,avatar_initials) VALUES(?,?,?,?,?,?)',
+    );
+    for (const doctor of DIRECTORY_DOCTORS) identity.run(...doctor);
     const group = db.prepare(
       'INSERT OR IGNORE INTO social_groups(id,name,specialty,description) VALUES(?,?,?,?)',
     );
@@ -34,12 +47,13 @@ export function seedSocialDemo(db: DatabaseSync): void {
     const preference = db.prepare(
       'INSERT OR IGNORE INTO social_preferences(identity_id,enabled,notifications_enabled,updated_at) VALUES(?,?,?,?)',
     );
-    for (const doctor of DOCTORS) preference.run(doctor, 1, 1, '2026-09-10T08:00:00+08:00');
+    for (const doctor of [...DOCTORS, ...DIRECTORY_DOCTORS.map((item) => item[0])])
+      preference.run(doctor, 1, 1, '2026-09-10T08:00:00+08:00');
 
     const post = db.prepare(`INSERT OR IGNORE INTO social_posts(
       id,group_id,author_id,display_mode,title,body,tags_json,contains_case_material,
-      deidentification_confirmed_at,moderation_status,created_at,last_activity_at
-    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`);
+      deidentification_confirmed_at,moderation_status,created_at,last_activity_at,view_count
+    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`);
     const topicStems = [
       '门诊随访记录如何更清楚',
       '长期管理中的沟通经验',
@@ -64,6 +78,7 @@ export function seedSocialDemo(db: DatabaseSync): void {
           'published',
           createdAt,
           `2026-09-${String(1 + (sequence % 9)).padStart(2, '0')}T15:00:00+08:00`,
+          37 + ((sequence * 17) % 126),
         );
       }
     }
@@ -118,6 +133,14 @@ export function seedSocialDemo(db: DatabaseSync): void {
         `2026-09-${String(1 + (index % 9)).padStart(2, '0')}T16:00:00+08:00`,
         index <= 4 ? '2026-09-10T08:00:00+08:00' : null,
       );
+    const reportNotices = [
+      ['NOTICE-REPORT-ACCEPTED', 'report-accepted', 'POST-001', '2026-09-11T09:10:00+08:00'],
+      ['NOTICE-REPORT-UPHELD', 'report-upheld', 'POST-002', '2026-09-12T10:20:00+08:00'],
+      ['NOTICE-REPORT-REJECTED', 'report-rejected', 'POST-003', '2026-09-13T11:30:00+08:00'],
+      ['NOTICE-CONTENT-MODERATED', 'content-moderated', 'POST-004', '2026-09-14T08:00:00+08:00'],
+    ] as const;
+    for (const [id, kind, postId, createdAt] of reportNotices)
+      notification.run(id, DOCTORS[0], DOCTORS[0], postId, null, kind, createdAt, null);
 
     const conversation = db.prepare(
       'INSERT OR IGNORE INTO social_conversations(id,created_at,updated_at) VALUES(?,?,?)',

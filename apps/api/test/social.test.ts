@@ -15,7 +15,7 @@ import { createApp } from '../src/app.js';
 test('social migrations remain clinically isolated and fixtures are idempotent', () => {
   const db = openDatabase(':memory:');
   try {
-    assert.equal(db.prepare('SELECT COUNT(*) count FROM schema_migrations').get()!.count, 9);
+    assert.equal(db.prepare('SELECT COUNT(*) count FROM schema_migrations').get()!.count, 12);
     const tables = db
       .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'social_%'")
       .all();
@@ -46,6 +46,106 @@ test('social migrations remain clinically isolated and fixtures are idempotent',
       .get(DEMO_DOCTOR_ID);
     assert.equal(preserved?.enabled, 0);
     assert.equal(preserved?.notifications_enabled, 0);
+  } finally {
+    db.close();
+  }
+});
+
+test('forum supports five deterministic sort modes and idempotent view recording', async () => {
+  const db = openDatabase(':memory:');
+  const app = await createApp({ database: db, now: () => '2026-09-13T12:00:00+08:00' });
+  try {
+    db.prepare(
+      `UPDATE social_posts SET view_count=CASE id
+      WHEN 'POST-013' THEN 17 WHEN 'POST-014' THEN 63 WHEN 'POST-015' THEN 29 ELSE view_count END
+      WHERE group_id='GROUP-GENERAL'`,
+    ).run();
+    db.prepare(
+      "DELETE FROM social_likes WHERE post_id IN ('POST-013','POST-014','POST-015','POST-016')",
+    ).run();
+    db.prepare(
+      "DELETE FROM social_bookmarks WHERE post_id IN ('POST-013','POST-014','POST-015','POST-016')",
+    ).run();
+    const like = db.prepare(
+      'INSERT INTO social_likes(post_id,identity_id,created_at) VALUES(?,?,?)',
+    );
+    like.run('POST-013', 'doctor-demo-001', '2026-09-13T10:00:00+08:00');
+    like.run('POST-013', 'doctor-demo-002', '2026-09-13T10:00:00+08:00');
+    like.run('POST-014', 'doctor-demo-001', '2026-09-13T10:00:00+08:00');
+    const bookmark = db.prepare(
+      'INSERT INTO social_bookmarks(post_id,identity_id,created_at) VALUES(?,?,?)',
+    );
+    bookmark.run('POST-015', 'doctor-demo-001', '2026-09-13T10:00:00+08:00');
+    bookmark.run('POST-015', 'doctor-demo-002', '2026-09-13T10:00:00+08:00');
+    bookmark.run('POST-015', 'doctor-demo-003', '2026-09-13T10:00:00+08:00');
+    bookmark.run('POST-014', 'doctor-demo-001', '2026-09-13T10:00:00+08:00');
+
+    const expectedFirst: Record<string, string> = {
+      'most-liked': 'POST-013',
+      'most-bookmarked': 'POST-015',
+      'most-viewed': 'POST-014',
+      latest: 'POST-016',
+      'latest-reply': 'POST-016',
+    };
+    for (const [sort, firstId] of Object.entries(expectedFirst)) {
+      const response = await app.inject(`/api/v1/social/groups/GROUP-GENERAL/posts?sort=${sort}`);
+      assert.equal(response.statusCode, 200, `${sort}: ${response.body}`);
+      assert.equal(response.json().data.items[0].id, firstId, sort);
+      assert.equal(typeof response.json().data.items[0].viewCount, 'number');
+    }
+
+    const before = (await app.inject('/api/v1/social/posts/POST-013')).json().data.viewCount;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const viewed = await app.inject({
+        method: 'POST',
+        url: '/api/v1/social/posts/POST-013/views',
+        payload: { commandId: 'cmd-view-post-013' },
+      });
+      assert.equal(viewed.statusCode, 200, viewed.body);
+      assert.equal(viewed.json().data.viewCount, before + 1);
+    }
+  } finally {
+    await app.close();
+    db.close();
+  }
+});
+
+test('forum search includes tags and multiple selected tags use OR semantics', async () => {
+  const app = await createApp();
+  try {
+    const response = await app.inject(
+      '/api/v1/social/groups/GROUP-GERIATRICS/posts?q=%E9%9A%8F%E8%AE%BF&tags=%E9%9A%8F%E8%AE%BF%E7%AE%A1%E7%90%86,%E5%81%A5%E5%BA%B7%E6%95%99%E8%82%B2',
+    );
+    assert.equal(response.statusCode, 200, response.body);
+    assert.ok(response.json().data.items.length > 0);
+    assert.ok(
+      response.json().data.items.every((item: { title: string; excerpt: string; tags: string[] }) =>
+        `${item.title} ${item.excerpt} ${item.tags.join(' ')}`.includes('随访'),
+      ),
+    );
+    assert.ok(
+      response.json().data.items.every((item: { tags: string[] }) =>
+        item.tags.some((tag) => ['随访管理', '健康教育'].includes(tag)),
+      ),
+    );
+  } finally {
+    await app.close();
+  }
+});
+
+test('creating a report immediately adds an accepted notification for the reporter', () => {
+  const db = openDatabase(':memory:');
+  const service = new SocialService(new SqliteSocialRepository(db));
+  try {
+    service.createReport(
+      { commandId: 'report-notice', postId: 'POST-001', reason: 'other' },
+      { actorId: DEMO_DOCTOR_ID, now: '2026-09-14T08:30:00+08:00' },
+    );
+    const notice = service
+      .listNotifications({ actorId: DEMO_DOCTOR_ID, now: '2026-09-14T08:30:00+08:00' })
+      .find((item) => item.kind === 'report-accepted');
+    assert.ok(notice);
+    assert.equal(notice.postId, 'POST-001');
   } finally {
     db.close();
   }
@@ -130,6 +230,21 @@ test('social HTTP routes expose distinct forum, personal, notification and messa
     assert.ok(read.json().data.readAt);
     const conversations = await app.inject('/api/v1/social/conversations');
     assert.equal(conversations.statusCode, 200);
+    const peers = await app.inject('/api/v1/social/peers?q=%E5%BF%83%E8%A1%80%E7%AE%A1');
+    assert.equal(peers.statusCode, 200, peers.body);
+    assert.ok(peers.json().data.length >= 1);
+    assert.ok(
+      peers
+        .json()
+        .data.every(
+          (item: { id: string; department: string }) =>
+            item.id !== DEMO_DOCTOR_ID && item.department.includes('心血管'),
+        ),
+    );
+    assert.equal(
+      (await app.inject('/api/v1/social/peers?q=%E6%9E%97%E7%9F%A5%E8%BF%9C')).json().data.length,
+      0,
+    );
     const targetConversation = conversations
       .json()
       .data.find((item: { peer: { id: string } }) => item.peer.id === 'doctor-demo-002');
@@ -280,6 +395,7 @@ test('social service enforces opt-in, membership, de-identification, interaction
         senderId: DEMO_DOCTOR_ID,
         recipientId: 'doctor-demo-002',
         body: `同一时间消息 ${index}`,
+        contentBlocks: [],
         sentAt: '2026-09-13T11:00:00+08:00',
       });
     }

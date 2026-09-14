@@ -1,9 +1,12 @@
 import Fastify, { LogController, type FastifyReply, type FastifyRequest } from 'fastify';
 import fastifyStatic from '@fastify/static';
+import fastifyMultipart from '@fastify/multipart';
 import type { DatabaseSync } from 'node:sqlite';
 import type { Dashboard, PatientQuery } from '@doctor/contracts';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
+import { dirname, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
 import { openDatabase } from './database/connection.js';
 import { DEMO_DOCTOR_ID, DEMO_DATE } from './database/seed.js';
 import { SqlitePatientRepository } from './patients/index.js';
@@ -13,7 +16,14 @@ import { HealthService, registerHealthRoutes, SqliteHealthRepository } from './h
 import { SqlitePatientAccess, SqlitePlatformRepository } from './platform/index.js';
 import { features } from './platform/index.js';
 import { registerPlannedCommands } from './platform/index.js';
-import { registerSocialRoutes, SocialService, SqliteSocialRepository } from './social/index.js';
+import {
+  registerSocialRoutes,
+  SocialService,
+  SqliteSocialPeerDirectory,
+  SqliteSocialRepository,
+  AttachmentService,
+  LocalAttachmentStorage,
+} from './social/index.js';
 
 export interface AppOptions {
   /** Desktop packages remain synthetic demos even when packaged with NODE_ENV=production. */
@@ -23,6 +33,7 @@ export interface AppOptions {
   webRoot?: string;
   logger?: boolean;
   now?: () => string;
+  mediaRoot?: string;
 }
 const envelope = <T>(request: FastifyRequest, data: T, extra: Record<string, number> = {}) => ({
   data,
@@ -66,11 +77,23 @@ export async function createApp(options: AppOptions = {}) {
     requestIdHeader: false,
     ajv: { customOptions: { removeAdditional: false } },
   });
+  await app.register(fastifyMultipart, {
+    limits: { files: 1, fileSize: 10 * 1024 * 1024, parts: 1 },
+  });
   const patients = new SqlitePatientRepository(db);
   const encounters = new SqliteEncounterRepository(db);
   const clinical = new SqliteClinicalRepository(db);
   const healthRepository = new SqliteHealthRepository(db);
   const platform = new SqlitePlatformRepository(db);
+  const ephemeralMediaRoot =
+    !options.mediaRoot && (!options.databasePath || options.databasePath === ':memory:')
+      ? mkdtempSync(resolve(tmpdir(), 'carelink-social-media-'))
+      : undefined;
+  const mediaRoot =
+    options.mediaRoot ??
+    ephemeralMediaRoot ??
+    resolve(dirname(options.databasePath!), 'social-media');
+  const socialRepository = new SqliteSocialRepository(db);
   const context = () => ({
     actorId: DEMO_DOCTOR_ID,
     now: options.now?.() ?? new Date().toISOString(),
@@ -81,7 +104,17 @@ export async function createApp(options: AppOptions = {}) {
     {
       find(patientId, requestContext) {
         const patient = patients.findById(patientId, requestContext);
-        return patient ? { id: patient.id, name: patient.name } : undefined;
+        return patient
+          ? {
+              id: patient.id,
+              name: patient.name,
+              gender: patient.gender,
+              age: patient.age,
+              diagnosis: patient.diagnosis,
+              nextFollowUp: patient.nextFollowUp,
+              avatarInitials: patient.name.slice(0, 1),
+            }
+          : undefined;
       },
       search(query, requestContext) {
         return patients
@@ -113,6 +146,7 @@ export async function createApp(options: AppOptions = {}) {
   );
   app.addHook('onClose', async () => {
     if (!options.database) db.close();
+    if (ephemeralMediaRoot) rmSync(ephemeralMediaRoot, { recursive: true, force: true });
   });
   app.addHook('onRequest', async (request, reply) => {
     reply.header('X-Content-Type-Options', 'nosniff').header('Referrer-Policy', 'no-referrer');
@@ -236,19 +270,24 @@ export async function createApp(options: AppOptions = {}) {
   registerHealthRoutes(app, health, context);
   registerSocialRoutes(
     app,
-    new SocialService(new SqliteSocialRepository(db), {
-      record(event) {
-        platform.recordAccess({
-          actorId: event.actorId,
-          action: event.action,
-          targetType: event.resourceType,
-          targetId: event.resourceId,
-          outcome: 'success',
-          description: 'E social success metadata event',
-        });
+    new SocialService(
+      socialRepository,
+      {
+        record(event) {
+          platform.recordAccess({
+            actorId: event.actorId,
+            action: event.action,
+            targetType: event.resourceType,
+            targetId: event.resourceId,
+            outcome: 'success',
+            description: 'E social success metadata event',
+          });
+        },
       },
-    }),
+      new SqliteSocialPeerDirectory(db),
+    ),
     context,
+    new AttachmentService(socialRepository, new LocalAttachmentStorage(mediaRoot)),
   );
   app.get('/api/v1/audit', async (request) => envelope(request, platform.ownAudit(DEMO_DOCTOR_ID)));
   app.get('/api/v1/features', async (request) => envelope(request, features));

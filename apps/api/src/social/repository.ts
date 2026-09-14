@@ -1,5 +1,7 @@
 import type { DatabaseSync, SQLInputValue } from 'node:sqlite';
+import { randomUUID } from 'node:crypto';
 import type {
+  CreateSocialContentBlockInput,
   SocialComment,
   SocialConversation,
   SocialDirectMessage,
@@ -11,8 +13,11 @@ import type {
   SocialPage,
   SocialPostDetail,
   SocialPostSummary,
+  SocialPostSort,
   SocialPreferences,
   SocialReport,
+  SocialAttachment,
+  SocialContentBlock,
 } from '@doctor/contracts';
 
 type Row = Record<string, string | number | bigint | null | Uint8Array>;
@@ -25,6 +30,15 @@ export interface SocialCommandReceipt {
   responseJson: string;
   createdAt: string;
 }
+
+export interface SocialAttachmentRecord extends SocialAttachment {
+  ownerIdentityId: string;
+  storageKey: string;
+  state: 'temporary' | 'attached';
+  createdAt: string;
+  attachedAt?: string;
+}
+export class SocialAttachmentClaimFailure extends Error {}
 
 export class SqliteSocialRepository {
   constructor(private readonly db: DatabaseSync) {}
@@ -153,12 +167,24 @@ export class SqliteSocialRepository {
       params.groupId = groupId;
     }
     if (query.q) {
-      conditions.push("instr(lower(p.title||' '||p.body),lower(:q))>0");
+      conditions.push("instr(lower(p.title||' '||p.body||' '||p.tags_json),lower(:q))>0");
       params.q = query.q;
     }
     if (query.tag) {
       conditions.push('instr(p.tags_json,:tag)>0');
       params.tag = `\"${query.tag}\"`;
+    }
+    const selectedTags = (query.tags ?? '')
+      .split(',')
+      .map((tag) => tag.trim())
+      .filter(Boolean)
+      .slice(0, 8);
+    if (selectedTags.length) {
+      const tagConditions = selectedTags.map((tag, index) => {
+        params[`selectedTag${index}`] = `\"${tag}\"`;
+        return `instr(p.tags_json,:selectedTag${index})>0`;
+      });
+      conditions.push(`(${tagConditions.join(' OR ')})`);
     }
     const where = conditions.join(' AND ');
     const countParams: Record<string, SQLInputValue> = {};
@@ -166,14 +192,23 @@ export class SqliteSocialRepository {
     if (groupId) countParams.groupId = groupId;
     if (query.q) countParams.q = query.q;
     if (query.tag) countParams.tag = `\"${query.tag}\"`;
+    selectedTags.forEach((tag, index) => {
+      countParams[`selectedTag${index}`] = `\"${tag}\"`;
+    });
     const total = Number(
       this.db.prepare(`SELECT COUNT(*) count FROM social_posts p WHERE ${where}`).get(countParams)!
         .count,
     );
-    const order =
-      query.sort === 'latest' ? 'p.created_at DESC,p.id DESC' : 'p.last_activity_at DESC,p.id DESC';
+    const sort = query.sort ?? 'latest-reply';
+    const order: Record<SocialPostSort, string> = {
+      'most-liked': 'like_count DESC,p.last_activity_at DESC,p.id DESC',
+      'most-bookmarked': 'bookmark_count DESC,p.last_activity_at DESC,p.id DESC',
+      'most-viewed': 'p.view_count DESC,p.last_activity_at DESC,p.id DESC',
+      latest: 'p.created_at DESC,p.id DESC',
+      'latest-reply': 'p.last_activity_at DESC,p.id DESC',
+    };
     const items = this.db
-      .prepare(`${postSelect()} WHERE ${where} ORDER BY ${order} LIMIT :limit OFFSET :offset`)
+      .prepare(`${postSelect()} WHERE ${where} ORDER BY ${order[sort]} LIMIT :limit OFFSET :offset`)
       .all(params)
       .map((row) => mapPost(row as Row));
     return { items, page, pageSize, total };
@@ -187,9 +222,16 @@ export class SqliteSocialRepository {
       .prepare(`${commentSelect()} WHERE c.post_id=? ORDER BY c.created_at,c.id`)
       .all(id)
       .map((item) => mapComment(item as Row));
+    const postBlocks = this.listContentBlocks('post', [id]);
+    const commentBlocks = this.listContentBlocks(
+      'comment',
+      comments.map((item) => item.id),
+    );
+    for (const comment of comments) comment.contentBlocks = commentBlocks.get(comment.id) ?? [];
     return {
       ...mapPost(row),
       body: String(row.body),
+      contentBlocks: postBlocks.get(id) ?? [],
       comments,
       containsCaseMaterial: Boolean(row.contains_case_material),
       deidentificationConfirmed: Boolean(row.deidentification_confirmed_at),
@@ -198,6 +240,9 @@ export class SqliteSocialRepository {
   findPostAuthor(id: string) {
     const row = this.db.prepare('SELECT author_id FROM social_posts WHERE id=?').get(id);
     return row ? String(row.author_id) : undefined;
+  }
+  incrementPostView(id: string) {
+    this.db.prepare('UPDATE social_posts SET view_count=view_count+1 WHERE id=?').run(id);
   }
   findCommentAuthor(id: string) {
     const row = this.db.prepare('SELECT author_id,post_id FROM social_comments WHERE id=?').get(id);
@@ -374,6 +419,11 @@ export class SqliteSocialRepository {
       )
       .all(params) as Row[];
     const items = rows.map(mapMessage).reverse();
+    const blocks = this.listContentBlocks(
+      'message',
+      items.map((item) => item.id),
+    );
+    for (const item of items) item.contentBlocks = blocks.get(item.id) ?? [];
     const oldest = rows.at(-1);
     const hasOlder = oldest
       ? Boolean(
@@ -445,6 +495,19 @@ export class SqliteSocialRepository {
       .prepare('UPDATE social_conversations SET updated_at=? WHERE id=?')
       .run(item.sentAt, item.conversationId);
   }
+  findMessage(id: string, actorId: string): SocialDirectMessage | undefined {
+    const row = this.db
+      .prepare(
+        `SELECT message.* FROM social_direct_messages message
+         JOIN social_conversation_members member ON member.conversation_id=message.conversation_id
+         WHERE message.id=? AND member.identity_id=?`,
+      )
+      .get(id, actorId) as Row | undefined;
+    if (!row) return undefined;
+    const item = mapMessage(row);
+    item.contentBlocks = this.listContentBlocks('message', [id]).get(id) ?? [];
+    return item;
+  }
   createReport(item: SocialReport, reporterId: string, description?: string) {
     this.db
       .prepare(
@@ -460,6 +523,165 @@ export class SqliteSocialRepository {
         item.status,
         item.createdAt,
       );
+  }
+
+  createAttachment(item: SocialAttachmentRecord) {
+    this.db
+      .prepare(
+        `INSERT INTO social_attachments(
+          id,owner_identity_id,kind,media_type,storage_key,byte_size,width,height,duration_ms,state,created_at,attached_at
+        ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
+      )
+      .run(
+        item.id,
+        item.ownerIdentityId,
+        item.kind,
+        item.mediaType,
+        item.storageKey,
+        item.byteSize,
+        item.width ?? null,
+        item.height ?? null,
+        item.durationMs ?? null,
+        item.state,
+        item.createdAt,
+        item.attachedAt ?? null,
+      );
+  }
+
+  findAttachment(id: string): SocialAttachmentRecord | undefined {
+    const row = this.db.prepare('SELECT * FROM social_attachments WHERE id=?').get(id) as
+      Row | undefined;
+    return row ? mapAttachmentRecord(row) : undefined;
+  }
+
+  deleteTemporaryAttachment(
+    id: string,
+    ownerIdentityId: string,
+  ): SocialAttachmentRecord | undefined {
+    const item = this.findAttachment(id);
+    if (!item || item.ownerIdentityId !== ownerIdentityId || item.state !== 'temporary')
+      return undefined;
+    this.db.prepare("DELETE FROM social_attachments WHERE id=? AND state='temporary'").run(id);
+    return item;
+  }
+
+  createContentBlocks(
+    entityType: 'post' | 'comment' | 'message',
+    entityId: string,
+    blocks: readonly CreateSocialContentBlockInput[],
+    ownerIdentityId: string,
+    createdAt: string,
+  ) {
+    const insert = this.db.prepare(
+      `INSERT INTO social_content_blocks(
+        id,entity_type,entity_id,display_order,kind,attachment_id,card_json,schema_version,created_at
+      ) VALUES(?,?,?,?,?,?,?,?,?)`,
+    );
+    const claim = this.db.prepare(
+      `UPDATE social_attachments SET state='attached',attached_at=?
+       WHERE id=? AND owner_identity_id=? AND state='temporary' AND kind=?`,
+    );
+    for (const block of blocks) {
+      let attachmentId: string | null = null;
+      let cardJson: string | null = null;
+      if (block.kind === 'medical-metric-card') cardJson = JSON.stringify(block.card);
+      else {
+        attachmentId = block.attachmentId;
+        const result = claim.run(createdAt, block.attachmentId, ownerIdentityId, block.kind);
+        if (result.changes !== 1) throw new SocialAttachmentClaimFailure();
+      }
+      insert.run(
+        `BLOCK-${randomUUID()}`,
+        entityType,
+        entityId,
+        block.order,
+        block.kind,
+        attachmentId,
+        cardJson,
+        1,
+        createdAt,
+      );
+    }
+  }
+
+  listContentBlocks(
+    entityType: 'post' | 'comment' | 'message',
+    entityIds: readonly string[],
+  ): Map<string, SocialContentBlock[]> {
+    const result = new Map<string, SocialContentBlock[]>();
+    if (!entityIds.length) return result;
+    const placeholders = entityIds.map(() => '?').join(',');
+    const rows = this.db
+      .prepare(
+        `SELECT b.*,a.kind attachment_kind,a.media_type,a.byte_size,a.width,a.height,a.duration_ms
+         FROM social_content_blocks b
+         LEFT JOIN social_attachments a ON a.id=b.attachment_id
+         WHERE b.entity_type=? AND b.entity_id IN (${placeholders})
+         ORDER BY b.entity_id,b.display_order`,
+      )
+      .all(entityType, ...entityIds) as Row[];
+    for (const row of rows) {
+      const entityId = String(row.entity_id);
+      const list = result.get(entityId) ?? [];
+      if (String(row.kind) === 'medical-metric-card') {
+        list.push({
+          id: String(row.id),
+          kind: 'medical-metric-card',
+          order: Number(row.display_order),
+          card: JSON.parse(String(row.card_json)),
+        });
+      } else {
+        const attachmentId = String(row.attachment_id);
+        const kind = row.kind as 'image' | 'audio';
+        list.push({
+          id: String(row.id),
+          kind,
+          order: Number(row.display_order),
+          attachment: {
+            id: attachmentId,
+            kind,
+            mediaType: String(row.media_type),
+            byteSize: Number(row.byte_size),
+            ...(row.width ? { width: Number(row.width) } : {}),
+            ...(row.height ? { height: Number(row.height) } : {}),
+            ...(row.duration_ms !== null ? { durationMs: Number(row.duration_ms) } : {}),
+            contentUrl: `/api/v1/social/attachments/${attachmentId}/content`,
+          },
+        });
+      }
+      result.set(entityId, list);
+    }
+    return result;
+  }
+
+  canReadAttachment(id: string, actorId: string): boolean {
+    const item = this.findAttachment(id);
+    if (!item) return false;
+    if (item.ownerIdentityId === actorId) return true;
+    if (item.state !== 'attached') return false;
+    return Boolean(
+      this.db
+        .prepare(
+          `SELECT 1 FROM social_content_blocks block
+           WHERE block.attachment_id=? AND (
+             (block.entity_type='post' AND EXISTS(
+               SELECT 1 FROM social_posts post JOIN social_memberships member ON member.group_id=post.group_id
+               WHERE post.id=block.entity_id AND member.identity_id=?
+             )) OR
+             (block.entity_type='comment' AND EXISTS(
+               SELECT 1 FROM social_comments comment JOIN social_posts post ON post.id=comment.post_id
+               JOIN social_memberships member ON member.group_id=post.group_id
+               WHERE comment.id=block.entity_id AND member.identity_id=?
+             )) OR
+             (block.entity_type='message' AND EXISTS(
+               SELECT 1 FROM social_direct_messages message
+               JOIN social_conversation_members member ON member.conversation_id=message.conversation_id
+               WHERE message.id=block.entity_id AND member.identity_id=?
+             ))
+           ) LIMIT 1`,
+        )
+        .get(id, actorId, actorId, actorId),
+    );
   }
 }
 
@@ -510,6 +732,7 @@ function mapPost(r: Row): SocialPostSummary {
     commentCount: Number(r.comment_count),
     likeCount: Number(r.like_count),
     bookmarkCount: Number(r.bookmark_count),
+    viewCount: Number(r.view_count),
     likedByMe: Boolean(r.liked_by_me),
     bookmarkedByMe: Boolean(r.bookmarked_by_me),
   };
@@ -517,11 +740,12 @@ function mapPost(r: Row): SocialPostSummary {
 function mapComment(r: Row): SocialComment {
   return {
     id: String(r.id),
-    postId: String(r.post_id),
+    postId: r.post_id ? String(r.post_id) : '',
     ...(r.parent_comment_id ? { parentCommentId: String(r.parent_comment_id) } : {}),
     author: author(r),
     displayMode: r.display_mode as SocialComment['displayMode'],
     body: String(r.body),
+    contentBlocks: [],
     createdAt: String(r.created_at),
   };
 }
@@ -543,6 +767,7 @@ function mapMessage(r: Row): SocialDirectMessage {
     senderId: String(r.sender_id),
     recipientId: String(r.recipient_id),
     body: String(r.body),
+    contentBlocks: [],
     sentAt: String(r.sent_at),
   };
 }
@@ -555,6 +780,25 @@ function mapReceipt(r: Row): SocialCommandReceipt {
     resourceId: String(r.resource_id),
     responseJson: String(r.response_json),
     createdAt: String(r.created_at),
+  };
+}
+
+function mapAttachmentRecord(r: Row): SocialAttachmentRecord {
+  const id = String(r.id);
+  return {
+    id,
+    ownerIdentityId: String(r.owner_identity_id),
+    kind: r.kind as SocialAttachmentRecord['kind'],
+    mediaType: String(r.media_type),
+    storageKey: String(r.storage_key),
+    byteSize: Number(r.byte_size),
+    ...(r.width ? { width: Number(r.width) } : {}),
+    ...(r.height ? { height: Number(r.height) } : {}),
+    ...(r.duration_ms !== null ? { durationMs: Number(r.duration_ms) } : {}),
+    contentUrl: `/api/v1/social/attachments/${id}/content`,
+    state: r.state as SocialAttachmentRecord['state'],
+    createdAt: String(r.created_at),
+    ...(r.attached_at ? { attachedAt: String(r.attached_at) } : {}),
   };
 }
 

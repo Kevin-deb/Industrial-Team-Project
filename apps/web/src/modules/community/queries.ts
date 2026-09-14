@@ -11,12 +11,15 @@ import type {
   CreateMessageInput,
   CreatePostInput,
   SocialConversation,
+  SocialAttachment,
   SocialDirectMessage,
   SocialGroup,
   SocialMessagePage,
   SocialNotification,
   SocialPage,
+  SocialPeer,
   SocialPostDetail,
+  SocialPostSort,
   SocialPostSummary,
   SocialPreferences,
   UpdateSocialPreferencesInput,
@@ -28,12 +31,13 @@ export const socialKeys = {
   preferences: ['social', 'preferences'] as const,
   feed: (q = '') => ['social', 'feed', q] as const,
   groups: (q = '') => ['social', 'groups', q] as const,
-  groupPosts: (id: string, sort = 'latest-reply', tag = '') =>
-    ['social', 'group-posts', id, sort, tag] as const,
+  groupPosts: (id: string, sort = 'latest-reply', q = '', tags: readonly string[] = []) =>
+    ['social', 'group-posts', id, sort, q, ...tags] as const,
   post: (id: string) => ['social', 'post', id] as const,
   personal: (kind: string) => ['social', 'personal', kind] as const,
   notifications: ['social', 'notifications'] as const,
   conversations: ['social', 'conversations'] as const,
+  peers: (q: string) => ['social', 'peers', q] as const,
   messages: (id: string) => ['social', 'messages', id] as const,
 };
 const commandId = () => globalThis.crypto?.randomUUID?.() ?? `cmd-${Date.now()}-${Math.random()}`;
@@ -105,13 +109,18 @@ export const useGroups = (q = '') =>
         ),
     }),
   );
-export const useGroupPosts = (id: string, sort: 'latest' | 'latest-reply', tag = '') =>
+export const useGroupPosts = (
+  id: string,
+  sort: SocialPostSort,
+  q = '',
+  tags: readonly string[] = [],
+) =>
   useLocalizedEQuery(
     useQuery({
-      queryKey: socialKeys.groupPosts(id, sort, tag),
+      queryKey: socialKeys.groupPosts(id, sort, q, tags),
       queryFn: () =>
         requestEApi<SocialPage<SocialPostSummary>>(
-          `/social/groups/${encodeURIComponent(id)}/posts?sort=${sort}${tag ? `&tag=${encodeURIComponent(tag)}` : ''}`,
+          `/social/groups/${encodeURIComponent(id)}/posts?sort=${sort}${q ? `&q=${encodeURIComponent(q)}` : ''}${tags.length ? `&tags=${encodeURIComponent(tags.join(','))}` : ''}`,
         ),
       enabled: Boolean(id),
     }),
@@ -124,6 +133,20 @@ export const usePost = (id: string) =>
       enabled: Boolean(id),
     }),
   );
+export function useRecordPostView(postId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      requestEApi<SocialPostDetail>(`/social/posts/${encodeURIComponent(postId)}/views`, {
+        method: 'POST',
+        body: { commandId: commandId() },
+      }),
+    onSuccess: async (result) => {
+      client.setQueryData(socialKeys.post(postId), result);
+      await client.invalidateQueries({ queryKey: ['social', 'group-posts'] });
+    },
+  });
+}
 export function useJoinGroup() {
   const client = useQueryClient();
   return useMutation({
@@ -154,10 +177,10 @@ export function useLeaveGroup() {
 export function useCreatePost(groupId: string) {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (input: Omit<CreatePostInput, 'commandId'>) =>
+    mutationFn: (input: Omit<CreatePostInput, 'commandId'> & { commandId?: string }) =>
       requestEApi<SocialPostDetail>('/social/posts', {
         method: 'POST',
-        body: { ...input, commandId: commandId() },
+        body: { ...input, commandId: input.commandId ?? commandId() },
       }),
     onSuccess: async (result) =>
       Promise.all([
@@ -170,10 +193,12 @@ export function useCreatePost(groupId: string) {
 export function useCreateComment(postId: string) {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (input: Omit<CreateCommentInput, 'commandId' | 'postId'>) =>
+    mutationFn: (
+      input: Omit<CreateCommentInput, 'commandId' | 'postId'> & { commandId?: string },
+    ) =>
       requestEApi(`/social/posts/${encodeURIComponent(postId)}/comments`, {
         method: 'POST',
-        body: { ...input, commandId: commandId() },
+        body: { ...input, commandId: input.commandId ?? commandId() },
       }),
     onSuccess: async () =>
       Promise.all([
@@ -271,6 +296,14 @@ export const useConversations = () =>
       queryFn: () => requestEApi<SocialConversation[]>('/social/conversations'),
     }),
   );
+export const usePeerSearch = (q: string) =>
+  useLocalizedEQuery(
+    useQuery({
+      queryKey: socialKeys.peers(q),
+      queryFn: () => requestEApi<SocialPeer[]>(`/social/peers?q=${encodeURIComponent(q)}`),
+      enabled: Boolean(q.trim()),
+    }),
+  );
 export const useMessages = (id: string) =>
   useLocalizedEQuery(
     useInfiniteQuery({
@@ -287,21 +320,41 @@ export const useMessages = (id: string) =>
 export function useSendMessage(conversationId: string, recipientId: string) {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (body: string) =>
+    mutationFn: (
+      input: Pick<CreateMessageInput, 'body' | 'contentBlocks'> & { commandId?: string },
+    ) =>
       requestEApi<SocialDirectMessage>('/social/messages', {
         method: 'POST',
         body: {
-          commandId: commandId(),
-          conversationId,
+          commandId: input.commandId ?? commandId(),
+          ...(conversationId ? { conversationId } : {}),
           recipientId,
-          body,
+          body: input.body,
+          contentBlocks: input.contentBlocks,
         } satisfies CreateMessageInput,
       }),
-    onSuccess: async () =>
+    onSuccess: async (result) =>
       Promise.all([
-        client.invalidateQueries({ queryKey: socialKeys.messages(conversationId) }),
+        client.invalidateQueries({ queryKey: socialKeys.messages(result.data.conversationId) }),
         client.invalidateQueries({ queryKey: socialKeys.conversations }),
       ]),
+  });
+}
+export function useUploadSocialAttachment() {
+  return useMutation({
+    mutationFn: (file: File) => {
+      const body = new FormData();
+      body.append('file', file);
+      return requestEApi<SocialAttachment>('/social/attachments', { method: 'POST', body });
+    },
+  });
+}
+export function useDeleteTemporaryAttachment() {
+  return useMutation({
+    mutationFn: (id: string) =>
+      requestEApi<{ id: string }>(`/social/attachments/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      }),
   });
 }
 export function useReportPost(postId: string) {

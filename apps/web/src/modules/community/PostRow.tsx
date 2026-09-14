@@ -1,4 +1,4 @@
-import { Bookmark, Heart, MessageCircle } from 'lucide-react';
+import { Bookmark, Eye, Heart, MessageCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { SocialPostSummary } from '@doctor/contracts';
 import { useI18n } from '../../shared/i18n';
@@ -40,6 +40,10 @@ export function PostRow({ post }: { post: SocialPostSummary }) {
             <MessageCircle size={15} />
             {post.commentCount}
           </Link>
+          <span aria-label={t('浏览量')}>
+            <Eye size={15} />
+            {post.viewCount}
+          </span>
           <button
             type="button"
             onClick={() => bookmark.mutate(!post.bookmarkedByMe)}

@@ -37,7 +37,7 @@ export function CommunityPreferences() {
       <div className="community-settings-row">
         <div>
           <strong>{t('社区互动通知')}</strong>
-          <p>{t('包括评论、回复、点赞和收藏')}</p>
+          <p>{t('包括互动消息和举报处理进度')}</p>
         </div>
         <button
           role="switch"

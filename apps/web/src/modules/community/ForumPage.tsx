@@ -1,19 +1,30 @@
-import { ArrowLeft, Plus, X } from 'lucide-react';
+import { ArrowLeft, Plus, Search, X } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import type { SocialPostSort } from '@doctor/contracts';
 import { useI18n } from '../../shared/i18n';
 import { Button } from '../../shared/ui';
 import { PostRow } from './PostRow';
 import { useCreatePost, useGroupPosts, useGroups } from './queries';
+import {
+  MixedContentComposer,
+  composerContentBlocks,
+  composerHasPending,
+  type ComposerValue,
+} from './composer/MixedContentComposer';
 
 export function ForumPage() {
   const { t } = useI18n();
   const { groupId = '' } = useParams();
-  const [sort, setSort] = useState<'latest' | 'latest-reply'>('latest-reply');
-  const [tag, setTag] = useState('');
-  const posts = useGroupPosts(groupId, sort, tag.trim());
+  const [sort, setSort] = useState<SocialPostSort>('latest-reply');
+  const [search, setSearch] = useState('');
+  const [tags, setTags] = useState<string[]>([]);
   const groups = useGroups();
   const group = groups.data?.data.items.find((item) => item.id === groupId);
+  const tagOptions = Array.from(
+    new Set([group?.specialty, '随访管理', '同行经验', '健康教育'].filter(Boolean) as string[]),
+  );
+  const posts = useGroupPosts(groupId, sort, search.trim(), tags);
   const create = useCreatePost(groupId);
   const [open, setOpen] = useState(false);
   return (
@@ -33,17 +44,50 @@ export function ForumPage() {
         </Button>
       </div>
       <div className="community-forum-toolbar">
+        <label className="community-forum-search">
+          {t('搜索本圈主题')}
+          <span>
+            <Search size={15} />
+            <input
+              type="search"
+              aria-label={t('搜索本圈主题')}
+              placeholder={t('搜索标题、内容或标签')}
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </span>
+        </label>
         <label>
           {t('主题排序')}
           <select value={sort} onChange={(event) => setSort(event.target.value as typeof sort)}>
-            <option value="latest-reply">{t('最新回复')}</option>
+            <option value="most-liked">{t('点赞最多')}</option>
+            <option value="most-bookmarked">{t('收藏最多')}</option>
+            <option value="most-viewed">{t('浏览最多')}</option>
             <option value="latest">{t('最新发布')}</option>
+            <option value="latest-reply">{t('最新回复')}</option>
           </select>
         </label>
-        <label>
-          {t('标签筛选')}
-          <input value={tag} onChange={(event) => setTag(event.target.value)} />
-        </label>
+        <fieldset className="community-tag-filters">
+          <legend>{t('标签筛选')}</legend>
+          <div>
+            {tagOptions.map((tag) => (
+              <label key={tag} className={tags.includes(tag) ? 'selected' : ''}>
+                <input
+                  type="checkbox"
+                  checked={tags.includes(tag)}
+                  onChange={() =>
+                    setTags((current) =>
+                      current.includes(tag)
+                        ? current.filter((item) => item !== tag)
+                        : [...current, tag],
+                    )
+                  }
+                />
+                {t(tag)}
+              </label>
+            ))}
+          </div>
+        </fieldset>
         {posts.isFetching && <span>{t('正在更新主题…')}</span>}
       </div>
       <div className="community-post-list">
@@ -87,11 +131,14 @@ function PostComposer({
     tags: string[];
     containsCaseMaterial: boolean;
     deidentificationConfirmed: boolean;
+    contentBlocks?: import('@doctor/contracts').CreateSocialContentBlockInput[];
+    commandId?: string;
   }) => Promise<void>;
 }) {
   const { t } = useI18n();
   const [title, setTitle] = useState('');
-  const [body, setBody] = useState('');
+  const [content, setContent] = useState<ComposerValue>({ body: '', items: [] });
+  const [draftCommandId] = useState(() => crypto.randomUUID());
   const [tags, setTags] = useState('');
   const [anonymous, setAnonymous] = useState(false);
   const [caseMaterial, setCaseMaterial] = useState(false);
@@ -103,7 +150,7 @@ function PostComposer({
       groupId,
       displayMode: anonymous ? 'anonymous' : 'named',
       title,
-      body,
+      body: content.body,
       tags: tags
         .split(/[，,]/)
         .map((tag) => tag.trim())
@@ -111,6 +158,8 @@ function PostComposer({
         .slice(0, 5),
       containsCaseMaterial: caseMaterial,
       deidentificationConfirmed: confirmed,
+      contentBlocks: composerContentBlocks(content),
+      commandId: draftCommandId,
     }).catch(() => undefined);
   }
   return (
@@ -119,7 +168,7 @@ function PostComposer({
         role="dialog"
         aria-modal="true"
         aria-label={t('发布主题')}
-        className="community-dialog"
+        className="community-dialog community-post-dialog"
       >
         <header>
           <h2>{t('发布主题')}</h2>
@@ -138,16 +187,13 @@ function PostComposer({
               onChange={(event) => setTitle(event.target.value)}
             />
           </label>
-          <label>
-            {t('讨论内容')}
-            <textarea
-              required
-              minLength={2}
-              rows={8}
-              value={body}
-              onChange={(event) => setBody(event.target.value)}
-            />
-          </label>
+          <MixedContentComposer
+            label={t('讨论内容')}
+            value={content}
+            onChange={setContent}
+            rows={7}
+            disabled={busy}
+          />
           <label>
             {t('标签')}
             <input
@@ -172,23 +218,31 @@ function PostComposer({
             />
             {t('内容包含病例材料')}
           </label>
-          {caseMaterial && (
-            <label className="community-check community-confirm">
+          <div className="community-confirm-slot">
+            <label className={`community-check community-confirm${caseMaterial ? '' : ' hidden'}`}>
               <input
                 type="checkbox"
                 checked={confirmed}
                 onChange={(event) => setConfirmed(event.target.checked)}
-                required
+                required={caseMaterial}
               />
               {t('我已手工去除患者身份及可重新识别的信息')}
             </label>
-          )}
+          </div>
           {error && <p className="community-error">{error.message}</p>}
           <footer>
             <Button variant="secondary" onClick={onClose}>
               {t('取消')}
             </Button>
-            <Button type="submit" disabled={busy || (caseMaterial && !confirmed)}>
+            <Button
+              type="submit"
+              disabled={
+                busy ||
+                composerHasPending(content) ||
+                (!content.body.trim() && !content.items.length) ||
+                (caseMaterial && !confirmed)
+              }
+            >
               {busy ? t('正在发布…') : t('确认发布')}
             </Button>
           </footer>

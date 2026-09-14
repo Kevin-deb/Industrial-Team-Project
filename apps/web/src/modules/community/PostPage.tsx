@@ -1,9 +1,24 @@
-import { ArrowLeft, Bookmark, Flag, Heart, Reply, X } from 'lucide-react';
-import { useState, type FormEvent } from 'react';
+import { ArrowLeft, Bookmark, Eye, Flag, Heart, Reply, X } from 'lucide-react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useI18n } from '../../shared/i18n';
 import { Button } from '../../shared/ui';
-import { useCreateComment, usePost, usePostReaction, useReportPost } from './queries';
+import { ContentBlocks } from './ContentBlocks';
+import {
+  MixedContentComposer,
+  composerContentBlocks,
+  composerHasPending,
+  type ComposerValue,
+} from './composer/MixedContentComposer';
+import {
+  useCreateComment,
+  usePost,
+  usePostReaction,
+  useRecordPostView,
+  useReportPost,
+} from './queries';
+
+const viewedPostIds = new Set<string>();
 
 export function PostPage() {
   const { t, formatDate } = useI18n();
@@ -13,19 +28,34 @@ export function PostPage() {
   const like = usePostReaction(postId, 'like');
   const bookmark = usePostReaction(postId, 'bookmark');
   const report = useReportPost(postId);
+  const view = useRecordPostView(postId);
   const [replyTo, setReplyTo] = useState('');
-  const [body, setBody] = useState('');
+  const [content, setContent] = useState<ComposerValue>({ body: '', items: [] });
+  const [draftCommandId, setDraftCommandId] = useState(() => crypto.randomUUID());
   const [reporting, setReporting] = useState(false);
   const data = post.data?.data;
+  useEffect(() => {
+    if (!data || viewedPostIds.has(postId)) return;
+    viewedPostIds.add(postId);
+    view.mutate(undefined, { onError: () => viewedPostIds.delete(postId) });
+  }, [data?.id, postId]);
   if (!data) return <div className="community-loading">{t('正在加载主题…')}</div>;
   async function submit(event: FormEvent) {
     event.preventDefault();
     await comment
-      .mutateAsync({ ...(replyTo ? { parentCommentId: replyTo } : {}), displayMode: 'named', body })
+      .mutateAsync({
+        ...(replyTo ? { parentCommentId: replyTo } : {}),
+        displayMode: 'named',
+        body: content.body,
+        contentBlocks: composerContentBlocks(content),
+        commandId: draftCommandId,
+      })
       .then(() => {
-        setBody('');
+        setContent({ body: '', items: [] });
+        setDraftCommandId(crypto.randomUUID());
         setReplyTo('');
-      });
+      })
+      .catch(() => undefined);
   }
   return (
     <section className="community-view community-thread">
@@ -41,12 +71,17 @@ export function PostPage() {
         </div>
         <h2>{data.title}</h2>
         <p>{data.body}</p>
+        <ContentBlocks blocks={data.contentBlocks ?? []} />
         <div className="community-post-tags">
           {data.tags.map((tag) => (
             <span key={tag}>{tag}</span>
           ))}
         </div>
         <div className="community-thread-actions">
+          <span aria-label={t('浏览量')}>
+            <Eye size={16} />
+            {t('浏览量')} · {data.viewCount}
+          </span>
           <button
             onClick={() => like.mutate(!data.likedByMe)}
             className={data.likedByMe ? 'active' : ''}
@@ -83,6 +118,7 @@ export function PostPage() {
               <time>{formatDate(item.createdAt, { dateStyle: 'medium', timeStyle: 'short' })}</time>
             </div>
             <p>{item.body}</p>
+            <ContentBlocks blocks={item.contentBlocks ?? []} />
             <button onClick={() => setReplyTo(item.id)}>
               <Reply size={13} />
               {t('回复')}
@@ -98,14 +134,24 @@ export function PostPage() {
               </button>
             </div>
           )}
-          <textarea
-            aria-label={t('回复内容')}
-            required
-            value={body}
-            onChange={(event) => setBody(event.target.value)}
-            placeholder={t('写下专业、友善的回复…')}
+          <MixedContentComposer
+            label={t('回复内容')}
+            value={content}
+            onChange={setContent}
+            rows={4}
+            disabled={comment.isPending}
           />
-          <Button type="submit" disabled={comment.isPending}>
+          {comment.isError && (
+            <p className="community-error">{t('发表失败，内容已保留，请重试。')}</p>
+          )}
+          <Button
+            type="submit"
+            disabled={
+              comment.isPending ||
+              composerHasPending(content) ||
+              (!content.body.trim() && !content.items.length)
+            }
+          >
             {t('发表回复')}
           </Button>
         </form>

@@ -7,6 +7,7 @@ import type {
   UpdateSocialPreferencesInput,
 } from '@doctor/contracts';
 import type { RequestContext } from '../platform/index.js';
+import type { AttachmentService } from './attachment-service.js';
 import {
   CommunityDisabled,
   SocialConflict,
@@ -28,7 +29,11 @@ const listQuery = {
   properties: {
     q: { type: 'string', maxLength: 100 },
     tag: { type: 'string', maxLength: 30 },
-    sort: { type: 'string', enum: ['latest', 'latest-reply'] },
+    tags: { type: 'string', maxLength: 180 },
+    sort: {
+      type: 'string',
+      enum: ['most-liked', 'most-bookmarked', 'most-viewed', 'latest', 'latest-reply'],
+    },
     page: { type: 'integer', minimum: 1, maximum: 100000 },
     pageSize: { type: 'integer', minimum: 1, maximum: 100 },
   },
@@ -38,6 +43,7 @@ export function registerSocialRoutes(
   app: FastifyInstance,
   service: SocialService,
   context: () => RequestContext,
+  attachments?: AttachmentService,
 ) {
   const socialReply = <T>(
     request: FastifyRequest,
@@ -45,6 +51,7 @@ export function registerSocialRoutes(
     work: () => T | Promise<T>,
     status = 200,
   ) => replySocial(request, reply, context().actorId, work, status);
+  if (attachments) registerAttachmentRoutes(app, attachments, context);
   app.get('/api/v1/social/preferences', async (request, reply) =>
     socialReply(request, reply, () => service.getPreferences(context())),
   );
@@ -111,6 +118,14 @@ export function registerSocialRoutes(
     { schema: { params: idParams } },
     async (request, reply) =>
       socialReply(request, reply, () => service.getPost(request.params.id, context())),
+  );
+  app.post<{ Params: { id: string }; Body: { commandId: string } }>(
+    '/api/v1/social/posts/:id/views',
+    { schema: { params: idParams, body: commandBody } },
+    async (request, reply) =>
+      socialReply(request, reply, () =>
+        service.recordView(request.params.id, request.body.commandId, context()),
+      ),
   );
   app.post<{ Body: CreatePostInput }>(
     '/api/v1/social/posts',
@@ -214,6 +229,21 @@ export function registerSocialRoutes(
   app.get('/api/v1/social/conversations', async (request, reply) =>
     socialReply(request, reply, () => service.listConversations(context())),
   );
+  app.get<{ Querystring: { q: string } }>(
+    '/api/v1/social/peers',
+    {
+      schema: {
+        querystring: {
+          type: 'object',
+          required: ['q'],
+          additionalProperties: false,
+          properties: { q: { type: 'string', minLength: 1, maxLength: 60 } },
+        },
+      },
+    },
+    async (request, reply) =>
+      socialReply(request, reply, () => service.searchPeers(request.query.q, context())),
+  );
   app.get<{ Params: { id: string }; Querystring: { cursor?: string } }>(
     '/api/v1/social/conversations/:id/messages',
     {
@@ -245,6 +275,97 @@ export function registerSocialRoutes(
   );
 }
 
+function registerAttachmentRoutes(
+  app: FastifyInstance,
+  attachments: AttachmentService,
+  context: () => RequestContext,
+) {
+  app.post('/api/v1/social/attachments', async (request, reply) =>
+    replySocial(
+      request,
+      reply,
+      context().actorId,
+      async () => {
+        try {
+          const file = await request.file({ limits: { files: 1, fileSize: 10 * 1024 * 1024 } });
+          if (!file) throw new SocialValidationFailure();
+          const content = await file.toBuffer();
+          if (file.file.truncated) throw new SocialValidationFailure();
+          return await attachments.upload(content, file.mimetype, context());
+        } catch (error) {
+          if (
+            error instanceof CommunityDisabled ||
+            error instanceof SocialNotFound ||
+            error instanceof SocialValidationFailure
+          )
+            throw error;
+          throw new SocialValidationFailure();
+        }
+      },
+      201,
+    ),
+  );
+  app.get<{ Params: { id: string } }>(
+    '/api/v1/social/attachments/:id/content',
+    { schema: { params: idParams } },
+    async (request, reply) => {
+      try {
+        const { attachment, content } = await attachments.read(request.params.id, context());
+        reply
+          .header('Accept-Ranges', attachment.kind === 'audio' ? 'bytes' : 'none')
+          .header('Content-Type', attachment.mediaType)
+          .header('Content-Disposition', 'inline')
+          .header('Cache-Control', 'private, max-age=300');
+        if (attachment.kind === 'audio' && request.headers.range) {
+          const range = parseSingleRange(request.headers.range, content.byteLength);
+          if (!range)
+            return reply.code(416).header('Content-Range', `bytes */${content.byteLength}`).send();
+          const chunk = content.subarray(range.start, range.end + 1);
+          return reply
+            .code(206)
+            .header('Content-Range', `bytes ${range.start}-${range.end}/${content.byteLength}`)
+            .header('Content-Length', String(chunk.byteLength))
+            .send(chunk);
+        }
+        return reply.header('Content-Length', String(content.byteLength)).send(content);
+      } catch (error) {
+        return replySocial(request, reply, context().actorId, async () => {
+          throw error;
+        });
+      }
+    },
+  );
+  app.delete<{ Params: { id: string } }>(
+    '/api/v1/social/attachments/:id',
+    { schema: { params: idParams } },
+    async (request, reply) =>
+      replySocial(request, reply, context().actorId, () =>
+        attachments.removeTemporary(request.params.id, context()),
+      ),
+  );
+}
+
+function parseSingleRange(value: string, size: number): { start: number; end: number } | undefined {
+  const match = /^bytes=(\d*)-(\d*)$/.exec(value.trim());
+  if (!match || (!match[1] && !match[2]) || size < 1) return undefined;
+  if (!match[1]) {
+    const suffix = Number(match[2]);
+    if (!Number.isSafeInteger(suffix) || suffix < 1) return undefined;
+    return { start: Math.max(0, size - suffix), end: size - 1 };
+  }
+  const start = Number(match[1]);
+  const end = match[2] ? Number(match[2]) : size - 1;
+  if (
+    !Number.isSafeInteger(start) ||
+    !Number.isSafeInteger(end) ||
+    start < 0 ||
+    start >= size ||
+    end < start
+  )
+    return undefined;
+  return { start, end: Math.min(end, size - 1) };
+}
+
 const commandBody = {
   type: 'object',
   required: ['commandId'],
@@ -256,6 +377,76 @@ const toggleBody = {
   required: ['commandId', 'value'],
   additionalProperties: false,
   properties: { commandId, value: { type: 'boolean' } },
+} as const;
+const metricSchema = {
+  type: 'object',
+  required: ['metricCode', 'displayName', 'value', 'unit'],
+  additionalProperties: false,
+  properties: {
+    metricCode: { type: 'string', enum: ['systolic', 'diastolic', 'heart-rate', 'glucose'] },
+    displayName: { type: 'string', minLength: 1, maxLength: 30 },
+    value: { type: 'number' },
+    unit: { type: 'string', minLength: 1, maxLength: 20 },
+  },
+} as const;
+const cardSchema = {
+  type: 'object',
+  required: [
+    'schemaVersion',
+    'sourceType',
+    'measuredAt',
+    'metrics',
+    'sourceLabel',
+    'deidentificationConfirmed',
+  ],
+  additionalProperties: false,
+  properties: {
+    schemaVersion: { type: 'integer', enum: [1] },
+    sourceType: { type: 'string', enum: ['manual', 'provider'] },
+    measuredAt: { type: 'string', minLength: 16, maxLength: 40 },
+    metrics: { type: 'array', minItems: 1, maxItems: 4, items: metricSchema },
+    sourceLabel: { type: 'string', minLength: 1, maxLength: 100 },
+    note: { type: 'string', maxLength: 300 },
+    deidentificationConfirmed: { type: 'boolean' },
+  },
+} as const;
+const contentBlocksSchema = {
+  type: 'array',
+  maxItems: 7,
+  items: {
+    oneOf: [
+      {
+        type: 'object',
+        required: ['kind', 'order', 'attachmentId'],
+        additionalProperties: false,
+        properties: {
+          kind: { type: 'string', enum: ['image'] },
+          order: { type: 'integer', minimum: 0, maximum: 6 },
+          attachmentId: { type: 'string', minLength: 1, maxLength: 140 },
+        },
+      },
+      {
+        type: 'object',
+        required: ['kind', 'order', 'attachmentId'],
+        additionalProperties: false,
+        properties: {
+          kind: { type: 'string', enum: ['audio'] },
+          order: { type: 'integer', minimum: 0, maximum: 6 },
+          attachmentId: { type: 'string', minLength: 1, maxLength: 140 },
+        },
+      },
+      {
+        type: 'object',
+        required: ['kind', 'order', 'card'],
+        additionalProperties: false,
+        properties: {
+          kind: { type: 'string', enum: ['medical-metric-card'] },
+          order: { type: 'integer', minimum: 0, maximum: 6 },
+          card: cardSchema,
+        },
+      },
+    ],
+  },
 } as const;
 const postBody = {
   type: 'object',
@@ -275,10 +466,11 @@ const postBody = {
     groupId: { type: 'string', minLength: 1, maxLength: 100 },
     displayMode: { type: 'string', enum: ['named', 'anonymous'] },
     title: { type: 'string', minLength: 2, maxLength: 120 },
-    body: { type: 'string', minLength: 2, maxLength: 10000 },
+    body: { type: 'string', maxLength: 10000 },
     tags: { type: 'array', maxItems: 5, items: { type: 'string', minLength: 1, maxLength: 30 } },
     containsCaseMaterial: { type: 'boolean' },
     deidentificationConfirmed: { type: 'boolean' },
+    contentBlocks: contentBlocksSchema,
   },
 } as const;
 const commentBody = {
@@ -289,7 +481,8 @@ const commentBody = {
     commandId,
     parentCommentId: { type: 'string', maxLength: 140 },
     displayMode: { type: 'string', enum: ['named', 'anonymous'] },
-    body: { type: 'string', minLength: 1, maxLength: 4000 },
+    body: { type: 'string', maxLength: 4000 },
+    contentBlocks: contentBlocksSchema,
   },
 } as const;
 const messageBody = {
@@ -300,7 +493,8 @@ const messageBody = {
     commandId,
     conversationId: { type: 'string', maxLength: 140 },
     recipientId: { type: 'string', minLength: 1, maxLength: 100 },
-    body: { type: 'string', minLength: 1, maxLength: 4000 },
+    body: { type: 'string', maxLength: 4000 },
+    contentBlocks: contentBlocksSchema,
   },
 } as const;
 const reportBody = {

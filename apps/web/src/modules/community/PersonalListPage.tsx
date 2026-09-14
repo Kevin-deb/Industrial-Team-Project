@@ -14,9 +14,9 @@ export function PersonalListPage() {
     safeKind === 'likes' ? '我的点赞' : safeKind === 'bookmarks' ? '我的收藏' : '我的帖子';
   return (
     <section className="community-view">
-      <Link className="community-back" to="/community/me">
+      <Link className="community-back" to="/community">
         <ArrowLeft size={14} />
-        {t('返回我的社区')}
+        {t('返回社区首页')}
       </Link>
       <div className="community-view-heading">
         <div>

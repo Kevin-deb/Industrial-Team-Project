@@ -7,7 +7,13 @@ import { encountersMigration } from '../encounters/index.js';
 import { clinicalMigration } from '../clinical/index.js';
 import { healthEvolutionMigration, healthMigration, seedHealthDemo } from '../health/index.js';
 import { socialMigration } from '../social/index.js';
-import { seedSocialDemo, socialEvolutionMigration } from '../social/index.js';
+import {
+  seedSocialDemo,
+  socialEvolutionMigration,
+  socialRichContentMigration,
+  socialNotificationMigration,
+  socialViewsMigration,
+} from '../social/index.js';
 import { seedDemo } from './seed.js';
 import { eModuleHardeningMigration } from './e-module-hardening-migration.js';
 
@@ -21,6 +27,9 @@ export const migrations = [
   healthEvolutionMigration,
   socialEvolutionMigration,
   eModuleHardeningMigration,
+  socialViewsMigration,
+  socialRichContentMigration,
+  socialNotificationMigration,
 ];
 
 /** Refuse a newer or inconsistent migration history instead of silently running incompatible code. */

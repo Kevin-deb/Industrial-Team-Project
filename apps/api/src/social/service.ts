@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type {
+  CreateSocialContentBlockInput,
   CreateCommentInput,
   CreateMessageInput,
   CreatePostInput,
@@ -18,8 +19,13 @@ import type {
   UpdateSocialPreferencesInput,
 } from '@doctor/contracts';
 import type { RequestContext } from '../platform/index.js';
-import { SqliteSocialRepository, type SocialCommandReceipt } from './repository.js';
-import type { SocialAuditPort } from './ports.js';
+import {
+  SocialAttachmentClaimFailure,
+  SqliteSocialRepository,
+  type SocialCommandReceipt,
+} from './repository.js';
+import type { SocialAuditPort, SocialPeerDirectoryPort } from './ports.js';
+import { validateContentBlocks } from './content-blocks.js';
 
 export class CommunityDisabled extends Error {}
 export class SocialNotFound extends Error {}
@@ -30,6 +36,7 @@ export class SocialService {
   constructor(
     private readonly repository: SqliteSocialRepository,
     private readonly audit?: SocialAuditPort,
+    private readonly peerDirectory?: SocialPeerDirectoryPort,
   ) {}
   getPreferences(context: RequestContext) {
     return this.repository.getPreferences(context.actorId);
@@ -113,6 +120,8 @@ export class SocialService {
       throw new SocialValidationFailure();
     if (input.containsCaseMaterial && !input.deidentificationConfirmed)
       throw new SocialValidationFailure();
+    const blocks = validateContentBlocks(input.contentBlocks);
+    this.assertBodyOrBlocks(input.body, blocks);
     return this.execute(
       'social.post.create',
       input.commandId,
@@ -134,12 +143,14 @@ export class SocialService {
           title: input.title,
           excerpt: input.body.slice(0, 180),
           body: input.body,
+          contentBlocks: [],
           tags: input.tags,
           createdAt: context.now,
           lastActivityAt: context.now,
           commentCount: 0,
           likeCount: 0,
           bookmarkCount: 0,
+          viewCount: 0,
           likedByMe: false,
           bookmarkedByMe: false,
           comments: [],
@@ -147,6 +158,7 @@ export class SocialService {
           deidentificationConfirmed: input.deidentificationConfirmed,
         };
         this.repository.createPost(item, context.actorId);
+        this.claimContentBlocks('post', id, blocks, context);
         return this.repository.findPost(id, context.actorId)!;
       },
       'post',
@@ -157,6 +169,8 @@ export class SocialService {
     const post = this.getPost(input.postId, context);
     if (input.parentCommentId && !post.comments.some((item) => item.id === input.parentCommentId))
       throw new SocialValidationFailure();
+    const blocks = validateContentBlocks(input.contentBlocks);
+    this.assertBodyOrBlocks(input.body, blocks);
     return this.execute(
       'social.comment.create',
       input.commandId,
@@ -176,9 +190,11 @@ export class SocialService {
           },
           displayMode: input.displayMode,
           body: input.body,
+          contentBlocks: [],
           createdAt: context.now,
         };
         this.repository.createComment(item, context.actorId);
+        this.claimContentBlocks('comment', item.id, blocks, context);
         const recipient = input.parentCommentId
           ? this.repository.findCommentAuthor(input.parentCommentId)?.authorId
           : this.repository.findPostAuthor(input.postId);
@@ -203,6 +219,21 @@ export class SocialService {
   }
   setBookmark(postId: string, bookmarked: boolean, commandId: string, context: RequestContext) {
     return this.setReaction(postId, bookmarked, commandId, context, 'bookmark');
+  }
+  recordView(postId: string, commandId: string, context: RequestContext): SocialPostDetail {
+    this.assertEnabled(context);
+    this.getPost(postId, context);
+    return this.execute(
+      'social.post.view',
+      commandId,
+      { postId, commandId },
+      context,
+      () => {
+        this.repository.incrementPostView(postId);
+        return this.repository.findPost(postId, context.actorId)!;
+      },
+      postId,
+    );
   }
   private setReaction(
     postId: string,
@@ -266,6 +297,10 @@ export class SocialService {
     this.assertEnabled(context);
     return this.repository.listConversations(context.actorId);
   }
+  searchPeers(query: string, context: RequestContext) {
+    this.assertEnabled(context);
+    return this.peerDirectory?.search(query, context.actorId) ?? [];
+  }
   listMessages(
     conversationId: string,
     cursor: string | undefined,
@@ -287,6 +322,8 @@ export class SocialService {
     this.assertEnabled(context);
     if (input.recipientId === context.actorId || !this.repository.identityExists(input.recipientId))
       throw new SocialValidationFailure();
+    const blocks = validateContentBlocks(input.contentBlocks);
+    this.assertBodyOrBlocks(input.body, blocks);
     return this.execute(
       'social.message.send',
       input.commandId,
@@ -313,10 +350,12 @@ export class SocialService {
           senderId: context.actorId,
           recipientId: input.recipientId,
           body: input.body,
+          contentBlocks: [],
           sentAt: context.now,
         };
         this.repository.createMessage(item);
-        return item;
+        this.claimContentBlocks('message', item.id, blocks, context);
+        return this.repository.findMessage(item.id, context.actorId)!;
       },
       'message',
     );
@@ -344,6 +383,7 @@ export class SocialService {
           createdAt: context.now,
         };
         this.repository.createReport(item, context.actorId, input.description);
+        this.notify(context.actorId, context.actorId, input.postId ?? '', 'report-accepted', context.now);
         return item;
       },
       'report',
@@ -351,6 +391,28 @@ export class SocialService {
   }
   private assertEnabled(context: RequestContext) {
     if (!this.repository.getPreferences(context.actorId).enabled) throw new CommunityDisabled();
+  }
+  private assertBodyOrBlocks(body: string, blocks: readonly CreateSocialContentBlockInput[]) {
+    if (!body.trim() && !blocks.length) throw new SocialValidationFailure();
+  }
+  private claimContentBlocks(
+    entityType: 'post' | 'comment' | 'message',
+    entityId: string,
+    blocks: readonly CreateSocialContentBlockInput[],
+    context: RequestContext,
+  ) {
+    try {
+      this.repository.createContentBlocks(
+        entityType,
+        entityId,
+        blocks,
+        context.actorId,
+        context.now,
+      );
+    } catch (error) {
+      if (error instanceof SocialAttachmentClaimFailure) throw new SocialValidationFailure();
+      throw error;
+    }
   }
   private notify(
     recipientId: string,

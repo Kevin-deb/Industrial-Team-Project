@@ -39,14 +39,20 @@ export async function requestEApi<T>(
 ): Promise<ApiResponse<T>> {
   const headers = new Headers(options.headers);
   headers.set('Accept', 'application/json');
-  if (options.body !== undefined) {
+  const multipart = typeof FormData !== 'undefined' && options.body instanceof FormData;
+  if (options.body !== undefined && !multipart) {
     headers.set('Content-Type', 'application/json');
   }
 
   const response = await fetch(`/api/v1${path}`, {
     ...options,
     headers,
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    body:
+      options.body === undefined
+        ? undefined
+        : multipart
+          ? (options.body as FormData)
+          : JSON.stringify(options.body),
   });
   const payload: unknown = await response.json().catch(() => null);
 
@@ -60,7 +66,9 @@ export async function requestEApi<T>(
 function isApiError(payload: unknown): payload is ApiError {
   if (!payload || typeof payload !== 'object') return false;
   const candidate = payload as Partial<ApiError>;
-  return typeof candidate.error?.code === 'string'
-    && typeof candidate.error.message === 'string'
-    && typeof candidate.meta?.requestId === 'string';
+  return (
+    typeof candidate.error?.code === 'string' &&
+    typeof candidate.error.message === 'string' &&
+    typeof candidate.meta?.requestId === 'string'
+  );
 }

@@ -31,14 +31,16 @@ export function CommunityNotifications({ onClose }: { onClose: () => void }) {
                 void (async () => {
                   if (!item.readAt) await read.mutateAsync(item.id).catch(() => undefined);
                   onClose();
-                  navigate(`/community/posts/${item.postId}`);
+                  if (item.postId) navigate(`/community/posts/${item.postId}`);
                 })();
               }}
             >
               <Bell size={16} />
               <span>
                 <strong>
-                  {item.actorDisplayName} {t(noticeText(item.kind))}
+                  {item.kind.startsWith('report-') || item.kind === 'content-moderated'
+                    ? t(noticeText(item.kind))
+                    : `${item.actorDisplayName} ${t(noticeText(item.kind))}`}
                 </strong>
                 <small>
                   {formatDate(item.createdAt, { dateStyle: 'medium', timeStyle: 'short' })}
@@ -52,11 +54,12 @@ export function CommunityNotifications({ onClose }: { onClose: () => void }) {
   );
 }
 function noticeText(kind: string) {
-  return kind === 'comment'
-    ? '评论了你的帖子'
-    : kind === 'reply'
-      ? '回复了你的评论'
-      : kind === 'like'
-        ? '点赞了你的帖子'
-        : '收藏了你的帖子';
+  const messages: Record<string, string> = {
+    comment: '评论了你的帖子', reply: '回复了你的评论',
+    like: '点赞了你的帖子', bookmark: '收藏了你的帖子',
+    'report-accepted': '你提交的举报已受理', 'report-upheld': '你提交的举报处理成功',
+    'report-rejected': '你提交的举报未通过',
+    'content-moderated': '你的内容因举报成立已被处理',
+  };
+  return messages[kind] ?? '有一条新的社区消息';
 }
