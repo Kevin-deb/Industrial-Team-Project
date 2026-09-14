@@ -385,11 +385,20 @@
   box-shadow: 0 22px 65px rgba(28, 51, 59, 0.25);
 }
 .community-post-dialog {
-  height: min(780px, calc(100dvh - 40px));
+  width: min(560px, 100%);
+  height: min(650px, calc(100dvh - 40px));
 }
 .community-post-dialog form {
   height: calc(100% - 56px);
+  padding: 15px 18px;
+  gap: 10px;
   max-height: none;
+}
+.community-post-dialog .community-mixed-composer > textarea {
+  height: 120px;
+  min-height: 120px;
+  max-height: 120px;
+  resize: none;
 }
 .community-confirm-slot {
   min-height: 45px;
