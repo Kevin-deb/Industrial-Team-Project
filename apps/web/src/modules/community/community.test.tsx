@@ -406,11 +406,11 @@ describe('CommunityPage', () => {
     const composer = within(dialog);
     fireEvent.change(composer.getByLabelText('主题标题'), { target: { value: '标签测试' } });
     fireEvent.change(composer.getByLabelText('讨论内容'), { target: { value: '测试新标签。' } });
-    fireEvent.click(composer.getByRole('checkbox', { name: '随访管理' }));
+    fireEvent.click(composer.getByRole('button', { name: '随访管理' }));
     fireEvent.change(composer.getByRole('textbox', { name: '新建标签' }), {
       target: { value: '用药沟通' },
     });
-    fireEvent.click(composer.getByRole('button', { name: '添加' }));
+    fireEvent.click(composer.getByRole('button', { name: '新建' }));
     fireEvent.click(composer.getByRole('button', { name: '确认发布' }));
 
     expect(await screen.findByRole('checkbox', { name: '用药沟通' })).toBeInTheDocument();

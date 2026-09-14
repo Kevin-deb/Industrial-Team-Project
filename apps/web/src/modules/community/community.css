@@ -405,50 +405,60 @@
   padding: 0;
   border: 0;
 }
-.community-post-tag-picker legend {
-  margin-bottom: 5px;
+.community-post-tag-heading {
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   color: #536c74;
   font-size: 11px;
+}
+.community-post-tag-heading small {
+  color: #87979c;
+  font-size: 8px;
 }
 .community-post-tag-options {
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
 }
-.community-post-tag-options label {
+.community-post-tag-options button {
   min-height: 24px;
-  padding: 2px 7px;
+  padding: 2px 9px;
   display: inline-flex;
   align-items: center;
   gap: 4px;
   border: 1px solid #d7e2e3;
-  border-radius: 5px;
+  border-radius: 13px;
+  background: #fff;
   color: #526b73;
   font-size: 9px;
+  line-height: 1;
+  white-space: nowrap;
 }
-.community-post-tag-options label.selected {
+.community-post-tag-options button[aria-pressed='true'] {
   border-color: #79bdb4;
   background: #edf8f5;
   color: #147d73;
 }
-.community-post-tag-options input {
-  width: 11px;
-  height: 11px;
-  padding: 0;
-  accent-color: #188d82;
+.community-post-tag-options button:disabled {
+  opacity: 0.45;
 }
 .community-new-tag {
   margin-top: 6px;
-  display: grid;
-  grid-template-columns: 1fr auto;
+  width: min(320px, 100%);
+  display: flex;
   gap: 6px;
 }
 .community-new-tag input {
+  min-width: 0;
   min-height: 30px;
+  flex: 1;
 }
 .community-new-tag .button {
   min-height: 30px;
   padding: 0 11px;
+  white-space: nowrap;
 }
 .community-confirm-slot {
   min-height: 38px;

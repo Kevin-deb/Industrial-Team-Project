@@ -1,4 +1,4 @@
-import { ArrowLeft, Plus, Search, X } from 'lucide-react';
+import { ArrowLeft, Check, Plus, Search, X } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import type { SocialPostSort } from '@doctor/contracts';
@@ -148,6 +148,7 @@ function PostComposer({
   const [anonymous, setAnonymous] = useState(false);
   const [caseMaterial, setCaseMaterial] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
+  const composerTagOptions = [...new Set([...tagOptions, ...tags])];
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (caseMaterial && !confirmed) return;
@@ -195,25 +196,31 @@ function PostComposer({
             rows={7}
             disabled={busy}
           />
-          <fieldset className="community-post-tag-picker">
-            <legend>{t('标签')}</legend>
+          <fieldset className="community-post-tag-picker" aria-label={t('标签')}>
+            <div className="community-post-tag-heading">
+              <span>{t('选择标签')}</span>
+              <small>
+                {t('已选')} {tags.length}/5
+              </small>
+            </div>
             <div className="community-post-tag-options">
-              {tagOptions.map((tag) => (
-                <label key={tag} className={tags.includes(tag) ? 'selected' : ''}>
-                  <input
-                    type="checkbox"
-                    checked={tags.includes(tag)}
-                    disabled={!tags.includes(tag) && tags.length >= 5}
-                    onChange={() =>
-                      setTags((current) =>
-                        current.includes(tag)
-                          ? current.filter((item) => item !== tag)
-                          : [...current, tag],
-                      )
-                    }
-                  />
+              {composerTagOptions.map((tag) => (
+                <button
+                  type="button"
+                  key={tag}
+                  aria-pressed={tags.includes(tag)}
+                  disabled={!tags.includes(tag) && tags.length >= 5}
+                  onClick={() =>
+                    setTags((current) =>
+                      current.includes(tag)
+                        ? current.filter((item) => item !== tag)
+                        : [...current, tag],
+                    )
+                  }
+                >
+                  {tags.includes(tag) && <Check size={11} />}
                   {t(tag)}
-                </label>
+                </button>
               ))}
             </div>
             <div className="community-new-tag">
@@ -235,7 +242,8 @@ function PostComposer({
                   setNewTag('');
                 }}
               >
-                {t('添加')}
+                <Plus size={12} />
+                {t('新建')}
               </Button>
             </div>
           </fieldset>
