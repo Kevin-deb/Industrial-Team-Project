@@ -16,7 +16,7 @@
     "build": "npm run build -w @doctor/web && npm run build -w @doctor/api && npm run build -w @doctor/desktop",
     "start": "npm run start -w @doctor/desktop",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "test": "npm run test -w @doctor/api && npm run test -w @doctor/desktop",
+    "test": "npm run test -w @doctor/api && npm run test -w @doctor/web && npm run test -w @doctor/desktop",
     "test:e2e": "playwright test",
     "check:boundaries": "node scripts/check-boundaries.mjs",
     "check": "npm run check:boundaries && npm run typecheck && npm test && npm run build",

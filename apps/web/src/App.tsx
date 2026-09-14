@@ -27,6 +27,7 @@ import type { DoctorSession } from '@doctor/contracts';
 import { useApi } from './shared/api';
 import { Badge, Button, Modal } from './shared/ui';
 import { DashboardPage } from './dashboard/DashboardPage';
+import { useCommunityPreference } from './modules/preferences';
 import {
   AuditPage,
   CommunityPage,
@@ -75,24 +76,13 @@ export function App() {
   const [query, setQuery] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [dialog, setDialog] = useState<'notifications' | 'help' | null>(null);
-  const [communityEnabled, setCommunityEnabled] = useState(
-    localStorage.getItem('carelink-community-enabled') !== 'false',
-  );
-  useEffect(() => {
-    const listener = () =>
-      setCommunityEnabled(localStorage.getItem('carelink-community-enabled') !== 'false');
-    window.addEventListener('carelink-preferences-changed', listener);
-    window.addEventListener('storage', listener);
-    return () => {
-      window.removeEventListener('carelink-preferences-changed', listener);
-      window.removeEventListener('storage', listener);
-    };
-  }, []);
+  const { enabled: communityEnabled } = useCommunityPreference();
   useEffect(() => {
     setSidebarOpen(false);
     window.scrollTo(0, 0);
   }, [location.pathname]);
   const title =
+    (location.pathname.startsWith('/community') ? '同行社区' : undefined) ??
     navigation.find((item) => item.path === location.pathname)?.label ??
     ({ '/audit': '操作审计', '/community': '同行协作', '/settings': '设置中心' }[
       location.pathname
@@ -150,7 +140,6 @@ export function App() {
             <NavLink to="/community" className="nav-item">
               <BookOpen size={19} />
               <span>{t('同行协作')}</span>
-              <span className="nav-soon">{t('规划中')}</span>
             </NavLink>
           )}
           <NavLink to="/audit" className="nav-item">
@@ -268,7 +257,7 @@ export function App() {
             <Route path="/consultations" element={<ConsultationsPage />} />
             <Route path="/health" element={<HealthPage />} />
             <Route path="/audit" element={<AuditPage />} />
-            <Route path="/community" element={<CommunityPage />} />
+            <Route path="/community/*" element={<CommunityPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route
               path="*"

@@ -36,10 +36,11 @@ export const settingsMessages: Record<string, string> = {
     'Profile editing will support contact and professional details. Institution, department, title, and qualification changes will require verification and approval workflows. The demo profile cannot be edited.',
   '资料编辑 · 尚未上线': 'Edit profile · Coming soon',
   工作台偏好: 'Workspace preferences',
-  'PREFERENCES · 当前设备本地保存': 'PREFERENCES · Saved on this device',
+  'PREFERENCES · 本地服务持久保存': 'PREFERENCES · Persisted by the local service',
   '关闭后隐藏侧边栏入口，诊疗功能保持可用。':
     'Turn off to hide the sidebar entry. Clinical features remain available.',
-  '消息服务尚未启用。': 'Messaging is not active.',
+  '同行私信可在本地演示，未连接外部消息服务。':
+    'Direct messages work in the local demo; no external messaging service is connected.',
   界面主题: 'Appearance',
   '当前采用适合医疗工作台的浅色风格。': 'A light theme designed for a medical workspace.',
   浅色: 'Light',
@@ -58,6 +59,6 @@ export const settingsMessages: Record<string, string> = {
   界面语言: 'Interface language',
   '切换中文或英文，即时生效并保存在此设备。':
     'Choose Chinese or English. Changes apply immediately and are saved on this device.',
-  '语言与社区入口偏好可以实际保存；医生资料、身份验证和通知设置均为规划入口。':
-    'Language and community-entry preferences can be saved locally. Profile editing, authentication, and notifications are planned features.',
+  '语言与社区入口偏好可以实际保存；医生资料、身份验证和外部通知设置均为规划入口。':
+    'Language and community-entry preferences are saved. Profile editing, authentication, and external notification settings remain planned.',
 };

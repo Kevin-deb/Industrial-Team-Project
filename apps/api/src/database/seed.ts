@@ -415,7 +415,9 @@ export function seedDemo(db: DatabaseSync): void {
       '模拟患者上传 · 合成数据',
       '演示待复核项，不构成自动诊断或治疗建议。',
     );
-    const plan = db.prepare('INSERT INTO care_plans VALUES(?,?,?,?,?,?,?,?)');
+    const plan = db.prepare(`INSERT INTO care_plans(
+      id,patient_id,doctor_id,title,status,goals_json,next_review,completion_percent
+    ) VALUES(?,?,?,?,?,?,?,?)`);
     plan.run(
       'PLAN-001',
       'PAT-001',
@@ -501,8 +503,8 @@ export function seedDemo(db: DatabaseSync): void {
     );
     db.prepare('INSERT INTO social_preferences VALUES(?,?,?,?)').run(
       DEMO_DOCTOR_ID,
-      0,
-      0,
+      1,
+      1,
       '2026-09-10T00:00:00+08:00',
     );
     for (const id of ['community', 'rtc', 'identity', 'notifications', 'hospital-sync'])

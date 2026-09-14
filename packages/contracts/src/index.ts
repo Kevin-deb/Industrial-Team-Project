@@ -5,3 +5,4 @@ export * from './encounters.js';
 export * from './clinical.js';
 export * from './health.js';
 export * from './integrations.js';
+export * from './social.js';

@@ -1,0 +1,56 @@
+import { useI18n } from '../../shared/i18n';
+import { useSocialPreferences, useUpdateSocialPreferences } from './queries';
+
+export function CommunityPreferences() {
+  const { t } = useI18n();
+  const preferences = useSocialPreferences();
+  const update = useUpdateSocialPreferences();
+  const value = preferences.data?.data;
+  if (!value) return <div className="community-loading">{t('正在加载设置…')}</div>;
+  return (
+    <section className="community-view">
+      <div className="community-view-heading">
+        <div>
+          <h2>{t('社区设置')}</h2>
+          <p>{t('社区为自愿参与，关闭后不影响诊疗工作')}</p>
+        </div>
+      </div>
+      <div className="community-settings-row">
+        <div>
+          <strong>{t('使用同行社区')}</strong>
+          <p>{t('关闭后将同时关闭社区互动通知')}</p>
+        </div>
+        <button
+          role="switch"
+          aria-checked={value.enabled}
+          className={value.enabled ? 'community-switch on' : 'community-switch'}
+          onClick={() =>
+            update.mutate({
+              enabled: !value.enabled,
+              notificationsEnabled: !value.enabled && value.notificationsEnabled,
+            })
+          }
+        >
+          <span />
+        </button>
+      </div>
+      <div className="community-settings-row">
+        <div>
+          <strong>{t('社区互动通知')}</strong>
+          <p>{t('包括互动消息和举报处理进度')}</p>
+        </div>
+        <button
+          role="switch"
+          disabled={!value.enabled}
+          aria-checked={value.notificationsEnabled}
+          className={value.notificationsEnabled ? 'community-switch on' : 'community-switch'}
+          onClick={() =>
+            update.mutate({ enabled: true, notificationsEnabled: !value.notificationsEnabled })
+          }
+        >
+          <span />
+        </button>
+      </div>
+    </section>
+  );
+}

@@ -29,7 +29,6 @@ const stableFields = new Set([
   'status',
   'type',
   'metric',
-  'gender',
   'source',
   'domain',
   'mode',
@@ -39,13 +38,14 @@ const stableFields = new Set([
   'iteration',
   'version',
   'phone',
+  'gender',
 ]);
 /** Only the known synthetic fixture vocabulary is localized. IDs and domain enums never change. */
 export function localizeDemoData<T>(data: T, language: Language): T {
   if (language === 'zh-CN' || data == null) return data;
   function visit(value: unknown, key = ''): unknown {
     if (stableFields.has(key)) return value;
-    if (typeof value === 'string') return demoMessages[value] ?? value;
+    if (typeof value === 'string') return messages[value] ?? value;
     if (Array.isArray(value)) return value.map((item) => visit(item));
     if (typeof value === 'object' && value !== null)
       return Object.fromEntries(

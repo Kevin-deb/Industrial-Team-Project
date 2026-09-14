@@ -4,14 +4,15 @@ import type { FastifyInstance } from 'fastify';
 
 export const APPLICATION_URL = 'carelink://app/';
 const MAX_BODY_SIZE = 1024 * 1024;
+const MAX_SOCIAL_ATTACHMENT_BODY_SIZE = 10 * 1024 * 1024 + 256 * 1024;
 export const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data:",
+  "img-src 'self' data: blob:",
   "font-src 'self' data:",
   "connect-src 'self' carelink://app",
-  "media-src 'none'",
+  "media-src 'self' blob:",
   "frame-src 'none'",
   "object-src 'none'",
   "base-uri 'none'",
@@ -46,6 +47,19 @@ export function isApplicationUrl(value: string): boolean {
   }
 }
 
+export function canGrantAudioCapture(
+  permission: string,
+  requestingUrl: string,
+  mediaTypes: readonly string[],
+): boolean {
+  return (
+    permission === 'media' &&
+    isApplicationUrl(requestingUrl) &&
+    mediaTypes.length === 1 &&
+    mediaTypes[0] === 'audio'
+  );
+}
+
 function response(body: BodyInit | null, status = 200, headers: HeadersInit = {}): Response {
   const secured = new Headers(headers);
   secured.set('Content-Security-Policy', CONTENT_SECURITY_POLICY);
@@ -64,15 +78,19 @@ export function createProtocolHandler(services: FastifyInstance, rendererRoot: s
       if (origin && origin !== 'carelink://app') return response('Forbidden origin', 403);
       const url = new URL(request.url);
       if (url.pathname.startsWith('/api/v1/')) {
+        const maxBodySize =
+          request.method === 'POST' && url.pathname === '/api/v1/social/attachments'
+            ? MAX_SOCIAL_ATTACHMENT_BODY_SIZE
+            : MAX_BODY_SIZE;
         const contentLength = Number(request.headers.get('content-length') ?? 0);
-        if (contentLength > MAX_BODY_SIZE) return response('Request too large', 413);
+        if (contentLength > maxBodySize) return response('Request too large', 413);
         const payload = ['GET', 'HEAD'].includes(request.method)
           ? undefined
           : Buffer.from(await request.arrayBuffer());
-        if (payload && payload.length > MAX_BODY_SIZE) return response('Request too large', 413);
+        if (payload && payload.length > maxBodySize) return response('Request too large', 413);
         // Preserve the API's local-only origin/host guards. Never forward caller-supplied host.
         const headers: Record<string, string> = { host: '127.0.0.1', origin: 'http://127.0.0.1' };
-        for (const name of ['accept', 'content-type', 'accept-language', 'if-match']) {
+        for (const name of ['accept', 'content-type', 'accept-language', 'range', 'if-match']) {
           const value = request.headers.get(name);
           if (value) headers[name] = value;
         }
@@ -92,7 +110,9 @@ export function createProtocolHandler(services: FastifyInstance, rendererRoot: s
             responseHeaders.set(name, Array.isArray(value) ? value.join(', ') : String(value));
         }
         return response(
-          request.method === 'HEAD' || [204, 304].includes(result.statusCode) ? null : result.body,
+          request.method === 'HEAD' || [204, 304].includes(result.statusCode)
+            ? null
+            : new Uint8Array(result.rawPayload),
           result.statusCode,
           responseHeaders,
         );

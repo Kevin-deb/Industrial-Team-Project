@@ -1,0 +1,809 @@
+import type { DatabaseSync, SQLInputValue } from 'node:sqlite';
+import { randomUUID } from 'node:crypto';
+import type {
+  CreateSocialContentBlockInput,
+  SocialComment,
+  SocialConversation,
+  SocialDirectMessage,
+  SocialGroup,
+  SocialListQuery,
+  SocialMembership,
+  SocialMessagePage,
+  SocialNotification,
+  SocialPage,
+  SocialPostDetail,
+  SocialPostSummary,
+  SocialPostSort,
+  SocialPreferences,
+  SocialReport,
+  SocialAttachment,
+  SocialContentBlock,
+} from '@doctor/contracts';
+
+type Row = Record<string, string | number | bigint | null | Uint8Array>;
+export interface SocialCommandReceipt {
+  actorId: string;
+  commandId: string;
+  operation: string;
+  requestDigest: string;
+  resourceId: string;
+  responseJson: string;
+  createdAt: string;
+}
+
+export interface SocialAttachmentRecord extends SocialAttachment {
+  ownerIdentityId: string;
+  storageKey: string;
+  state: 'temporary' | 'attached';
+  createdAt: string;
+  attachedAt?: string;
+}
+export class SocialAttachmentClaimFailure extends Error {}
+
+export class SqliteSocialRepository {
+  constructor(private readonly db: DatabaseSync) {}
+  transaction<T>(work: () => T): T {
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      const result = work();
+      this.db.exec('COMMIT');
+      return result;
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+  findReceipt(actorId: string, commandId: string) {
+    const row = this.db
+      .prepare('SELECT * FROM social_command_receipts WHERE actor_id=? AND command_id=?')
+      .get(actorId, commandId) as Row | undefined;
+    return row ? mapReceipt(row) : undefined;
+  }
+  saveReceipt(item: SocialCommandReceipt) {
+    this.db
+      .prepare('INSERT INTO social_command_receipts VALUES(?,?,?,?,?,?,?)')
+      .run(
+        item.actorId,
+        item.commandId,
+        item.operation,
+        item.requestDigest,
+        item.resourceId,
+        item.responseJson,
+        item.createdAt,
+      );
+  }
+  getPreferences(actorId: string): SocialPreferences {
+    const row = this.db
+      .prepare('SELECT * FROM social_preferences WHERE identity_id=?')
+      .get(actorId);
+    return row
+      ? {
+          enabled: Boolean(row.enabled),
+          notificationsEnabled: Boolean(row.notifications_enabled),
+          updatedAt: String(row.updated_at),
+        }
+      : { enabled: false, notificationsEnabled: false, updatedAt: '' };
+  }
+  updatePreferences(actorId: string, item: SocialPreferences) {
+    this.db
+      .prepare(
+        `INSERT INTO social_preferences(identity_id,enabled,notifications_enabled,updated_at) VALUES(?,?,?,?) ON CONFLICT(identity_id) DO UPDATE SET enabled=excluded.enabled,notifications_enabled=excluded.notifications_enabled,updated_at=excluded.updated_at`,
+      )
+      .run(actorId, Number(item.enabled), Number(item.notificationsEnabled), item.updatedAt);
+  }
+  listGroups(query: SocialListQuery, actorId: string): SocialPage<SocialGroup> {
+    const page = query.page ?? 1,
+      pageSize = query.pageSize ?? 20;
+    const params: Record<string, SQLInputValue> = {
+      actorId,
+      limit: pageSize,
+      offset: (page - 1) * pageSize,
+    };
+    const where = query.q
+      ? "WHERE instr(lower(g.name||' '||g.specialty||' '||g.description),lower(:q))>0"
+      : '';
+    if (query.q) params.q = query.q;
+    const total = Number(
+      this.db
+        .prepare(`SELECT COUNT(*) count FROM social_groups g ${where}`)
+        .get(query.q ? { q: query.q } : {})!.count,
+    );
+    const items = this.db
+      .prepare(
+        `SELECT g.*,(SELECT COUNT(*) FROM social_memberships m WHERE m.group_id=g.id) member_count,(SELECT COUNT(*) FROM social_posts p WHERE p.group_id=g.id AND p.moderation_status='published') post_count,EXISTS(SELECT 1 FROM social_memberships me WHERE me.group_id=g.id AND me.identity_id=:actorId) joined_by_me FROM social_groups g ${where} ORDER BY joined_by_me DESC,g.name LIMIT :limit OFFSET :offset`,
+      )
+      .all(params)
+      .map((row) => mapGroup(row as Row));
+    return { items, page, pageSize, total };
+  }
+  hasGroup(groupId: string) {
+    return Boolean(this.db.prepare('SELECT 1 FROM social_groups WHERE id=?').get(groupId));
+  }
+  isMember(groupId: string, actorId: string) {
+    return Boolean(
+      this.db
+        .prepare('SELECT 1 FROM social_memberships WHERE group_id=? AND identity_id=?')
+        .get(groupId, actorId),
+    );
+  }
+  joinGroup(item: SocialMembership) {
+    this.db
+      .prepare(
+        'INSERT OR IGNORE INTO social_memberships(group_id,identity_id,joined_at) VALUES(?,?,?)',
+      )
+      .run(item.groupId, item.identityId, item.joinedAt);
+  }
+  leaveGroup(groupId: string, actorId: string) {
+    this.db
+      .prepare('DELETE FROM social_memberships WHERE group_id=? AND identity_id=?')
+      .run(groupId, actorId);
+  }
+  listFeed(query: SocialListQuery, actorId: string) {
+    return this.listPosts(undefined, query, actorId, true);
+  }
+  listGroupPosts(groupId: string, query: SocialListQuery, actorId: string) {
+    return this.listPosts(groupId, query, actorId);
+  }
+  private listPosts(
+    groupId: string | undefined,
+    query: SocialListQuery,
+    actorId: string,
+    joinedOnly = false,
+  ): SocialPage<SocialPostSummary> {
+    const page = query.page ?? 1,
+      pageSize = query.pageSize ?? 20;
+    const conditions = ["p.moderation_status='published'"];
+    const params: Record<string, SQLInputValue> = {
+      actorId,
+      limit: pageSize,
+      offset: (page - 1) * pageSize,
+    };
+    if (joinedOnly)
+      conditions.push(
+        'EXISTS(SELECT 1 FROM social_memberships joined WHERE joined.group_id=p.group_id AND joined.identity_id=:actorId)',
+      );
+    if (groupId) {
+      conditions.push('p.group_id=:groupId');
+      params.groupId = groupId;
+    }
+    if (query.q) {
+      conditions.push("instr(lower(p.title||' '||p.body||' '||p.tags_json),lower(:q))>0");
+      params.q = query.q;
+    }
+    if (query.tag) {
+      conditions.push('instr(p.tags_json,:tag)>0');
+      params.tag = `\"${query.tag}\"`;
+    }
+    const selectedTags = (query.tags ?? '')
+      .split(',')
+      .map((tag) => tag.trim())
+      .filter(Boolean)
+      .slice(0, 8);
+    if (selectedTags.length) {
+      const tagConditions = selectedTags.map((tag, index) => {
+        params[`selectedTag${index}`] = `\"${tag}\"`;
+        return `instr(p.tags_json,:selectedTag${index})>0`;
+      });
+      conditions.push(`(${tagConditions.join(' OR ')})`);
+    }
+    const where = conditions.join(' AND ');
+    const countParams: Record<string, SQLInputValue> = {};
+    if (joinedOnly) countParams.actorId = actorId;
+    if (groupId) countParams.groupId = groupId;
+    if (query.q) countParams.q = query.q;
+    if (query.tag) countParams.tag = `\"${query.tag}\"`;
+    selectedTags.forEach((tag, index) => {
+      countParams[`selectedTag${index}`] = `\"${tag}\"`;
+    });
+    const total = Number(
+      this.db.prepare(`SELECT COUNT(*) count FROM social_posts p WHERE ${where}`).get(countParams)!
+        .count,
+    );
+    const sort = query.sort ?? 'latest-reply';
+    const order: Record<SocialPostSort, string> = {
+      'most-liked': 'like_count DESC,p.last_activity_at DESC,p.id DESC',
+      'most-bookmarked': 'bookmark_count DESC,p.last_activity_at DESC,p.id DESC',
+      'most-viewed': 'p.view_count DESC,p.last_activity_at DESC,p.id DESC',
+      latest: 'p.created_at DESC,p.id DESC',
+      'latest-reply': 'p.last_activity_at DESC,p.id DESC',
+    };
+    const items = this.db
+      .prepare(`${postSelect()} WHERE ${where} ORDER BY ${order[sort]} LIMIT :limit OFFSET :offset`)
+      .all(params)
+      .map((row) => mapPost(row as Row));
+    return { items, page, pageSize, total };
+  }
+  findPost(id: string, actorId: string): SocialPostDetail | undefined {
+    const row = this.db
+      .prepare(`${postSelect()} WHERE p.id=:id AND p.moderation_status='published'`)
+      .get({ id, actorId }) as Row | undefined;
+    if (!row) return undefined;
+    const comments = this.db
+      .prepare(`${commentSelect()} WHERE c.post_id=? ORDER BY c.created_at,c.id`)
+      .all(id)
+      .map((item) => mapComment(item as Row));
+    const postBlocks = this.listContentBlocks('post', [id]);
+    const commentBlocks = this.listContentBlocks(
+      'comment',
+      comments.map((item) => item.id),
+    );
+    for (const comment of comments) comment.contentBlocks = commentBlocks.get(comment.id) ?? [];
+    return {
+      ...mapPost(row),
+      body: String(row.body),
+      contentBlocks: postBlocks.get(id) ?? [],
+      comments,
+      containsCaseMaterial: Boolean(row.contains_case_material),
+      deidentificationConfirmed: Boolean(row.deidentification_confirmed_at),
+    };
+  }
+  findPostAuthor(id: string) {
+    const row = this.db.prepare('SELECT author_id FROM social_posts WHERE id=?').get(id);
+    return row ? String(row.author_id) : undefined;
+  }
+  incrementPostView(id: string) {
+    this.db.prepare('UPDATE social_posts SET view_count=view_count+1 WHERE id=?').run(id);
+  }
+  findCommentAuthor(id: string) {
+    const row = this.db.prepare('SELECT author_id,post_id FROM social_comments WHERE id=?').get(id);
+    return row ? { authorId: String(row.author_id), postId: String(row.post_id) } : undefined;
+  }
+  createPost(post: SocialPostDetail, authorId: string) {
+    this.db
+      .prepare(
+        `INSERT INTO social_posts(id,group_id,author_id,display_mode,title,body,tags_json,contains_case_material,deidentification_confirmed_at,moderation_status,created_at,last_activity_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
+      )
+      .run(
+        post.id,
+        post.groupId,
+        authorId,
+        post.author.anonymous ? 'anonymous' : 'named',
+        post.title,
+        post.body,
+        JSON.stringify(post.tags),
+        Number(post.containsCaseMaterial),
+        post.deidentificationConfirmed ? post.createdAt : null,
+        'published',
+        post.createdAt,
+        post.lastActivityAt,
+      );
+  }
+  createComment(item: SocialComment, authorId: string) {
+    this.db
+      .prepare(
+        'INSERT INTO social_comments(id,post_id,parent_comment_id,author_id,display_mode,body,created_at) VALUES(?,?,?,?,?,?,?)',
+      )
+      .run(
+        item.id,
+        item.postId,
+        item.parentCommentId ?? null,
+        authorId,
+        item.displayMode,
+        item.body,
+        item.createdAt,
+      );
+    this.db
+      .prepare('UPDATE social_posts SET last_activity_at=? WHERE id=?')
+      .run(item.createdAt, item.postId);
+  }
+  setLike(postId: string, actorId: string, liked: boolean, at: string) {
+    liked
+      ? this.db.prepare('INSERT OR IGNORE INTO social_likes VALUES(?,?,?)').run(postId, actorId, at)
+      : this.db
+          .prepare('DELETE FROM social_likes WHERE post_id=? AND identity_id=?')
+          .run(postId, actorId);
+  }
+  setBookmark(postId: string, actorId: string, value: boolean, at: string) {
+    value
+      ? this.db
+          .prepare('INSERT OR IGNORE INTO social_bookmarks VALUES(?,?,?)')
+          .run(postId, actorId, at)
+      : this.db
+          .prepare('DELETE FROM social_bookmarks WHERE post_id=? AND identity_id=?')
+          .run(postId, actorId);
+  }
+  listMyPosts(query: SocialListQuery, actorId: string) {
+    return this.listPersonal('author', query, actorId);
+  }
+  listMyLikes(query: SocialListQuery, actorId: string) {
+    return this.listPersonal('like', query, actorId);
+  }
+  listMyBookmarks(query: SocialListQuery, actorId: string) {
+    return this.listPersonal('bookmark', query, actorId);
+  }
+  private listPersonal(
+    kind: 'author' | 'like' | 'bookmark',
+    query: SocialListQuery,
+    actorId: string,
+  ): SocialPage<SocialPostSummary> {
+    const page = query.page ?? 1,
+      pageSize = query.pageSize ?? 20;
+    const condition =
+      kind === 'author'
+        ? 'p.author_id=:actorId'
+        : kind === 'like'
+          ? 'EXISTS(SELECT 1 FROM social_likes mine WHERE mine.post_id=p.id AND mine.identity_id=:actorId)'
+          : 'EXISTS(SELECT 1 FROM social_bookmarks mine WHERE mine.post_id=p.id AND mine.identity_id=:actorId)';
+    const params = { actorId, limit: pageSize, offset: (page - 1) * pageSize };
+    const total = Number(
+      this.db
+        .prepare(
+          `SELECT COUNT(*) count FROM social_posts p WHERE p.moderation_status='published' AND ${condition}`,
+        )
+        .get({ actorId })!.count,
+    );
+    const items = this.db
+      .prepare(
+        `${postSelect()} WHERE p.moderation_status='published' AND ${condition} ORDER BY p.last_activity_at DESC LIMIT :limit OFFSET :offset`,
+      )
+      .all(params)
+      .map((row) => mapPost(row as Row));
+    return { items, page, pageSize, total };
+  }
+  listNotifications(actorId: string): SocialNotification[] {
+    return this.db
+      .prepare(
+        `${notificationSelect()} WHERE n.recipient_id=? ORDER BY n.created_at DESC,n.id DESC LIMIT 100`,
+      )
+      .all(actorId)
+      .map((row) => mapNotification(row as Row));
+  }
+  findNotification(id: string, actorId: string) {
+    const row = this.db
+      .prepare(`${notificationSelect()} WHERE n.id=? AND n.recipient_id=?`)
+      .get(id, actorId) as Row | undefined;
+    return row ? mapNotification(row) : undefined;
+  }
+  markNotificationRead(id: string, actorId: string, readAt: string) {
+    return (
+      this.db
+        .prepare('UPDATE social_notifications SET read_at=? WHERE id=? AND recipient_id=?')
+        .run(readAt, id, actorId).changes > 0
+    );
+  }
+  createNotification(item: SocialNotification, recipientId: string, actorId: string) {
+    this.db
+      .prepare(
+        'INSERT INTO social_notifications(id,recipient_id,actor_id,post_id,comment_id,kind,created_at,read_at) VALUES(?,?,?,?,?,?,?,?)',
+      )
+      .run(
+        item.id,
+        recipientId,
+        actorId,
+        item.postId,
+        item.commentId ?? null,
+        item.kind,
+        item.createdAt,
+        null,
+      );
+  }
+  listConversations(actorId: string): SocialConversation[] {
+    return this.db
+      .prepare(
+        `SELECT c.*,peer.id peer_id,peer.display_name peer_name,peer.avatar_initials peer_avatar,(SELECT body FROM social_direct_messages m WHERE m.conversation_id=c.id ORDER BY m.sent_at DESC,m.id DESC LIMIT 1) last_message,(SELECT COUNT(*) FROM social_direct_messages m WHERE m.conversation_id=c.id AND m.recipient_id=:actorId AND m.read_at IS NULL) unread_count FROM social_conversations c JOIN social_conversation_members mine ON mine.conversation_id=c.id AND mine.identity_id=:actorId JOIN social_conversation_members other ON other.conversation_id=c.id AND other.identity_id<>:actorId JOIN identities peer ON peer.id=other.identity_id ORDER BY c.updated_at DESC`,
+      )
+      .all({ actorId })
+      .map((row) => ({
+        id: String(row.id),
+        peer: {
+          id: String(row.peer_id),
+          displayName: String(row.peer_name),
+          avatarInitials: String(row.peer_avatar),
+        },
+        lastMessage: String(row.last_message ?? ''),
+        updatedAt: String(row.updated_at),
+        unreadCount: Number(row.unread_count),
+      }));
+  }
+  listMessages(conversationId: string, actorId: string, cursor?: string): SocialMessagePage {
+    if (
+      !this.db
+        .prepare(
+          'SELECT 1 FROM social_conversation_members WHERE conversation_id=? AND identity_id=?',
+        )
+        .get(conversationId, actorId)
+    )
+      return { items: [] };
+    const params: Record<string, SQLInputValue> = { conversationId, limit: 30 };
+    const parsedCursor = cursor ? parseMessageCursor(cursor) : undefined;
+    const condition = parsedCursor
+      ? 'AND (sent_at < :cursorTime OR (sent_at = :cursorTime AND id < :cursorId))'
+      : '';
+    if (parsedCursor) {
+      params.cursorTime = parsedCursor.sentAt;
+      params.cursorId = parsedCursor.id;
+    }
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM social_direct_messages WHERE conversation_id=:conversationId ${condition} ORDER BY sent_at DESC,id DESC LIMIT :limit`,
+      )
+      .all(params) as Row[];
+    const items = rows.map(mapMessage).reverse();
+    const blocks = this.listContentBlocks(
+      'message',
+      items.map((item) => item.id),
+    );
+    for (const item of items) item.contentBlocks = blocks.get(item.id) ?? [];
+    const oldest = rows.at(-1);
+    const hasOlder = oldest
+      ? Boolean(
+          this.db
+            .prepare(
+              `SELECT 1 FROM social_direct_messages
+               WHERE conversation_id=? AND (sent_at<? OR (sent_at=? AND id<?)) LIMIT 1`,
+            )
+            .get(
+              conversationId,
+              oldest.sent_at as SQLInputValue,
+              oldest.sent_at as SQLInputValue,
+              oldest.id as SQLInputValue,
+            ),
+        )
+      : false;
+    return {
+      items,
+      ...(hasOlder && oldest
+        ? { nextCursor: `${String(oldest.sent_at)}::${String(oldest.id)}` }
+        : {}),
+    };
+  }
+  findDirectConversation(actorId: string, recipientId: string) {
+    const row = this.db
+      .prepare(
+        `SELECT c.id FROM social_conversations c WHERE (SELECT COUNT(*) FROM social_conversation_members allm WHERE allm.conversation_id=c.id)=2 AND EXISTS(SELECT 1 FROM social_conversation_members m WHERE m.conversation_id=c.id AND m.identity_id=?) AND EXISTS(SELECT 1 FROM social_conversation_members m WHERE m.conversation_id=c.id AND m.identity_id=?) LIMIT 1`,
+      )
+      .get(actorId, recipientId);
+    return row ? String(row.id) : undefined;
+  }
+  identityExists(id: string) {
+    return Boolean(this.db.prepare('SELECT 1 FROM identities WHERE id=?').get(id));
+  }
+  canAccessMessage(messageId: string, actorId: string) {
+    return Boolean(
+      this.db
+        .prepare(
+          `SELECT 1
+      FROM social_direct_messages message
+      JOIN social_conversation_members member
+        ON member.conversation_id=message.conversation_id
+      WHERE message.id=? AND member.identity_id=?`,
+        )
+        .get(messageId, actorId),
+    );
+  }
+  createDirectConversation(id: string, actorId: string, recipientId: string, at: string) {
+    this.db.prepare('INSERT INTO social_conversations VALUES(?,?,?)').run(id, at, at);
+    this.db
+      .prepare('INSERT INTO social_conversation_members VALUES(?,?),(?,?)')
+      .run(id, actorId, id, recipientId);
+  }
+  createMessage(item: SocialDirectMessage) {
+    this.db
+      .prepare(
+        'INSERT INTO social_direct_messages(id,sender_id,recipient_id,body,sent_at,conversation_id,read_at) VALUES(?,?,?,?,?,?,?)',
+      )
+      .run(
+        item.id,
+        item.senderId,
+        item.recipientId,
+        item.body,
+        item.sentAt,
+        item.conversationId,
+        null,
+      );
+    this.db
+      .prepare('UPDATE social_conversations SET updated_at=? WHERE id=?')
+      .run(item.sentAt, item.conversationId);
+  }
+  findMessage(id: string, actorId: string): SocialDirectMessage | undefined {
+    const row = this.db
+      .prepare(
+        `SELECT message.* FROM social_direct_messages message
+         JOIN social_conversation_members member ON member.conversation_id=message.conversation_id
+         WHERE message.id=? AND member.identity_id=?`,
+      )
+      .get(id, actorId) as Row | undefined;
+    if (!row) return undefined;
+    const item = mapMessage(row);
+    item.contentBlocks = this.listContentBlocks('message', [id]).get(id) ?? [];
+    return item;
+  }
+  createReport(item: SocialReport, reporterId: string, description?: string) {
+    this.db
+      .prepare(
+        'INSERT INTO social_reports(id,post_id,reported_message_id,reporter_id,reason,description,status,created_at) VALUES(?,?,?,?,?,?,?,?)',
+      )
+      .run(
+        item.id,
+        item.postId ?? null,
+        item.messageId ?? null,
+        reporterId,
+        item.reason,
+        description ?? null,
+        item.status,
+        item.createdAt,
+      );
+  }
+
+  createAttachment(item: SocialAttachmentRecord) {
+    this.db
+      .prepare(
+        `INSERT INTO social_attachments(
+          id,owner_identity_id,kind,media_type,storage_key,byte_size,width,height,duration_ms,state,created_at,attached_at
+        ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
+      )
+      .run(
+        item.id,
+        item.ownerIdentityId,
+        item.kind,
+        item.mediaType,
+        item.storageKey,
+        item.byteSize,
+        item.width ?? null,
+        item.height ?? null,
+        item.durationMs ?? null,
+        item.state,
+        item.createdAt,
+        item.attachedAt ?? null,
+      );
+  }
+
+  findAttachment(id: string): SocialAttachmentRecord | undefined {
+    const row = this.db.prepare('SELECT * FROM social_attachments WHERE id=?').get(id) as
+      Row | undefined;
+    return row ? mapAttachmentRecord(row) : undefined;
+  }
+
+  deleteTemporaryAttachment(
+    id: string,
+    ownerIdentityId: string,
+  ): SocialAttachmentRecord | undefined {
+    const item = this.findAttachment(id);
+    if (!item || item.ownerIdentityId !== ownerIdentityId || item.state !== 'temporary')
+      return undefined;
+    this.db.prepare("DELETE FROM social_attachments WHERE id=? AND state='temporary'").run(id);
+    return item;
+  }
+
+  createContentBlocks(
+    entityType: 'post' | 'comment' | 'message',
+    entityId: string,
+    blocks: readonly CreateSocialContentBlockInput[],
+    ownerIdentityId: string,
+    createdAt: string,
+  ) {
+    const insert = this.db.prepare(
+      `INSERT INTO social_content_blocks(
+        id,entity_type,entity_id,display_order,kind,attachment_id,card_json,schema_version,created_at
+      ) VALUES(?,?,?,?,?,?,?,?,?)`,
+    );
+    const claim = this.db.prepare(
+      `UPDATE social_attachments SET state='attached',attached_at=?
+       WHERE id=? AND owner_identity_id=? AND state='temporary' AND kind=?`,
+    );
+    for (const block of blocks) {
+      let attachmentId: string | null = null;
+      let cardJson: string | null = null;
+      if (block.kind === 'medical-metric-card') cardJson = JSON.stringify(block.card);
+      else {
+        attachmentId = block.attachmentId;
+        const result = claim.run(createdAt, block.attachmentId, ownerIdentityId, block.kind);
+        if (result.changes !== 1) throw new SocialAttachmentClaimFailure();
+      }
+      insert.run(
+        `BLOCK-${randomUUID()}`,
+        entityType,
+        entityId,
+        block.order,
+        block.kind,
+        attachmentId,
+        cardJson,
+        1,
+        createdAt,
+      );
+    }
+  }
+
+  listContentBlocks(
+    entityType: 'post' | 'comment' | 'message',
+    entityIds: readonly string[],
+  ): Map<string, SocialContentBlock[]> {
+    const result = new Map<string, SocialContentBlock[]>();
+    if (!entityIds.length) return result;
+    const placeholders = entityIds.map(() => '?').join(',');
+    const rows = this.db
+      .prepare(
+        `SELECT b.*,a.kind attachment_kind,a.media_type,a.byte_size,a.width,a.height,a.duration_ms
+         FROM social_content_blocks b
+         LEFT JOIN social_attachments a ON a.id=b.attachment_id
+         WHERE b.entity_type=? AND b.entity_id IN (${placeholders})
+         ORDER BY b.entity_id,b.display_order`,
+      )
+      .all(entityType, ...entityIds) as Row[];
+    for (const row of rows) {
+      const entityId = String(row.entity_id);
+      const list = result.get(entityId) ?? [];
+      if (String(row.kind) === 'medical-metric-card') {
+        list.push({
+          id: String(row.id),
+          kind: 'medical-metric-card',
+          order: Number(row.display_order),
+          card: JSON.parse(String(row.card_json)),
+        });
+      } else {
+        const attachmentId = String(row.attachment_id);
+        const kind = row.kind as 'image' | 'audio';
+        list.push({
+          id: String(row.id),
+          kind,
+          order: Number(row.display_order),
+          attachment: {
+            id: attachmentId,
+            kind,
+            mediaType: String(row.media_type),
+            byteSize: Number(row.byte_size),
+            ...(row.width ? { width: Number(row.width) } : {}),
+            ...(row.height ? { height: Number(row.height) } : {}),
+            ...(row.duration_ms !== null ? { durationMs: Number(row.duration_ms) } : {}),
+            contentUrl: `/api/v1/social/attachments/${attachmentId}/content`,
+          },
+        });
+      }
+      result.set(entityId, list);
+    }
+    return result;
+  }
+
+  canReadAttachment(id: string, actorId: string): boolean {
+    const item = this.findAttachment(id);
+    if (!item) return false;
+    if (item.ownerIdentityId === actorId) return true;
+    if (item.state !== 'attached') return false;
+    return Boolean(
+      this.db
+        .prepare(
+          `SELECT 1 FROM social_content_blocks block
+           WHERE block.attachment_id=? AND (
+             (block.entity_type='post' AND EXISTS(
+               SELECT 1 FROM social_posts post JOIN social_memberships member ON member.group_id=post.group_id
+               WHERE post.id=block.entity_id AND member.identity_id=?
+             )) OR
+             (block.entity_type='comment' AND EXISTS(
+               SELECT 1 FROM social_comments comment JOIN social_posts post ON post.id=comment.post_id
+               JOIN social_memberships member ON member.group_id=post.group_id
+               WHERE comment.id=block.entity_id AND member.identity_id=?
+             )) OR
+             (block.entity_type='message' AND EXISTS(
+               SELECT 1 FROM social_direct_messages message
+               JOIN social_conversation_members member ON member.conversation_id=message.conversation_id
+               WHERE message.id=block.entity_id AND member.identity_id=?
+             ))
+           ) LIMIT 1`,
+        )
+        .get(id, actorId, actorId, actorId),
+    );
+  }
+}
+
+function postSelect() {
+  return `SELECT p.*,g.name group_name,i.display_name author_name,i.avatar_initials author_avatar,(SELECT COUNT(*) FROM social_comments c WHERE c.post_id=p.id) comment_count,(SELECT COUNT(*) FROM social_likes l WHERE l.post_id=p.id) like_count,(SELECT COUNT(*) FROM social_bookmarks b WHERE b.post_id=p.id) bookmark_count,EXISTS(SELECT 1 FROM social_likes me WHERE me.post_id=p.id AND me.identity_id=:actorId) liked_by_me,EXISTS(SELECT 1 FROM social_bookmarks me WHERE me.post_id=p.id AND me.identity_id=:actorId) bookmarked_by_me FROM social_posts p JOIN social_groups g ON g.id=p.group_id JOIN identities i ON i.id=p.author_id`;
+}
+function commentSelect() {
+  return `SELECT c.*,i.display_name author_name,i.avatar_initials author_avatar FROM social_comments c JOIN identities i ON i.id=c.author_id`;
+}
+function notificationSelect() {
+  return `SELECT n.*,
+    CASE WHEN c.display_mode='anonymous' THEN '匿名医生' ELSE COALESCE(i.display_name,'系统') END actor_name
+    FROM social_notifications n
+    LEFT JOIN identities i ON i.id=n.actor_id
+    LEFT JOIN social_comments c ON c.id=n.comment_id`;
+}
+function mapGroup(r: Row): SocialGroup {
+  return {
+    id: String(r.id),
+    name: String(r.name),
+    specialty: String(r.specialty),
+    description: String(r.description),
+    memberCount: Number(r.member_count),
+    postCount: Number(r.post_count),
+    joinedByMe: Boolean(r.joined_by_me),
+  };
+}
+function author(r: Row) {
+  const anonymous = String(r.display_mode) === 'anonymous';
+  return {
+    ...(anonymous ? {} : { id: String(r.author_id) }),
+    displayName: anonymous ? '匿名医生' : String(r.author_name),
+    anonymous,
+    avatarInitials: anonymous ? '匿' : String(r.author_avatar),
+  };
+}
+function mapPost(r: Row): SocialPostSummary {
+  return {
+    id: String(r.id),
+    groupId: String(r.group_id),
+    groupName: String(r.group_name),
+    author: author(r),
+    title: String(r.title),
+    excerpt: String(r.body).slice(0, 180),
+    tags: JSON.parse(String(r.tags_json)),
+    createdAt: String(r.created_at),
+    lastActivityAt: String(r.last_activity_at),
+    commentCount: Number(r.comment_count),
+    likeCount: Number(r.like_count),
+    bookmarkCount: Number(r.bookmark_count),
+    viewCount: Number(r.view_count),
+    likedByMe: Boolean(r.liked_by_me),
+    bookmarkedByMe: Boolean(r.bookmarked_by_me),
+  };
+}
+function mapComment(r: Row): SocialComment {
+  return {
+    id: String(r.id),
+    postId: r.post_id ? String(r.post_id) : '',
+    ...(r.parent_comment_id ? { parentCommentId: String(r.parent_comment_id) } : {}),
+    author: author(r),
+    displayMode: r.display_mode as SocialComment['displayMode'],
+    body: String(r.body),
+    contentBlocks: [],
+    createdAt: String(r.created_at),
+  };
+}
+function mapNotification(r: Row): SocialNotification {
+  return {
+    id: String(r.id),
+    kind: r.kind as SocialNotification['kind'],
+    actorDisplayName: String(r.actor_name),
+    postId: String(r.post_id),
+    ...(r.comment_id ? { commentId: String(r.comment_id) } : {}),
+    createdAt: String(r.created_at),
+    ...(r.read_at ? { readAt: String(r.read_at) } : {}),
+  };
+}
+function mapMessage(r: Row): SocialDirectMessage {
+  return {
+    id: String(r.id),
+    conversationId: String(r.conversation_id),
+    senderId: String(r.sender_id),
+    recipientId: String(r.recipient_id),
+    body: String(r.body),
+    contentBlocks: [],
+    sentAt: String(r.sent_at),
+  };
+}
+function mapReceipt(r: Row): SocialCommandReceipt {
+  return {
+    actorId: String(r.actor_id),
+    commandId: String(r.command_id),
+    operation: String(r.operation),
+    requestDigest: String(r.request_digest),
+    resourceId: String(r.resource_id),
+    responseJson: String(r.response_json),
+    createdAt: String(r.created_at),
+  };
+}
+
+function mapAttachmentRecord(r: Row): SocialAttachmentRecord {
+  const id = String(r.id);
+  return {
+    id,
+    ownerIdentityId: String(r.owner_identity_id),
+    kind: r.kind as SocialAttachmentRecord['kind'],
+    mediaType: String(r.media_type),
+    storageKey: String(r.storage_key),
+    byteSize: Number(r.byte_size),
+    ...(r.width ? { width: Number(r.width) } : {}),
+    ...(r.height ? { height: Number(r.height) } : {}),
+    ...(r.duration_ms !== null ? { durationMs: Number(r.duration_ms) } : {}),
+    contentUrl: `/api/v1/social/attachments/${id}/content`,
+    state: r.state as SocialAttachmentRecord['state'],
+    createdAt: String(r.created_at),
+    ...(r.attached_at ? { attachedAt: String(r.attached_at) } : {}),
+  };
+}
+
+function parseMessageCursor(cursor: string): { sentAt: string; id: string } | undefined {
+  const separator = cursor.lastIndexOf('::');
+  if (separator < 1 || separator === cursor.length - 2) return undefined;
+  return { sentAt: cursor.slice(0, separator), id: cursor.slice(separator + 2) };
+}

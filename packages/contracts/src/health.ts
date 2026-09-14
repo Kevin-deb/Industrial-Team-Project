@@ -1,13 +1,120 @@
+export interface CommandInput {
+  commandId: string;
+}
+
+export interface VersionedCommandInput extends CommandInput {
+  expectedVersion: number;
+}
+
+export type ObservationSource = 'synthetic-demo' | 'manual-entry' | 'device-simulator';
+
+export type HealthMetric = 'systolic' | 'diastolic' | 'glucose' | 'heart-rate';
+
+export interface Paginated<T> {
+  items: T[];
+  page: number;
+  pageSize: number;
+  total: number;
+}
+
 export interface Observation {
   id: string;
   patientId: string;
-  metric: 'systolic' | 'diastolic' | 'glucose' | 'heart-rate';
+  metric: HealthMetric;
   value: number;
   unit: string;
   measuredAt: string;
   receivedAt: string;
-  source: 'synthetic-demo';
+  source: ObservationSource;
   sourceLabel: string;
+  externalObservationId?: string;
+  qualityStatus: 'demo' | 'unreviewed' | 'reviewed';
+}
+
+/** Deliberately narrow B-to-E patient directory projection. */
+export interface HealthPatientSummary {
+  id: string;
+  name: string;
+  gender: '男' | '女';
+  age: number;
+  diagnosis: string;
+  nextFollowUp: string;
+  avatarInitials: string;
+}
+
+export interface ObservationQuery {
+  patientId: string;
+  metric?: HealthMetric;
+  from?: string;
+  to?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export type ObservationList = Paginated<Observation>;
+
+export interface ObservationTrendQuery {
+  patientId: string;
+  metric?: HealthMetric;
+  from?: string;
+  to?: string;
+}
+
+export interface ObservationTrendPoint {
+  id: string;
+  value: number;
+  measuredAt: string;
+  receivedAt: string;
+  sourceLabel: string;
+}
+
+export interface ObservationTrendStats {
+  latest: number;
+  average: number;
+  minimum: number;
+  maximum: number;
+  change: number;
+  count: number;
+}
+
+export interface ReferenceRange {
+  metric: HealthMetric;
+  lower: number;
+  upper: number;
+  unit: string;
+  ageMin: number;
+  ageMax: number;
+  sourceName: string;
+  version: string;
+  updatedAt: string;
+  level: 'demo' | 'clinical-configured';
+}
+
+export interface ObservationTrendSeries {
+  metric: HealthMetric;
+  unit: string;
+  points: ObservationTrendPoint[];
+  stats?: ObservationTrendStats;
+  referenceRange?: ReferenceRange;
+}
+
+export interface ObservationTrendResponse {
+  patientId: string;
+  patientAge: number;
+  from?: string;
+  to?: string;
+  series: ObservationTrendSeries[];
+}
+
+export interface CreateObservationInput extends CommandInput {
+  patientId: string;
+  metric: HealthMetric;
+  value: number;
+  unit: string;
+  measuredAt: string;
+  source: 'manual-entry' | 'device-simulator';
+  sourceLabel: string;
+  externalObservationId?: string;
 }
 
 export interface HealthAlert {
@@ -31,6 +138,77 @@ export interface CarePlan {
   goals: string[];
   nextReview: string;
   completionPercent: number;
+}
+
+export interface CarePlanDetail extends CarePlan {
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CarePlanVersion {
+  id: string;
+  planId: string;
+  version: number;
+  snapshot: Omit<CarePlanDetail, 'patientName'>;
+  authoredBy: string;
+  createdAt: string;
+}
+
+export interface CreateCarePlanInput extends CommandInput {
+  patientId: string;
+  title: string;
+  goals: string[];
+  nextReview: string;
+}
+
+export interface UpdateCarePlanInput extends VersionedCommandInput {
+  title: string;
+  status: 'draft' | 'active';
+  goals: string[];
+  nextReview: string;
+  completionPercent: number;
+}
+
+export interface HealthAssessment {
+  id: string;
+  patientId: string;
+  planId?: string;
+  assessorId: string;
+  assessedAt: string;
+  summary: string;
+  recommendations: string[];
+  nextReview?: string;
+}
+
+export interface CreateAssessmentInput extends CommandInput {
+  patientId: string;
+  planId?: string;
+  assessedAt: string;
+  summary: string;
+  recommendations: string[];
+  nextReview?: string;
+}
+
+export interface ReminderTask {
+  id: string;
+  patientId: string;
+  planId?: string;
+  channel: 'in-app' | 'sms' | 'email';
+  templateId: string;
+  scheduledAt: string;
+  status: 'planned' | 'pending' | 'sent' | 'failed' | 'cancelled';
+  attempts: number;
+  lastError?: string;
+}
+
+export interface CreateReminderInput extends CommandInput {
+  patientId: string;
+  planId?: string;
+  channel: ReminderTask['channel'];
+  templateId: string;
+  scheduledAt: string;
+  consentReference?: string;
 }
 
 export interface HealthOverview {
