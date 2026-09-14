@@ -282,7 +282,17 @@ test('health service scopes patients and enforces idempotent versioned plan writ
     const patientSummaries: PatientSummaryPort = {
       find(patientId, context) {
         const patient = patients.findById(patientId, context);
-        return patient ? { id: patient.id, name: patient.name } : undefined;
+        return patient
+          ? {
+              id: patient.id,
+              name: patient.name,
+              gender: patient.gender,
+              age: patient.age,
+              diagnosis: patient.diagnosis,
+              nextFollowUp: patient.nextFollowUp,
+              avatarInitials: patient.name.slice(0, 1),
+            }
+          : undefined;
       },
       search(query, context) {
         return patients
@@ -368,7 +378,17 @@ test('reminder delivery uses a durable claim and a stable provider idempotency k
     const summaries: PatientSummaryPort = {
       find(patientId, context) {
         const patient = patients.findById(patientId, context);
-        return patient ? { id: patient.id, name: patient.name } : undefined;
+        return patient
+          ? {
+              id: patient.id,
+              name: patient.name,
+              gender: patient.gender,
+              age: patient.age,
+              diagnosis: patient.diagnosis,
+              nextFollowUp: patient.nextFollowUp,
+              avatarInitials: patient.name.slice(0, 1),
+            }
+          : undefined;
       },
       search() {
         return [];

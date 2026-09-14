@@ -6,6 +6,7 @@ import type {
   CreateReminderInput,
   HealthMetric,
   ObservationQuery,
+  ObservationTrendQuery,
   UpdateCarePlanInput,
 } from '@doctor/contracts';
 import type { RequestContext } from '../platform/index.js';
@@ -116,6 +117,57 @@ export function registerHealthRoutes(
         );
       return healthReply(request, reply, () =>
         service.listObservations(request.query, getContext()),
+      );
+    },
+  );
+
+  app.get<{ Querystring: ObservationTrendQuery }>(
+    '/api/v1/health/observation-trends',
+    {
+      schema: {
+        querystring: {
+          type: 'object',
+          required: ['patientId'],
+          additionalProperties: false,
+          properties: {
+            patientId,
+            metric: { type: 'string', enum: ['systolic', 'diastolic', 'glucose', 'heart-rate'] },
+            from: dateTime,
+            to: dateTime,
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      if (
+        (request.query.from && !isValidRfc3339(request.query.from)) ||
+        (request.query.to && !isValidRfc3339(request.query.to))
+      ) {
+        return errorEnvelope(
+          request,
+          reply,
+          400,
+          'INVALID_REQUEST',
+          '时间格式无效。',
+          getContext().actorId,
+        );
+      }
+      if (
+        request.query.from &&
+        request.query.to &&
+        Date.parse(request.query.from) > Date.parse(request.query.to)
+      ) {
+        return errorEnvelope(
+          request,
+          reply,
+          400,
+          'INVALID_REQUEST',
+          '开始时间不能晚于结束时间。',
+          getContext().actorId,
+        );
+      }
+      return healthReply(request, reply, () =>
+        service.observationTrends(request.query, getContext()),
       );
     },
   );

@@ -22,7 +22,7 @@ export interface HealthNotificationPort {
 }
 
 export interface PatientSummaryPort {
-  find(patientId: string, context: RequestContext): { id: string; name: string } | undefined;
+  find(patientId: string, context: RequestContext): HealthPatientSummary | undefined;
   search(query: string, context: RequestContext): HealthPatientSummary[];
 }
 

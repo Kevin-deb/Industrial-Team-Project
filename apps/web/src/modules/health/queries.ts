@@ -10,6 +10,7 @@ import type {
   HealthPatientSummary,
   HealthOverview,
   Observation,
+  ObservationTrendResponse,
   Paginated,
   ReminderTask,
   UpdateCarePlanInput,
@@ -28,6 +29,8 @@ export const healthKeys = {
   overview: (patientId: string) => ['health', 'overview', patientId] as const,
   observations: (patientId: string, filters: ObservationFilters) =>
     ['health', 'observations', patientId, filters] as const,
+  observationTrends: (patientId: string, filters: ObservationFilters) =>
+    ['health', 'observation-trends', patientId, filters] as const,
   plans: (patientId: string) => ['health', 'plans', patientId] as const,
   assessments: (patientId: string) => ['health', 'assessments', patientId] as const,
   reminders: (patientId: string) => ['health', 'reminders', patientId] as const,
@@ -73,6 +76,25 @@ export function useObservations(patientId: string, filters: ObservationFilters) 
   );
 }
 
+export function useObservationTrends(
+  patientId: string,
+  filters: ObservationFilters,
+  enabled: boolean,
+) {
+  const search = new URLSearchParams({ patientId });
+  if (filters.metric) search.set('metric', filters.metric);
+  if (filters.from) search.set('from', filters.from);
+  if (filters.to) search.set('to', filters.to);
+  return useLocalizedEQuery(
+    useQuery({
+      queryKey: healthKeys.observationTrends(patientId, filters),
+      queryFn: () => requestEApi<ObservationTrendResponse>(`/health/observation-trends?${search}`),
+      enabled: Boolean(patientId) && enabled,
+      placeholderData: keepPreviousData,
+    }),
+  );
+}
+
 export function useCreateObservation(patientId: string) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -82,6 +104,7 @@ export function useCreateObservation(patientId: string) {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: healthKeys.overview(patientId) }),
         queryClient.invalidateQueries({ queryKey: ['health', 'observations', patientId] }),
+        queryClient.invalidateQueries({ queryKey: ['health', 'observation-trends', patientId] }),
       ]);
     },
   });

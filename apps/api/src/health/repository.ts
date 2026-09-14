@@ -7,6 +7,7 @@ import type {
   HealthOverview,
   Observation,
   ObservationQuery,
+  ObservationTrendQuery,
   Paginated,
   ReminderTask,
 } from '@doctor/contracts';
@@ -30,6 +31,7 @@ export interface HealthRepository {
   saveReceipt(receipt: CommandReceipt): void;
   overview(context: RequestContext, patientId?: string): HealthOverview;
   listObservations(query: ObservationQuery, context: RequestContext): Paginated<Observation>;
+  listObservationsForTrend(query: ObservationTrendQuery, context: RequestContext): Observation[];
   findObservationByExternal(
     patientId: string,
     source: Observation['source'],
@@ -168,6 +170,29 @@ export class SqliteHealthRepository implements HealthRepository {
       .all({ ...params, limit: pageSize, offset: (page - 1) * pageSize })
       .map((row) => mapObservation(row as Row));
     return { items, page, pageSize, total };
+  }
+
+  listObservationsForTrend(query: ObservationTrendQuery, _context: RequestContext): Observation[] {
+    const conditions = ['patient_id=:patientId'];
+    const params: Record<string, SQLInputValue> = { patientId: query.patientId };
+    if (query.metric) {
+      conditions.push('metric=:metric');
+      params.metric = query.metric;
+    }
+    if (query.from) {
+      conditions.push('measured_at>=:from');
+      params.from = query.from;
+    }
+    if (query.to) {
+      conditions.push('measured_at<=:to');
+      params.to = query.to;
+    }
+    return this.db
+      .prepare(
+        `SELECT * FROM health_observations WHERE ${conditions.join(' AND ')} ORDER BY measured_at ASC,id ASC`,
+      )
+      .all(params)
+      .map((row) => mapObservation(row as Row));
   }
 
   findObservationByExternal(

@@ -10,6 +10,8 @@ import type {
   HealthOverview,
   Observation,
   ObservationQuery,
+  ObservationTrendQuery,
+  ObservationTrendResponse,
   Paginated,
   ReminderTask,
   UpdateCarePlanInput,
@@ -23,6 +25,9 @@ import type {
   PatientSummaryPort,
   RequestContext,
 } from './ports.js';
+import type { ReferenceRangeProvider } from './reference-ranges.js';
+import { demoReferenceRangeProvider } from './reference-ranges.js';
+import { calculateTrendSeries } from './trends.js';
 
 export class HealthResourceNotFound extends Error {}
 export class CommandConflict extends Error {}
@@ -38,6 +43,7 @@ export class HealthService {
     private readonly patientSummaries: PatientSummaryPort,
     private readonly audit?: HealthAuditPort,
     private readonly notifications?: HealthNotificationPort,
+    private readonly referenceRanges: ReferenceRangeProvider = demoReferenceRangeProvider,
   ) {}
 
   searchPatients(query: string, context: RequestContext): HealthPatientSummary[] {
@@ -85,6 +91,43 @@ export class HealthService {
   listObservations(query: ObservationQuery, context: RequestContext): Paginated<Observation> {
     this.requirePatient(query.patientId, context);
     return this.repository.listObservations(query, context);
+  }
+
+  observationTrends(
+    query: ObservationTrendQuery,
+    context: RequestContext,
+  ): ObservationTrendResponse {
+    const patient = this.requirePatient(query.patientId, context);
+    const observations = this.repository.listObservationsForTrend(query, context);
+    const metrics = query.metric
+      ? [query.metric]
+      : (['systolic', 'diastolic', 'glucose', 'heart-rate'] as const);
+    const units = {
+      systolic: 'mmHg',
+      diastolic: 'mmHg',
+      glucose: 'mmol/L',
+      'heart-rate': 'bpm',
+    } as const;
+    return {
+      patientId: query.patientId,
+      patientAge: patient.age,
+      ...(query.from ? { from: query.from } : {}),
+      ...(query.to ? { to: query.to } : {}),
+      series: metrics.map((metric) => {
+        const matching = observations.filter((item) => item.metric === metric);
+        const measuredAt = matching.at(-1)?.measuredAt ?? context.now;
+        const reference = this.referenceRanges.find(metric, patient.age, units[metric], measuredAt);
+        if (!matching.length) {
+          return {
+            metric,
+            unit: units[metric],
+            points: [],
+            ...(reference ? { referenceRange: reference } : {}),
+          };
+        }
+        return calculateTrendSeries(matching, reference);
+      }),
+    };
   }
 
   createObservation(input: CreateObservationInput, context: RequestContext): Observation {

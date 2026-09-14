@@ -21,3 +21,10 @@ export type {
   PatientSummaryPort,
 } from './ports.js';
 export { registerHealthRoutes } from './routes.js';
+export {
+  ConfiguredReferenceRangeProvider,
+  demoReferenceRangeProvider,
+  demoReferenceRanges,
+} from './reference-ranges.js';
+export type { ReferenceRangeProvider } from './reference-ranges.js';
+export { calculateTrendSeries } from './trends.js';

@@ -53,6 +53,59 @@ export interface ObservationQuery {
 
 export type ObservationList = Paginated<Observation>;
 
+export interface ObservationTrendQuery {
+  patientId: string;
+  metric?: HealthMetric;
+  from?: string;
+  to?: string;
+}
+
+export interface ObservationTrendPoint {
+  id: string;
+  value: number;
+  measuredAt: string;
+  receivedAt: string;
+  sourceLabel: string;
+}
+
+export interface ObservationTrendStats {
+  latest: number;
+  average: number;
+  minimum: number;
+  maximum: number;
+  change: number;
+  count: number;
+}
+
+export interface ReferenceRange {
+  metric: HealthMetric;
+  lower: number;
+  upper: number;
+  unit: string;
+  ageMin: number;
+  ageMax: number;
+  sourceName: string;
+  version: string;
+  updatedAt: string;
+  level: 'demo' | 'clinical-configured';
+}
+
+export interface ObservationTrendSeries {
+  metric: HealthMetric;
+  unit: string;
+  points: ObservationTrendPoint[];
+  stats?: ObservationTrendStats;
+  referenceRange?: ReferenceRange;
+}
+
+export interface ObservationTrendResponse {
+  patientId: string;
+  patientAge: number;
+  from?: string;
+  to?: string;
+  series: ObservationTrendSeries[];
+}
+
 export interface CreateObservationInput extends CommandInput {
   patientId: string;
   metric: HealthMetric;
