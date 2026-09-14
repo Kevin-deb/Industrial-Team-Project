@@ -5,7 +5,7 @@ import type { SocialPostSort } from '@doctor/contracts';
 import { useI18n } from '../../shared/i18n';
 import { Button } from '../../shared/ui';
 import { PostRow } from './PostRow';
-import { useCreatePost, useGroupPosts, useGroups } from './queries';
+import { useCreatePost, useGroupPosts, useGroups, useGroupTags } from './queries';
 import {
   MixedContentComposer,
   composerContentBlocks,
@@ -21,9 +21,8 @@ export function ForumPage() {
   const [tags, setTags] = useState<string[]>([]);
   const groups = useGroups();
   const group = groups.data?.data.items.find((item) => item.id === groupId);
-  const tagOptions = Array.from(
-    new Set([group?.specialty, '随访管理', '同行经验', '健康教育'].filter(Boolean) as string[]),
-  );
+  const groupTags = useGroupTags(groupId);
+  const tagOptions = groupTags.data?.data.tags ?? [];
   const posts = useGroupPosts(groupId, sort, search.trim(), tags);
   const create = useCreatePost(groupId);
   const [open, setOpen] = useState(false);
@@ -101,6 +100,7 @@ export function ForumPage() {
       {open && (
         <PostComposer
           groupId={groupId}
+          tagOptions={tagOptions}
           busy={create.isPending}
           error={create.error}
           onClose={() => setOpen(false)}
@@ -116,12 +116,14 @@ export function ForumPage() {
 
 function PostComposer({
   groupId,
+  tagOptions,
   busy,
   error,
   onClose,
   onSubmit,
 }: {
   groupId: string;
+  tagOptions: string[];
   busy: boolean;
   error: Error | null;
   onClose: () => void;
@@ -141,7 +143,8 @@ function PostComposer({
   const [title, setTitle] = useState('');
   const [content, setContent] = useState<ComposerValue>({ body: '', items: [] });
   const [draftCommandId] = useState(() => crypto.randomUUID());
-  const [tags, setTags] = useState('');
+  const [tags, setTags] = useState<string[]>([]);
+  const [newTag, setNewTag] = useState('');
   const [anonymous, setAnonymous] = useState(false);
   const [caseMaterial, setCaseMaterial] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
@@ -153,11 +156,7 @@ function PostComposer({
       displayMode: anonymous ? 'anonymous' : 'named',
       title,
       body: content.body,
-      tags: tags
-        .split(/[，,]/)
-        .map((tag) => tag.trim())
-        .filter(Boolean)
-        .slice(0, 5),
+      tags,
       containsCaseMaterial: caseMaterial,
       deidentificationConfirmed: confirmed,
       contentBlocks: composerContentBlocks(content),
@@ -196,14 +195,50 @@ function PostComposer({
             rows={7}
             disabled={busy}
           />
-          <label>
-            {t('标签')}
-            <input
-              value={tags}
-              onChange={(event) => setTags(event.target.value)}
-              placeholder={t('用逗号分隔，最多 5 个')}
-            />
-          </label>
+          <fieldset className="community-post-tag-picker">
+            <legend>{t('标签')}</legend>
+            <div className="community-post-tag-options">
+              {tagOptions.map((tag) => (
+                <label key={tag} className={tags.includes(tag) ? 'selected' : ''}>
+                  <input
+                    type="checkbox"
+                    checked={tags.includes(tag)}
+                    disabled={!tags.includes(tag) && tags.length >= 5}
+                    onChange={() =>
+                      setTags((current) =>
+                        current.includes(tag)
+                          ? current.filter((item) => item !== tag)
+                          : [...current, tag],
+                      )
+                    }
+                  />
+                  {t(tag)}
+                </label>
+              ))}
+            </div>
+            <div className="community-new-tag">
+              <input
+                aria-label={t('新建标签')}
+                value={newTag}
+                maxLength={30}
+                placeholder={t('输入新标签')}
+                onChange={(event) => setNewTag(event.target.value)}
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={!newTag.trim() || tags.length >= 5}
+                onClick={() => {
+                  const value = newTag.trim();
+                  if (!value) return;
+                  setTags((current) => [...new Set([...current, value])].slice(0, 5));
+                  setNewTag('');
+                }}
+              >
+                {t('添加')}
+              </Button>
+            </div>
+          </fieldset>
           <label className="community-check">
             <input
               type="checkbox"

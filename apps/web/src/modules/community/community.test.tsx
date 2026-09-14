@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { SocialRealtimeEvent } from '@doctor/contracts';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -24,6 +24,7 @@ const post = {
   likedByMe: false,
   bookmarkedByMe: false,
 };
+let availableTags = ['老年医学', '随访管理', '同行经验', '健康教育'];
 function envelope(data: unknown) {
   return new Response(JSON.stringify({ data, meta: { requestId: 'test', mode: 'demo' } }), {
     status: 200,
@@ -33,13 +34,24 @@ function envelope(data: unknown) {
 
 describe('CommunityPage', () => {
   beforeEach(() => {
+    availableTags = ['老年医学', '随访管理', '同行经验', '健康教育'];
     localStorage.setItem('carelink-language', 'zh-CN');
     vi.stubGlobal(
       'fetch',
-      vi.fn(async (input: RequestInfo | URL) => {
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
         if (url.includes('/preferences'))
           return envelope({ enabled: true, notificationsEnabled: true, updatedAt: '2026-09-10' });
+        if (url.includes('/groups/') && url.endsWith('/tags'))
+          return envelope({ groupId: 'GROUP-GERIATRICS', tags: availableTags });
+        if (url.endsWith('/social/posts') && init?.method === 'POST') {
+          const submitted = JSON.parse(String(init.body)) as { tags: string[] };
+          availableTags = [...new Set([...availableTags, ...submitted.tags])];
+          return new Response(JSON.stringify({ data: { ...post, tags: submitted.tags } }), {
+            status: 201,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
         if (url.includes('/groups/') && url.includes('/posts'))
           return envelope({ items: [post], page: 1, pageSize: 20, total: 1 });
         if (url.includes('/groups'))
@@ -377,5 +389,30 @@ describe('CommunityPage', () => {
     const fieldset = await screen.findByRole('group', { name: '标签筛选' });
     expect(fieldset).toHaveClass('community-tag-filters');
     expect(fieldset.parentElement).toHaveClass('community-forum-tags-row');
+  });
+
+  it('selects existing tags and exposes a newly published tag in the circle filter', async () => {
+    renderWithEProviders(
+      <I18nProvider>
+        <MemoryRouter initialEntries={['/community/groups/GROUP-GERIATRICS']}>
+          <Routes>
+            <Route path="/community/*" element={<CommunityPage />} />
+          </Routes>
+        </MemoryRouter>
+      </I18nProvider>,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: '发布主题' }));
+    const dialog = screen.getByRole('dialog', { name: '发布主题' });
+    const composer = within(dialog);
+    fireEvent.change(composer.getByLabelText('主题标题'), { target: { value: '标签测试' } });
+    fireEvent.change(composer.getByLabelText('讨论内容'), { target: { value: '测试新标签。' } });
+    fireEvent.click(composer.getByRole('checkbox', { name: '随访管理' }));
+    fireEvent.change(composer.getByRole('textbox', { name: '新建标签' }), {
+      target: { value: '用药沟通' },
+    });
+    fireEvent.click(composer.getByRole('button', { name: '添加' }));
+    fireEvent.click(composer.getByRole('button', { name: '确认发布' }));
+
+    expect(await screen.findByRole('checkbox', { name: '用药沟通' })).toBeInTheDocument();
   });
 });

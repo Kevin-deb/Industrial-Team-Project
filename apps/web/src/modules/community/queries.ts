@@ -15,6 +15,7 @@ import type {
   SocialAttachment,
   SocialDirectMessage,
   SocialGroup,
+  SocialGroupTags,
   SocialMessagePage,
   SocialNotification,
   SocialPage,
@@ -32,6 +33,7 @@ export const socialKeys = {
   preferences: ['social', 'preferences'] as const,
   feed: (q = '') => ['social', 'feed', q] as const,
   groups: (q = '') => ['social', 'groups', q] as const,
+  groupTags: (id: string) => ['social', 'group-tags', id] as const,
   groupPosts: (id: string, sort = 'latest-reply', q = '', tags: readonly string[] = []) =>
     ['social', 'group-posts', id, sort, q, ...tags] as const,
   post: (id: string) => ['social', 'post', id] as const,
@@ -126,6 +128,14 @@ export const useGroupPosts = (
       enabled: Boolean(id),
     }),
   );
+export const useGroupTags = (id: string) =>
+  useLocalizedEQuery(
+    useQuery({
+      queryKey: socialKeys.groupTags(id),
+      queryFn: () => requestEApi<SocialGroupTags>(`/social/groups/${encodeURIComponent(id)}/tags`),
+      enabled: Boolean(id),
+    }),
+  );
 export const usePost = (id: string) =>
   useLocalizedEQuery(
     useQuery({
@@ -186,6 +196,7 @@ export function useCreatePost(groupId: string) {
     onSuccess: async (result) =>
       Promise.all([
         client.invalidateQueries({ queryKey: ['social', 'group-posts', groupId] }),
+        client.invalidateQueries({ queryKey: socialKeys.groupTags(groupId) }),
         client.invalidateQueries({ queryKey: ['social', 'feed'] }),
         client.setQueryData(socialKeys.post(result.data.id), result),
       ]),

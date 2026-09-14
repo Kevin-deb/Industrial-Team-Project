@@ -177,6 +177,10 @@ export interface SocialMessagePage {
   items: SocialDirectMessage[];
   nextCursor?: string;
 }
+export interface SocialGroupTags {
+  groupId: string;
+  tags: string[];
+}
 export type SocialPostSort =
   'most-liked' | 'most-bookmarked' | 'most-viewed' | 'latest' | 'latest-reply';
 export interface SocialListQuery {

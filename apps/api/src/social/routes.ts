@@ -115,6 +115,12 @@ export function registerSocialRoutes(
       ),
   );
   app.get<{ Params: { id: string } }>(
+    '/api/v1/social/groups/:id/tags',
+    { schema: { params: idParams } },
+    async (request, reply) =>
+      socialReply(request, reply, () => service.listGroupTags(request.params.id, context())),
+  );
+  app.get<{ Params: { id: string } }>(
     '/api/v1/social/posts/:id',
     { schema: { params: idParams } },
     async (request, reply) =>

@@ -138,6 +138,32 @@ test('forum search includes tags and multiple selected tags use OR semantics', a
   }
 });
 
+test('circle tag options include tags created by newly published posts', async () => {
+  const app = await createApp({ now: () => '2026-09-14T11:10:00+08:00' });
+  try {
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/v1/social/posts',
+      payload: {
+        commandId: 'cmd-create-circle-tag',
+        groupId: 'GROUP-GERIATRICS',
+        displayMode: 'named',
+        title: '用药沟通标签测试',
+        body: '用于验证圈内自定义标签。',
+        tags: ['用药沟通'],
+        containsCaseMaterial: false,
+        deidentificationConfirmed: false,
+      },
+    });
+    assert.equal(created.statusCode, 201, created.body);
+    const response = await app.inject('/api/v1/social/groups/GROUP-GERIATRICS/tags');
+    assert.equal(response.statusCode, 200, response.body);
+    assert.ok(response.json().data.tags.includes('用药沟通'));
+  } finally {
+    await app.close();
+  }
+});
+
 test('opening a conversation marks only incoming unread messages as read', async () => {
   const db = openDatabase(':memory:');
   const app = await createApp({ database: db, now: () => '2026-09-14T09:30:00+08:00' });

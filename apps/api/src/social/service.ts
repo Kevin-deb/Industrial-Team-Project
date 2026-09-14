@@ -110,6 +110,12 @@ export class SocialService {
     if (!this.repository.isMember(groupId, context.actorId)) throw new SocialNotFound();
     return this.repository.listGroupPosts(groupId, query, context.actorId);
   }
+  listGroupTags(groupId: string, context: RequestContext) {
+    this.assertEnabled(context);
+    if (!this.repository.hasGroup(groupId)) throw new SocialNotFound();
+    if (!this.repository.isMember(groupId, context.actorId)) throw new SocialNotFound();
+    return { groupId, tags: this.repository.listGroupTags(groupId) };
+  }
   getPost(id: string, context: RequestContext) {
     this.assertEnabled(context);
     const item = this.repository.findPost(id, context.actorId);

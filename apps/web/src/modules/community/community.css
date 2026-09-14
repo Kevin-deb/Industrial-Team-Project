@@ -400,6 +400,56 @@
   max-height: 90px;
   resize: none;
 }
+.community-post-tag-picker {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+}
+.community-post-tag-picker legend {
+  margin-bottom: 5px;
+  color: #536c74;
+  font-size: 11px;
+}
+.community-post-tag-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.community-post-tag-options label {
+  min-height: 24px;
+  padding: 2px 7px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid #d7e2e3;
+  border-radius: 5px;
+  color: #526b73;
+  font-size: 9px;
+}
+.community-post-tag-options label.selected {
+  border-color: #79bdb4;
+  background: #edf8f5;
+  color: #147d73;
+}
+.community-post-tag-options input {
+  width: 11px;
+  height: 11px;
+  padding: 0;
+  accent-color: #188d82;
+}
+.community-new-tag {
+  margin-top: 6px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px;
+}
+.community-new-tag input {
+  min-height: 30px;
+}
+.community-new-tag .button {
+  min-height: 30px;
+  padding: 0 11px;
+}
 .community-confirm-slot {
   min-height: 38px;
 }
