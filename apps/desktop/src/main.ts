@@ -2,7 +2,12 @@ import { app, BrowserWindow, dialog, Menu, protocol, session, screen } from 'ele
 import { resolve, isAbsolute } from 'node:path';
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { createApp } from '../../api/src/app.js';
-import { APPLICATION_URL, createProtocolHandler, isApplicationUrl } from './protocol.js';
+import {
+  APPLICATION_URL,
+  canGrantAudioCapture,
+  createProtocolHandler,
+  isApplicationUrl,
+} from './protocol.js';
 
 // This name also fixes a stable per-user data location across installer upgrades.
 app.setName('CareLink Doctor');
@@ -18,6 +23,7 @@ protocol.registerSchemesAsPrivileged([
       supportFetchAPI: true,
       corsEnabled: true,
       codeCache: true,
+      stream: true,
     },
   },
 ]);
@@ -106,10 +112,25 @@ if (!app.requestSingleInstanceLock()) {
     .whenReady()
     .then(async () => {
       Menu.setApplicationMenu(null);
-      session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) =>
-        callback(false),
+      session.defaultSession.setPermissionRequestHandler(
+        (contents, permission, callback, details) =>
+          callback(
+            canGrantAudioCapture(
+              permission,
+              ('securityOrigin' in details ? details.securityOrigin : undefined) ??
+                contents.getURL(),
+              'mediaTypes' in details ? (details.mediaTypes ?? []) : [],
+            ),
+          ),
       );
-      session.defaultSession.setPermissionCheckHandler(() => false);
+      session.defaultSession.setPermissionCheckHandler(
+        (contents, permission, requestingOrigin, details) =>
+          canGrantAudioCapture(
+            permission,
+            details.requestingUrl ?? requestingOrigin ?? contents?.getURL() ?? '',
+            details.mediaType === 'audio' ? ['audio'] : [],
+          ),
+      );
       session.defaultSession.webRequest.onBeforeRequest((details, callback) => {
         callback({
           cancel: !isApplicationUrl(details.url) && !details.url.startsWith('devtools:'),

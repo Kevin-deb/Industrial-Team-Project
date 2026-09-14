@@ -4,7 +4,12 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { createApp } from '../../api/src/app.js';
-import { createProtocolHandler, isApplicationUrl } from '../src/protocol.js';
+import {
+  CONTENT_SECURITY_POLICY,
+  canGrantAudioCapture,
+  createProtocolHandler,
+  isApplicationUrl,
+} from '../src/protocol.js';
 
 test('private application protocol serves offline UI routes and keeps API contracts intact', async () => {
   const root = mkdtempSync(resolve(tmpdir(), 'carelink-protocol-'));
@@ -98,4 +103,62 @@ test('production environment still refuses standalone demo but permits explicit 
     if (previous === undefined) delete process.env.NODE_ENV;
     else process.env.NODE_ENV = previous;
   }
+});
+
+test('desktop protocol carries social media bytes but keeps the generic one MiB request limit', async () => {
+  const root = mkdtempSync(resolve(tmpdir(), 'carelink-media-protocol-'));
+  const app = await createApp({ runtime: 'desktop-demo', mediaRoot: resolve(root, 'media') });
+  const handler = createProtocolHandler(app, root);
+  try {
+    const png = Buffer.concat([
+      Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+        'base64',
+      ),
+      Buffer.alloc(2 * 1024 * 1024),
+    ]);
+    const boundary = '----carelink-desktop-media';
+    const multipart = Buffer.concat([
+      Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="demo.png"\r\nContent-Type: image/png\r\n\r\n`,
+      ),
+      png,
+      Buffer.from(`\r\n--${boundary}--\r\n`),
+    ]);
+    const uploaded = await handler(
+      new Request('carelink://app/api/v1/social/attachments', {
+        method: 'POST',
+        headers: { 'content-type': `multipart/form-data; boundary=${boundary}` },
+        body: multipart,
+      }),
+    );
+    const uploadedBody = await uploaded.text();
+    assert.equal(uploaded.status, 201, uploadedBody);
+    const attachment = JSON.parse(uploadedBody).data;
+    const content = await handler(new Request(`carelink://app${attachment.contentUrl}`));
+    assert.equal(content.status, 200);
+    assert.equal(content.headers.get('content-type'), 'image/png');
+    assert.deepEqual(Buffer.from(await content.arrayBuffer()), png);
+
+    const generic = await handler(
+      new Request('carelink://app/api/v1/patients', {
+        method: 'POST',
+        body: Buffer.alloc(1024 * 1024 + 1),
+      }),
+    );
+    assert.equal(generic.status, 413);
+  } finally {
+    await app.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('desktop allows microphone audio only for the bundled application origin', () => {
+  assert.equal(canGrantAudioCapture('media', 'carelink://app/', ['audio']), true);
+  assert.equal(canGrantAudioCapture('media', 'carelink://app/', ['video']), false);
+  assert.equal(canGrantAudioCapture('media', 'carelink://app/', ['audio', 'video']), false);
+  assert.equal(canGrantAudioCapture('media', 'https://example.com/', ['audio']), false);
+  assert.equal(canGrantAudioCapture('notifications', 'carelink://app/', ['audio']), false);
+  assert.match(CONTENT_SECURITY_POLICY, /img-src 'self' data: blob:/);
+  assert.match(CONTENT_SECURITY_POLICY, /media-src 'self' blob:/);
 });
