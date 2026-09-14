@@ -4,22 +4,6 @@ import type { PlannedCommand } from '../platform/index.js';
 export const clinicalCommands: readonly PlannedCommand[] = [
   {
     method: 'POST',
-    path: '/records',
-    domain: 'clinical',
-    capability: 'records',
-    tables: ['medical_records', 'medical_record_versions'],
-    providers: [],
-  },
-  {
-    method: 'PATCH',
-    path: '/records/:id',
-    domain: 'clinical',
-    capability: 'records',
-    tables: ['medical_record_versions', 'audit_events'],
-    providers: [],
-  },
-  {
-    method: 'POST',
     path: '/records/:id/submit',
     domain: 'clinical',
     capability: 'records',

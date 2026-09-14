@@ -1,12 +1,12 @@
 # API Conventions and Module Contracts
 
-The desktop renderer and embedded API share the `@doctor/contracts` package. Each feature owner implements against this boundary rather than importing another module's internals. This guide distinguishes the implemented local E workflows from the other domains' read-only demonstrations and future writes.
+The desktop renderer and embedded API share the `@doctor/contracts` package. Each feature owner implements against this boundary rather than importing another module's internals. This guide distinguishes the implemented local E workflows and structured medical-record drafts from the other domains' read-only demonstrations and future writes.
 
-All application routes start with `/api/v1`. In the installed desktop application, renderer requests use `carelink://app/api/v1/...`; the private protocol dispatches to Fastify through `app.inject` without opening an HTTP listener. The optional `npm run dev:web` environment exposes the same routes on a loopback HTTP server. Requests and responses use JSON unless a future upload/download contract explicitly states otherwise. The current application uses a fixed synthetic doctor, synthetic records and a fixed demonstration date. It does not implement a real login. E health/community changes persist only in the local demo database; they are not production clinical operations or external deliveries.
+All application routes start with `/api/v1`. In the installed desktop application, renderer requests use `carelink://app/api/v1/...`; the private protocol dispatches to Fastify through `app.inject` without opening an HTTP listener. The optional `npm run dev:web` environment exposes the same routes on a loopback HTTP server. Requests and responses use JSON unless an upload/download contract explicitly states otherwise. The current application uses a fixed synthetic doctor, synthetic records and a fixed demonstration date. It does not implement a real login. Structured medical-record drafts and E health/community changes persist only in the local demo database; they are not production clinical operations or external deliveries.
 
 The private protocol accepts only the application origin and validates asset paths, request size and supported operations. Application-level errors keep the JSON envelope below. A transport-level rejection, such as an invalid protocol origin or oversized request, may return a safe plain-text error before Fastify runs; the renderer must handle a non-JSON failure gracefully.
 
-The current desktop header allowlist forwards `Accept`, `Content-Type` and `Accept-Language`. E-module local writes carry version and idempotency values in typed request bodies so they work through the existing desktop bridge. Future authenticated transport may move these values to agreed headers, but must explicitly extend the allowlist first.
+The current desktop header allowlist forwards `Accept`, `Content-Type`, `Accept-Language`, `Range` and the record-draft concurrency header `If-Match`. `Range` supports local social-media playback, while E-module writes carry version and idempotency values in typed request bodies. Future authenticated transport must explicitly add agreed session and `Idempotency-Key` header handling before enabling retriable production commands. Do not assume a new HTTP header automatically passes through the desktop bridge.
 
 ## Implemented API
 
@@ -18,6 +18,7 @@ The current desktop header allowlist forwards `Accept`, `Content-Type` and `Acce
 | `GET /api/v1/patients/:id`    | B                             | `Patient`                | Scoped synthetic patient detail; an unavailable patient is not disclosed                                    |
 | `GET /api/v1/encounters`      | C                             | `Encounter[]`            | Synthetic text/video appointment and encounter worklist                                                     |
 | `GET /api/v1/records`         | D                             | `MedicalRecord[]`        | Synthetic record summaries, review state, version and order count                                           |
+| `GET /api/v1/records/:id`     | D                             | `MedicalRecordDetail`    | Scoped current structured body and draft version                                                            |
 | `GET /api/v1/consultations`   | C                             | `Consultation[]`         | Synthetic expert-consultation summaries and participants                                                    |
 | `GET /api/v1/health/overview` | E                             | `HealthOverview`         | Synthetic observations, alerts, plans and summary counts                                                    |
 | `GET /api/v1/health/patients` | E using B ports               | `HealthPatientSummary[]` | Narrow scoped patient search for E; never returns B's full patient record                                   |
@@ -31,6 +32,15 @@ The current desktop header allowlist forwards `Accept`, `Content-Type` and `Acce
 | `GET /api/v1/health`          | A                             | `ServiceHealth`          | API/database availability and demonstration mode                                                            |
 
 `/health` reports service availability; `/health/overview` is the doctor's health-management view. Do not substitute one for the other.
+
+## Implemented synthetic draft commands
+
+| Method and path             | Request contract             | Success | Preconditions and limits                                                  |
+| --------------------------- | ---------------------------- | ------- | ------------------------------------------------------------------------- |
+| `POST /api/v1/records`      | `CreateMedicalRecordRequest` | `201`   | Scoped patient; optional encounter must belong to that patient            |
+| `PATCH /api/v1/records/:id` | `UpdateMedicalRecordRequest` | `200`   | Author-owned draft and exact `If-Match: "record-v{version}"` precondition |
+
+Both commands return `MedicalRecordDetail` with the current ETag. Every save appends a record version. Missing version preconditions return `428`, stale versions return `412`, non-draft updates return `409`, and template-shape failures return `422`. These commands store fictional local data only; they are not authenticated production clinical writes.
 
 Patient query parameters:
 
@@ -108,7 +118,7 @@ Never return stack traces, raw SQL, credentials or patient content in an error. 
 
 ## Unavailable commands and future route design
 
-Iteration 0 registers 39 explicit future command routes with `501 FEATURE_NOT_IMPLEMENTED` handlers. Unknown paths return `404 NOT_FOUND`; there is no catch-all write route. Each domain owns its `commands.ts`, which records method/path, owner, tables, provider dependencies and an optional future handler. The [composition registry](../apps/api/src/platform/planned-commands.ts) combines these entries and supplies the standard placeholder response. Domain owners implement a handler in their own file once its command meets the iteration's acceptance criteria; normal feature work does not require editing the shared registry.
+The original Iteration 0 scaffold registered 39 explicit future command routes. Iteration 1 enables 13 E health/community commands plus `POST /records` and `PATCH /records/:id` for local synthetic workflows; the remaining 24 commands keep their `501 FEATURE_NOT_IMPLEMENTED` handlers. Unknown paths return `404 NOT_FOUND`; there is no catch-all write route. Each domain owns its command and route registration. The [composition registry](../apps/api/src/platform/planned-commands.ts) combines unavailable commands and supplies the standard placeholder response.
 
 The following resource families define ownership and implementation responsibility. Exact accepted payloads must be added to the owning contract before enabling a command.
 
@@ -130,7 +140,7 @@ Use `POST` to create resources or invoke a state transition; `PATCH` to revise p
 
 ### Reserved route registry snapshot
 
-All of these routes are placeholders and return `501`; request body schemas and real operations remain future work. The paths include the common prefix.
+The routes below remain placeholders and return `501`; request body schemas and real operations remain future work. The paths include the common prefix. Record draft creation and update are intentionally absent because they are implemented above.
 
 | Method  | Route                                   | Owner domain |
 | ------- | --------------------------------------- | ------------ |
@@ -146,8 +156,6 @@ All of these routes are placeholders and return `501`; request body schemas and 
 | `POST`  | `/api/v1/encounters/:id/rtc-room`       | `encounters` |
 | `POST`  | `/api/v1/encounters/:id/recordings`     | `encounters` |
 | `POST`  | `/api/v1/encounters/:id/export`         | `encounters` |
-| `POST`  | `/api/v1/records`                       | `clinical`   |
-| `PATCH` | `/api/v1/records/:id`                   | `clinical`   |
 | `POST`  | `/api/v1/records/:id/submit`            | `clinical`   |
 | `POST`  | `/api/v1/records/:id/reviews`           | `clinical`   |
 | `POST`  | `/api/v1/records/:id/archive`           | `clinical`   |
@@ -169,6 +177,7 @@ All of these routes are placeholders and return `501`; request body schemas and 
 | `HealthPatientSummary` | ID, display name, age, gender, diagnosis, next follow-up and avatar initials                               | E consumes this narrow B-port projection; phone, allergies, history and care summary stay in B           |
 | `Encounter`            | ID, patient ID/name, text/video type, status, schedule, reason, duration                                   | C owns the patient encounter; it differs from an expert consultation                                     |
 | `MedicalRecord`        | ID, patient reference, title/diagnosis, status, author, update time, version, order count                  | D owns record/review state; order count is a summary, not an editable order API                          |
+| `MedicalRecordDetail`  | Record summary, structured body, template metadata and version history                                    | D owns editable local drafts and their optimistic concurrency boundary                                  |
 | `Consultation`         | ID, patient reference, title, specialty, status, schedule, participants, summary                           | C owns the expert task and report workflow                                                               |
 | `Observation`          | Patient, metric, numeric value, unit, measured/received timestamps, source, external source ID and quality | E owns monitoring data; local writes allow manual entry and a device simulator                           |
 | `CarePlan`             | Patient, title, state, goals, review date, completion percentage                                           | E owns plan lifecycle; current percentage is a demonstration value                                       |

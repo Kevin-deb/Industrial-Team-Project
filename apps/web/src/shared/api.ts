@@ -3,19 +3,46 @@ import { useI18n, localizeDemoData } from './i18n';
 import type { ApiMeta } from '@doctor/contracts';
 
 export type { ApiMeta } from '@doctor/contracts';
+export class ApiRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly code: string,
+    readonly etag: string | null,
+  ) {
+    super(message);
+  }
+}
+
+export async function requestApi<T>(
+  path: string,
+  init: RequestInit = {},
+): Promise<{ data: T; meta: ApiMeta; etag: string | null }> {
+  const response = await fetch(`/api/v1${path}`, {
+    ...init,
+    headers: {
+      Accept: 'application/json',
+      ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+      ...init.headers,
+    },
+  });
+  const body = await response.json().catch(() => null);
+  if (!response.ok)
+    throw new ApiRequestError(
+      body?.error?.message || '服务暂时不可用',
+      response.status,
+      body?.error?.code || 'UNKNOWN_ERROR',
+      response.headers.get('ETag'),
+    );
+  return { ...body, etag: response.headers.get('ETag') };
+}
+
 export async function getApi<T>(
   path: string,
   signal?: AbortSignal,
 ): Promise<{ data: T; meta: ApiMeta }> {
-  const response = await fetch(`/api/v1${path}`, {
-    signal,
-    headers: { Accept: 'application/json' },
-  });
-  if (!response.ok) {
-    const body = await response.json().catch(() => null);
-    throw new Error(body?.error?.message || '服务暂时不可用');
-  }
-  return response.json();
+  const { data, meta } = await requestApi<T>(path, { signal });
+  return { data, meta };
 }
 
 export function useApi<T>(path: string) {
