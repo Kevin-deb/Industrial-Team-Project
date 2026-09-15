@@ -138,7 +138,7 @@ test('forum search includes tags and multiple selected tags use OR semantics', a
   }
 });
 
-test('circle tag options include tags created by newly published posts', async () => {
+test('posting accepts existing circle tags but rejects user-created tags', async () => {
   const app = await createApp({ now: () => '2026-09-14T11:10:00+08:00' });
   try {
     const created = await app.inject({
@@ -150,15 +150,32 @@ test('circle tag options include tags created by newly published posts', async (
         displayMode: 'named',
         title: '用药沟通标签测试',
         body: '用于验证圈内自定义标签。',
-        tags: ['用药沟通'],
+        tags: ['随访管理'],
         containsCaseMaterial: false,
         deidentificationConfirmed: false,
       },
     });
     assert.equal(created.statusCode, 201, created.body);
+    const rejected = await app.inject({
+      method: 'POST',
+      url: '/api/v1/social/posts',
+      payload: {
+        commandId: 'cmd-reject-user-created-tag',
+        groupId: 'GROUP-GERIATRICS',
+        displayMode: 'named',
+        title: '自建标签应被拒绝',
+        body: '普通用户不可以创建新标签。',
+        tags: ['普通用户自建标签'],
+        containsCaseMaterial: false,
+        deidentificationConfirmed: false,
+      },
+    });
+    assert.equal(rejected.statusCode, 400, rejected.body);
+    assert.equal(rejected.json().error.code, 'SOCIAL_TAG_NOT_ALLOWED');
     const response = await app.inject('/api/v1/social/groups/GROUP-GERIATRICS/tags');
     assert.equal(response.statusCode, 200, response.body);
-    assert.ok(response.json().data.tags.includes('用药沟通'));
+    assert.ok(response.json().data.tags.includes('随访管理'));
+    assert.ok(!response.json().data.tags.includes('普通用户自建标签'));
   } finally {
     await app.close();
   }
@@ -291,7 +308,7 @@ test('social HTTP routes expose distinct forum, personal, notification and messa
         displayMode: 'named',
         title: '门诊健康教育资料如何整理',
         body: '想和同行交流一下资料结构与复核流程。',
-        tags: ['健康教育'],
+        tags: ['随访管理'],
         containsCaseMaterial: false,
         deidentificationConfirmed: false,
       },
@@ -454,7 +471,7 @@ test('social service enforces opt-in, membership, de-identification, interaction
             displayMode: 'anonymous',
             title: '连续照护讨论',
             body: '手工整理后的讨论文本',
-            tags: ['连续照护'],
+            tags: ['随访管理'],
             containsCaseMaterial: true,
             deidentificationConfirmed: false,
           },
@@ -469,7 +486,7 @@ test('social service enforces opt-in, membership, de-identification, interaction
         displayMode: 'anonymous',
         title: '连续照护记录方式',
         body: '这是一段已经人工去标识化的合成讨论文本。',
-        tags: ['连续照护'],
+        tags: ['随访管理'],
         containsCaseMaterial: true,
         deidentificationConfirmed: true,
       },

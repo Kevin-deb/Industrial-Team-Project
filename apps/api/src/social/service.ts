@@ -33,6 +33,7 @@ export class CommunityDisabled extends Error {}
 export class SocialNotFound extends Error {}
 export class SocialConflict extends Error {}
 export class SocialValidationFailure extends Error {}
+export class SocialTagNotAllowed extends SocialValidationFailure {}
 
 export class SocialService {
   constructor(
@@ -127,6 +128,8 @@ export class SocialService {
     this.assertEnabled(context);
     if (!this.repository.isMember(input.groupId, context.actorId))
       throw new SocialValidationFailure();
+    const allowedTags = new Set(this.repository.listGroupTags(input.groupId));
+    if (input.tags.some((tag) => !allowedTags.has(tag))) throw new SocialTagNotAllowed();
     if (input.containsCaseMaterial && !input.deidentificationConfirmed)
       throw new SocialValidationFailure();
     const blocks = validateContentBlocks(input.contentBlocks);

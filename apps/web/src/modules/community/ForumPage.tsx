@@ -144,11 +144,9 @@ function PostComposer({
   const [content, setContent] = useState<ComposerValue>({ body: '', items: [] });
   const [draftCommandId] = useState(() => crypto.randomUUID());
   const [tags, setTags] = useState<string[]>([]);
-  const [newTag, setNewTag] = useState('');
   const [anonymous, setAnonymous] = useState(false);
   const [caseMaterial, setCaseMaterial] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
-  const composerTagOptions = [...new Set([...tagOptions, ...tags])];
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (caseMaterial && !confirmed) return;
@@ -204,7 +202,7 @@ function PostComposer({
               </small>
             </div>
             <div className="community-post-tag-options">
-              {composerTagOptions.map((tag) => (
+              {tagOptions.map((tag) => (
                 <button
                   type="button"
                   key={tag}
@@ -222,29 +220,6 @@ function PostComposer({
                   {t(tag)}
                 </button>
               ))}
-            </div>
-            <div className="community-new-tag">
-              <input
-                aria-label={t('新建标签')}
-                value={newTag}
-                maxLength={30}
-                placeholder={t('输入新标签')}
-                onChange={(event) => setNewTag(event.target.value)}
-              />
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={!newTag.trim() || tags.length >= 5}
-                onClick={() => {
-                  const value = newTag.trim();
-                  if (!value) return;
-                  setTags((current) => [...new Set([...current, value])].slice(0, 5));
-                  setNewTag('');
-                }}
-              >
-                <Plus size={12} />
-                {t('新建')}
-              </Button>
             </div>
           </fieldset>
           <label className="community-check">

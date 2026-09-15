@@ -128,7 +128,7 @@ test('E community separates feed, forum, personal activity and scrollable direct
   await page.getByRole('button', { name: '发布主题' }).click();
   await page.getByLabel('主题标题').fill(postTitle);
   await page.getByLabel('讨论内容').fill('这是一段不含真实患者资料的合成讨论内容。');
-  await page.getByLabel('标签', { exact: true }).fill('流程测试, 同行交流');
+  await page.getByRole('group', { name: '标签', exact: true }).getByRole('button').first().click();
   await page.getByRole('button', { name: '确认发布' }).click();
   await page.getByRole('heading', { name: postTitle }).click();
   await expect(page).toHaveURL(/\/community\/posts\//);

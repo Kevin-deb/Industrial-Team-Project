@@ -444,22 +444,6 @@
 .community-post-tag-options button:disabled {
   opacity: 0.45;
 }
-.community-new-tag {
-  margin-top: 6px;
-  width: min(320px, 100%);
-  display: flex;
-  gap: 6px;
-}
-.community-new-tag input {
-  min-width: 0;
-  min-height: 30px;
-  flex: 1;
-}
-.community-new-tag .button {
-  min-height: 30px;
-  padding: 0 11px;
-  white-space: nowrap;
-}
 .community-confirm-slot {
   min-height: 38px;
 }

@@ -391,7 +391,7 @@ describe('CommunityPage', () => {
     expect(fieldset.parentElement).toHaveClass('community-forum-tags-row');
   });
 
-  it('selects existing tags and exposes a newly published tag in the circle filter', async () => {
+  it('allows existing tags but offers no user-created tag control', async () => {
     renderWithEProviders(
       <I18nProvider>
         <MemoryRouter initialEntries={['/community/groups/GROUP-GERIATRICS']}>
@@ -407,12 +407,10 @@ describe('CommunityPage', () => {
     fireEvent.change(composer.getByLabelText('主题标题'), { target: { value: '标签测试' } });
     fireEvent.change(composer.getByLabelText('讨论内容'), { target: { value: '测试新标签。' } });
     fireEvent.click(composer.getByRole('button', { name: '随访管理' }));
-    fireEvent.change(composer.getByRole('textbox', { name: '新建标签' }), {
-      target: { value: '用药沟通' },
-    });
-    fireEvent.click(composer.getByRole('button', { name: '新建' }));
+    expect(composer.queryByRole('textbox', { name: '新建标签' })).not.toBeInTheDocument();
+    expect(composer.queryByRole('button', { name: '新建' })).not.toBeInTheDocument();
+    expect(composer.getByRole('button', { name: '随访管理' })).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(composer.getByRole('button', { name: '确认发布' }));
-
-    expect(await screen.findByRole('checkbox', { name: '用药沟通' })).toBeInTheDocument();
+    await waitFor(() => expect(dialog).not.toBeInTheDocument());
   });
 });

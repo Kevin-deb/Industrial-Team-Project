@@ -14,6 +14,7 @@ import {
   SocialConflict,
   SocialNotFound,
   SocialService,
+  SocialTagNotAllowed,
   SocialValidationFailure,
 } from './service.js';
 
@@ -591,6 +592,8 @@ async function replySocial<T>(
         'COMMAND_CONFLICT',
         '该操作编号已用于另一项修改，请重新操作。',
       );
+    if (error instanceof SocialTagNotAllowed)
+      return fail(request, reply, actorId, durationMs, 400, 'SOCIAL_TAG_NOT_ALLOWED', '只能选择本圈子已有的标签。');
     if (error instanceof SocialValidationFailure)
       return fail(
         request,
