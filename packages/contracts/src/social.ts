@@ -99,6 +99,29 @@ export interface SocialDirectMessage {
   sentAt: string;
 }
 
+export interface MarkConversationReadInput {
+  commandId: string;
+}
+
+export interface ConversationReadResult {
+  conversationId: string;
+  unreadCount: 0;
+  readAt: string;
+}
+
+export type SocialRealtimeEvent =
+  | {
+      type: 'social.message.created';
+      conversationId: string;
+      messageId: string;
+      occurredAt: string;
+    }
+  | {
+      type: 'social.conversation.read';
+      conversationId: string;
+      occurredAt: string;
+    };
+
 export interface MedicalMetricItem {
   metricCode: string;
   displayName: string;
@@ -153,6 +176,10 @@ export interface SocialPage<T> {
 export interface SocialMessagePage {
   items: SocialDirectMessage[];
   nextCursor?: string;
+}
+export interface SocialGroupTags {
+  groupId: string;
+  tags: string[];
 }
 export type SocialPostSort =
   'most-liked' | 'most-bookmarked' | 'most-viewed' | 'latest' | 'latest-reply';

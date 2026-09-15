@@ -20,6 +20,17 @@ await build({
   sourcemap: false,
   logLevel: 'info',
 });
+await build({
+  entryPoints: [resolve(desktopRoot, 'src/preload.ts')],
+  outfile: resolve(desktopRoot, 'dist/preload.cjs'),
+  bundle: true,
+  platform: 'node',
+  format: 'cjs',
+  target: 'node24',
+  external: ['electron'],
+  sourcemap: false,
+  logLevel: 'info',
+});
 if (dirname(rendererOutput) !== resolve(desktopRoot, 'dist'))
   throw new Error('Unsafe renderer output path.');
 await rm(rendererOutput, { recursive: true, force: true });

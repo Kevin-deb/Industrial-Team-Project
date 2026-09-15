@@ -1,11 +1,11 @@
-import { ArrowLeft, Plus, Search, X } from 'lucide-react';
+import { ArrowLeft, Check, Plus, Search, X } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import type { SocialPostSort } from '@doctor/contracts';
 import { useI18n } from '../../shared/i18n';
 import { Button } from '../../shared/ui';
 import { PostRow } from './PostRow';
-import { useCreatePost, useGroupPosts, useGroups } from './queries';
+import { useCreatePost, useGroupPosts, useGroups, useGroupTags } from './queries';
 import {
   MixedContentComposer,
   composerContentBlocks,
@@ -21,9 +21,8 @@ export function ForumPage() {
   const [tags, setTags] = useState<string[]>([]);
   const groups = useGroups();
   const group = groups.data?.data.items.find((item) => item.id === groupId);
-  const tagOptions = Array.from(
-    new Set([group?.specialty, '随访管理', '同行经验', '健康教育'].filter(Boolean) as string[]),
-  );
+  const groupTags = useGroupTags(groupId);
+  const tagOptions = groupTags.data?.data.tags ?? [];
   const posts = useGroupPosts(groupId, sort, search.trim(), tags);
   const create = useCreatePost(groupId);
   const [open, setOpen] = useState(false);
@@ -67,28 +66,30 @@ export function ForumPage() {
             <option value="latest-reply">{t('最新回复')}</option>
           </select>
         </label>
-        <fieldset className="community-tag-filters">
-          <legend>{t('标签筛选')}</legend>
-          <div>
-            {tagOptions.map((tag) => (
-              <label key={tag} className={tags.includes(tag) ? 'selected' : ''}>
-                <input
-                  type="checkbox"
-                  checked={tags.includes(tag)}
-                  onChange={() =>
-                    setTags((current) =>
-                      current.includes(tag)
-                        ? current.filter((item) => item !== tag)
-                        : [...current, tag],
-                    )
-                  }
-                />
-                {t(tag)}
-              </label>
-            ))}
-          </div>
-        </fieldset>
         {posts.isFetching && <span>{t('正在更新主题…')}</span>}
+        <div className="community-forum-tags-row">
+          <fieldset className="community-tag-filters">
+            <legend>{t('标签筛选')}</legend>
+            <div>
+              {tagOptions.map((tag) => (
+                <label key={tag} className={tags.includes(tag) ? 'selected' : ''}>
+                  <input
+                    type="checkbox"
+                    checked={tags.includes(tag)}
+                    onChange={() =>
+                      setTags((current) =>
+                        current.includes(tag)
+                          ? current.filter((item) => item !== tag)
+                          : [...current, tag],
+                      )
+                    }
+                  />
+                  {t(tag)}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        </div>
       </div>
       <div className="community-post-list">
         {(posts.data?.data.items ?? []).map((post) => (
@@ -99,6 +100,7 @@ export function ForumPage() {
       {open && (
         <PostComposer
           groupId={groupId}
+          tagOptions={tagOptions}
           busy={create.isPending}
           error={create.error}
           onClose={() => setOpen(false)}
@@ -114,12 +116,14 @@ export function ForumPage() {
 
 function PostComposer({
   groupId,
+  tagOptions,
   busy,
   error,
   onClose,
   onSubmit,
 }: {
   groupId: string;
+  tagOptions: string[];
   busy: boolean;
   error: Error | null;
   onClose: () => void;
@@ -139,7 +143,7 @@ function PostComposer({
   const [title, setTitle] = useState('');
   const [content, setContent] = useState<ComposerValue>({ body: '', items: [] });
   const [draftCommandId] = useState(() => crypto.randomUUID());
-  const [tags, setTags] = useState('');
+  const [tags, setTags] = useState<string[]>([]);
   const [anonymous, setAnonymous] = useState(false);
   const [caseMaterial, setCaseMaterial] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
@@ -151,11 +155,7 @@ function PostComposer({
       displayMode: anonymous ? 'anonymous' : 'named',
       title,
       body: content.body,
-      tags: tags
-        .split(/[，,]/)
-        .map((tag) => tag.trim())
-        .filter(Boolean)
-        .slice(0, 5),
+      tags,
       containsCaseMaterial: caseMaterial,
       deidentificationConfirmed: confirmed,
       contentBlocks: composerContentBlocks(content),
@@ -194,14 +194,34 @@ function PostComposer({
             rows={7}
             disabled={busy}
           />
-          <label>
-            {t('标签')}
-            <input
-              value={tags}
-              onChange={(event) => setTags(event.target.value)}
-              placeholder={t('用逗号分隔，最多 5 个')}
-            />
-          </label>
+          <fieldset className="community-post-tag-picker" aria-label={t('标签')}>
+            <div className="community-post-tag-heading">
+              <span>{t('选择标签')}</span>
+              <small>
+                {t('已选')} {tags.length}/5
+              </small>
+            </div>
+            <div className="community-post-tag-options">
+              {tagOptions.map((tag) => (
+                <button
+                  type="button"
+                  key={tag}
+                  aria-pressed={tags.includes(tag)}
+                  disabled={!tags.includes(tag) && tags.length >= 5}
+                  onClick={() =>
+                    setTags((current) =>
+                      current.includes(tag)
+                        ? current.filter((item) => item !== tag)
+                        : [...current, tag],
+                    )
+                  }
+                >
+                  {tags.includes(tag) && <Check size={11} />}
+                  {t(tag)}
+                </button>
+              ))}
+            </div>
+          </fieldset>
           <label className="community-check">
             <input
               type="checkbox"

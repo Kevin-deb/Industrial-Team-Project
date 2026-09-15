@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type {
   CreateMessageInput,
+  MarkConversationReadInput,
   CreatePostInput,
   CreateReportInput,
   SocialListQuery,
@@ -13,6 +14,7 @@ import {
   SocialConflict,
   SocialNotFound,
   SocialService,
+  SocialTagNotAllowed,
   SocialValidationFailure,
 } from './service.js';
 
@@ -112,6 +114,12 @@ export function registerSocialRoutes(
       socialReply(request, reply, () =>
         service.listGroupPosts(request.params.id, request.query, context()),
       ),
+  );
+  app.get<{ Params: { id: string } }>(
+    '/api/v1/social/groups/:id/tags',
+    { schema: { params: idParams } },
+    async (request, reply) =>
+      socialReply(request, reply, () => service.listGroupTags(request.params.id, context())),
   );
   app.get<{ Params: { id: string } }>(
     '/api/v1/social/posts/:id',
@@ -259,6 +267,24 @@ export function registerSocialRoutes(
     async (request, reply) =>
       socialReply(request, reply, () =>
         service.listMessages(request.params.id, request.query.cursor, context()),
+      ),
+  );
+  app.post<{ Params: { id: string }; Body: MarkConversationReadInput }>(
+    '/api/v1/social/conversations/:id/read',
+    {
+      schema: {
+        params: idParams,
+        body: {
+          type: 'object',
+          required: ['commandId'],
+          additionalProperties: false,
+          properties: { commandId },
+        },
+      },
+    },
+    async (request, reply) =>
+      socialReply(request, reply, () =>
+        service.markConversationRead(request.params.id, request.body.commandId, context()),
       ),
   );
   app.post<{ Body: CreateMessageInput }>(
@@ -566,6 +592,8 @@ async function replySocial<T>(
         'COMMAND_CONFLICT',
         '该操作编号已用于另一项修改，请重新操作。',
       );
+    if (error instanceof SocialTagNotAllowed)
+      return fail(request, reply, actorId, durationMs, 400, 'SOCIAL_TAG_NOT_ALLOWED', '只能选择本圈子已有的标签。');
     if (error instanceof SocialValidationFailure)
       return fail(
         request,

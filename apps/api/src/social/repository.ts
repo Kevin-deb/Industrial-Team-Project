@@ -144,6 +144,23 @@ export class SqliteSocialRepository {
   listGroupPosts(groupId: string, query: SocialListQuery, actorId: string) {
     return this.listPosts(groupId, query, actorId);
   }
+  listGroupTags(groupId: string): string[] {
+    const counts = new Map<string, number>();
+    const rows = this.db
+      .prepare(
+        "SELECT tags_json FROM social_posts WHERE group_id=? AND moderation_status='published'",
+      )
+      .all(groupId) as Array<{ tags_json: string }>;
+    for (const row of rows) {
+      for (const tag of JSON.parse(row.tags_json) as string[])
+        counts.set(tag, (counts.get(tag) ?? 0) + 1);
+    }
+    return [...counts]
+      .sort(([left, leftCount], [right, rightCount]) =>
+        rightCount === leftCount ? left.localeCompare(right, 'zh-CN') : rightCount - leftCount,
+      )
+      .map(([tag]) => tag);
+  }
   private listPosts(
     groupId: string | undefined,
     query: SocialListQuery,
@@ -446,6 +463,21 @@ export class SqliteSocialRepository {
         ? { nextCursor: `${String(oldest.sent_at)}::${String(oldest.id)}` }
         : {}),
     };
+  }
+  markConversationRead(conversationId: string, actorId: string, readAt: string): boolean {
+    const member = this.db
+      .prepare(
+        'SELECT 1 FROM social_conversation_members WHERE conversation_id=? AND identity_id=?',
+      )
+      .get(conversationId, actorId);
+    if (!member) return false;
+    this.db
+      .prepare(
+        `UPDATE social_direct_messages SET read_at=?
+         WHERE conversation_id=? AND recipient_id=? AND read_at IS NULL`,
+      )
+      .run(readAt, conversationId, actorId);
+    return true;
   }
   findDirectConversation(actorId: string, recipientId: string) {
     const row = this.db

@@ -11,6 +11,7 @@ import {
 } from '../src/social/service.js';
 import { DEMO_DOCTOR_ID } from '../src/database/seed.js';
 import { createApp } from '../src/app.js';
+import { SocialRealtimeHub } from '../src/social/realtime.js';
 
 test('social migrations remain clinically isolated and fixtures are idempotent', () => {
   const db = openDatabase(':memory:');
@@ -119,18 +120,156 @@ test('forum search includes tags and multiple selected tags use OR semantics', a
     assert.equal(response.statusCode, 200, response.body);
     assert.ok(response.json().data.items.length > 0);
     assert.ok(
-      response.json().data.items.every((item: { title: string; excerpt: string; tags: string[] }) =>
-        `${item.title} ${item.excerpt} ${item.tags.join(' ')}`.includes('随访'),
-      ),
+      response
+        .json()
+        .data.items.every((item: { title: string; excerpt: string; tags: string[] }) =>
+          `${item.title} ${item.excerpt} ${item.tags.join(' ')}`.includes('随访'),
+        ),
     );
     assert.ok(
-      response.json().data.items.every((item: { tags: string[] }) =>
-        item.tags.some((tag) => ['随访管理', '健康教育'].includes(tag)),
-      ),
+      response
+        .json()
+        .data.items.every((item: { tags: string[] }) =>
+          item.tags.some((tag) => ['随访管理', '健康教育'].includes(tag)),
+        ),
     );
   } finally {
     await app.close();
   }
+});
+
+test('posting accepts existing circle tags but rejects user-created tags', async () => {
+  const app = await createApp({ now: () => '2026-09-14T11:10:00+08:00' });
+  try {
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/v1/social/posts',
+      payload: {
+        commandId: 'cmd-create-circle-tag',
+        groupId: 'GROUP-GERIATRICS',
+        displayMode: 'named',
+        title: '用药沟通标签测试',
+        body: '用于验证圈内自定义标签。',
+        tags: ['随访管理'],
+        containsCaseMaterial: false,
+        deidentificationConfirmed: false,
+      },
+    });
+    assert.equal(created.statusCode, 201, created.body);
+    const rejected = await app.inject({
+      method: 'POST',
+      url: '/api/v1/social/posts',
+      payload: {
+        commandId: 'cmd-reject-user-created-tag',
+        groupId: 'GROUP-GERIATRICS',
+        displayMode: 'named',
+        title: '自建标签应被拒绝',
+        body: '普通用户不可以创建新标签。',
+        tags: ['普通用户自建标签'],
+        containsCaseMaterial: false,
+        deidentificationConfirmed: false,
+      },
+    });
+    assert.equal(rejected.statusCode, 400, rejected.body);
+    assert.equal(rejected.json().error.code, 'SOCIAL_TAG_NOT_ALLOWED');
+    const response = await app.inject('/api/v1/social/groups/GROUP-GERIATRICS/tags');
+    assert.equal(response.statusCode, 200, response.body);
+    assert.ok(response.json().data.tags.includes('随访管理'));
+    assert.ok(!response.json().data.tags.includes('普通用户自建标签'));
+  } finally {
+    await app.close();
+  }
+});
+
+test('opening a conversation marks only incoming unread messages as read', async () => {
+  const db = openDatabase(':memory:');
+  const app = await createApp({ database: db, now: () => '2026-09-14T09:30:00+08:00' });
+  try {
+    const before = (await app.inject('/api/v1/social/conversations'))
+      .json()
+      .data.find((item: { id: string }) => item.id === 'CONVERSATION-1');
+    assert.ok(before.unreadCount > 0);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/social/conversations/CONVERSATION-1/read',
+      payload: { commandId: 'cmd-read-conversation-1' },
+    });
+    assert.equal(response.statusCode, 200, response.body);
+    assert.deepEqual(response.json().data, {
+      conversationId: 'CONVERSATION-1',
+      unreadCount: 0,
+      readAt: '2026-09-14T09:30:00+08:00',
+    });
+
+    const after = (await app.inject('/api/v1/social/conversations'))
+      .json()
+      .data.find((item: { id: string }) => item.id === 'CONVERSATION-1');
+    assert.equal(after.unreadCount, 0);
+    assert.equal(
+      db
+        .prepare(
+          'SELECT COUNT(*) count FROM social_direct_messages WHERE conversation_id=? AND recipient_id=? AND read_at IS NULL',
+        )
+        .get('CONVERSATION-1', DEMO_DOCTOR_ID)!.count,
+      0,
+    );
+  } finally {
+    await app.close();
+    db.close();
+  }
+});
+
+test('websocket subscribers receive metadata-only message events', async () => {
+  const app = await createApp({ now: () => '2026-09-14T09:40:00+08:00' });
+  const socket = await app.injectWS('/api/v1/social/events', {
+    headers: { host: '127.0.0.1', origin: 'http://127.0.0.1' },
+  });
+  try {
+    const eventReceived = new Promise<string>((resolve) =>
+      socket.once('message', (data: { toString(): string }) => resolve(data.toString())),
+    );
+    const sent = await app.inject({
+      method: 'POST',
+      url: '/api/v1/social/messages',
+      payload: {
+        commandId: 'cmd-realtime-message-1',
+        conversationId: 'CONVERSATION-1',
+        recipientId: 'doctor-demo-002',
+        body: '实时通道测试',
+      },
+    });
+    assert.equal(sent.statusCode, 201, sent.body);
+    const event = JSON.parse(await eventReceived);
+    assert.deepEqual(event, {
+      type: 'social.message.created',
+      conversationId: 'CONVERSATION-1',
+      messageId: sent.json().data.id,
+      occurredAt: '2026-09-14T09:40:00+08:00',
+    });
+    assert.equal(JSON.stringify(event).includes('实时通道测试'), false);
+  } finally {
+    socket.terminate();
+    await app.close();
+  }
+});
+
+test('realtime fan-out isolates a disconnected listener from committed commands', () => {
+  const hub = new SocialRealtimeHub();
+  const delivered: string[] = [];
+  hub.subscribe(DEMO_DOCTOR_ID, () => {
+    throw new Error('transport closed');
+  });
+  hub.subscribe(DEMO_DOCTOR_ID, (event) => delivered.push(event.type));
+
+  assert.doesNotThrow(() =>
+    hub.publish([DEMO_DOCTOR_ID], {
+      type: 'social.conversation.read',
+      conversationId: 'CONVERSATION-1',
+      occurredAt: '2026-09-14T09:45:00+08:00',
+    }),
+  );
+  assert.deepEqual(delivered, ['social.conversation.read']);
 });
 
 test('creating a report immediately adds an accepted notification for the reporter', () => {
@@ -169,7 +308,7 @@ test('social HTTP routes expose distinct forum, personal, notification and messa
         displayMode: 'named',
         title: '门诊健康教育资料如何整理',
         body: '想和同行交流一下资料结构与复核流程。',
-        tags: ['健康教育'],
+        tags: ['随访管理'],
         containsCaseMaterial: false,
         deidentificationConfirmed: false,
       },
@@ -332,7 +471,7 @@ test('social service enforces opt-in, membership, de-identification, interaction
             displayMode: 'anonymous',
             title: '连续照护讨论',
             body: '手工整理后的讨论文本',
-            tags: ['连续照护'],
+            tags: ['随访管理'],
             containsCaseMaterial: true,
             deidentificationConfirmed: false,
           },
@@ -347,7 +486,7 @@ test('social service enforces opt-in, membership, de-identification, interaction
         displayMode: 'anonymous',
         title: '连续照护记录方式',
         body: '这是一段已经人工去标识化的合成讨论文本。',
-        tags: ['连续照护'],
+        tags: ['随访管理'],
         containsCaseMaterial: true,
         deidentificationConfirmed: true,
       },

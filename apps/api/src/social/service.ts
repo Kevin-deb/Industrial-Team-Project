@@ -5,6 +5,7 @@ import type {
   CreateMessageInput,
   CreatePostInput,
   CreateReportInput,
+  ConversationReadResult,
   SocialComment,
   SocialDirectMessage,
   SocialListQuery,
@@ -25,18 +26,21 @@ import {
   type SocialCommandReceipt,
 } from './repository.js';
 import type { SocialAuditPort, SocialPeerDirectoryPort } from './ports.js';
+import type { SocialRealtimePort } from './realtime.js';
 import { validateContentBlocks } from './content-blocks.js';
 
 export class CommunityDisabled extends Error {}
 export class SocialNotFound extends Error {}
 export class SocialConflict extends Error {}
 export class SocialValidationFailure extends Error {}
+export class SocialTagNotAllowed extends SocialValidationFailure {}
 
 export class SocialService {
   constructor(
     private readonly repository: SqliteSocialRepository,
     private readonly audit?: SocialAuditPort,
     private readonly peerDirectory?: SocialPeerDirectoryPort,
+    private readonly realtime?: SocialRealtimePort,
   ) {}
   getPreferences(context: RequestContext) {
     return this.repository.getPreferences(context.actorId);
@@ -107,6 +111,12 @@ export class SocialService {
     if (!this.repository.isMember(groupId, context.actorId)) throw new SocialNotFound();
     return this.repository.listGroupPosts(groupId, query, context.actorId);
   }
+  listGroupTags(groupId: string, context: RequestContext) {
+    this.assertEnabled(context);
+    if (!this.repository.hasGroup(groupId)) throw new SocialNotFound();
+    if (!this.repository.isMember(groupId, context.actorId)) throw new SocialNotFound();
+    return { groupId, tags: this.repository.listGroupTags(groupId) };
+  }
   getPost(id: string, context: RequestContext) {
     this.assertEnabled(context);
     const item = this.repository.findPost(id, context.actorId);
@@ -118,6 +128,8 @@ export class SocialService {
     this.assertEnabled(context);
     if (!this.repository.isMember(input.groupId, context.actorId))
       throw new SocialValidationFailure();
+    const allowedTags = new Set(this.repository.listGroupTags(input.groupId));
+    if (input.tags.some((tag) => !allowedTags.has(tag))) throw new SocialTagNotAllowed();
     if (input.containsCaseMaterial && !input.deidentificationConfirmed)
       throw new SocialValidationFailure();
     const blocks = validateContentBlocks(input.contentBlocks);
@@ -315,6 +327,31 @@ export class SocialService {
       throw new SocialNotFound();
     return page;
   }
+  markConversationRead(
+    conversationId: string,
+    commandId: string,
+    context: RequestContext,
+  ): ConversationReadResult {
+    this.assertEnabled(context);
+    const result = this.execute(
+      'social.conversation.read',
+      commandId,
+      { conversationId, commandId },
+      context,
+      () => {
+        if (!this.repository.markConversationRead(conversationId, context.actorId, context.now))
+          throw new SocialNotFound();
+        return { conversationId, unreadCount: 0 as const, readAt: context.now };
+      },
+      'conversation',
+    );
+    this.realtime?.publish([context.actorId], {
+      type: 'social.conversation.read',
+      conversationId,
+      occurredAt: context.now,
+    });
+    return result;
+  }
   async sendMessage(
     input: CreateMessageInput,
     context: RequestContext,
@@ -324,7 +361,7 @@ export class SocialService {
       throw new SocialValidationFailure();
     const blocks = validateContentBlocks(input.contentBlocks);
     this.assertBodyOrBlocks(input.body, blocks);
-    return this.execute(
+    const result = this.execute(
       'social.message.send',
       input.commandId,
       input,
@@ -359,6 +396,13 @@ export class SocialService {
       },
       'message',
     );
+    this.realtime?.publish([result.senderId, result.recipientId], {
+      type: 'social.message.created',
+      conversationId: result.conversationId,
+      messageId: result.id,
+      occurredAt: result.sentAt,
+    });
+    return result;
   }
   createReport(input: CreateReportInput, context: RequestContext): SocialReport {
     this.assertEnabled(context);
@@ -383,7 +427,13 @@ export class SocialService {
           createdAt: context.now,
         };
         this.repository.createReport(item, context.actorId, input.description);
-        this.notify(context.actorId, context.actorId, input.postId ?? '', 'report-accepted', context.now);
+        this.notify(
+          context.actorId,
+          context.actorId,
+          input.postId ?? '',
+          'report-accepted',
+          context.now,
+        );
         return item;
       },
       'report',

@@ -2,6 +2,7 @@ import { app, BrowserWindow, dialog, Menu, protocol, session, screen } from 'ele
 import { resolve, isAbsolute } from 'node:path';
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { createApp } from '../../api/src/app.js';
+import { SocialRealtimeHub } from '../../api/src/social/index.js';
 import {
   APPLICATION_URL,
   canGrantAudioCapture,
@@ -32,6 +33,7 @@ let window: BrowserWindow | null = null;
 let services: Awaited<ReturnType<typeof createApp>> | undefined;
 let closing = false;
 let mayQuit = false;
+const socialRealtime = new SocialRealtimeHub();
 
 function showStartupError(error: unknown) {
   const dataRoot = app.getPath('userData');
@@ -61,6 +63,7 @@ async function openWindow() {
     show: false,
     autoHideMenuBar: true,
     webPreferences: {
+      preload: resolve(__dirname, 'preload.cjs'),
       contextIsolation: true,
       sandbox: true,
       nodeIntegration: false,
@@ -140,6 +143,11 @@ if (!app.requestSingleInstanceLock()) {
         databasePath: resolve(app.getPath('userData'), 'data/doctor.sqlite'),
         runtime: 'desktop-demo',
         logger: false,
+        socialRealtime,
+      });
+      socialRealtime.subscribe('doctor-demo-001', (event) => {
+        if (window && !window.isDestroyed())
+          window.webContents.send('carelink:social-event', event);
       });
       protocol.handle('carelink', createProtocolHandler(services, resolve(__dirname, 'renderer')));
       await openWindow();
