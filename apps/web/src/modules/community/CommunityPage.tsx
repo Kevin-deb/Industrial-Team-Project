@@ -1,5 +1,8 @@
 import { BookOpen, MessageCircle, Settings, UserRound } from 'lucide-react';
 import { NavLink, Route, Routes } from 'react-router-dom';
+import { useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import type { SocialRealtimeEvent } from '@doctor/contracts';
 import { useI18n } from '../../shared/i18n';
 import { CommunityPreferences } from './CommunityPreferences';
 import { DirectMessages } from './DirectMessages';
@@ -9,7 +12,8 @@ import { PersonalListPage } from './PersonalListPage';
 import { PostPage } from './PostPage';
 import { SpecialtyGroups } from './SpecialtyGroups';
 import './community.css';
-import { useSocialPreferences } from './queries';
+import { socialKeys, useSocialPreferences } from './queries';
+import { useSocialRealtime } from './realtime';
 
 export function CommunityPage() {
   const { t } = useI18n();
@@ -33,6 +37,7 @@ export function CommunityPage() {
     );
   return (
     <div className="community-workspace">
+      <CommunityLiveUpdates />
       <div className="community-sticky-header">
         <header className="community-page-heading">
           <h1>{t('同行社区')}</h1>
@@ -61,4 +66,24 @@ export function CommunityPage() {
       </Routes>
     </div>
   );
+}
+
+/** One subscription per enabled community workspace, shared across all its tabs. */
+function CommunityLiveUpdates() {
+  const client = useQueryClient();
+  const reconcile = useCallback(() => {
+    void client.invalidateQueries({ queryKey: socialKeys.notifications });
+    void client.invalidateQueries({ queryKey: socialKeys.conversations });
+    void client.invalidateQueries({ queryKey: ['social', 'messages'] });
+  }, [client]);
+  const receive = useCallback((event: SocialRealtimeEvent) => {
+    if (event.type === 'social.notifications.changed') {
+      void client.invalidateQueries({ queryKey: socialKeys.notifications });
+      return;
+    }
+    void client.invalidateQueries({ queryKey: socialKeys.conversations });
+    void client.invalidateQueries({ queryKey: socialKeys.messages(event.conversationId) });
+  }, [client]);
+  useSocialRealtime(receive, reconcile);
+  return null;
 }

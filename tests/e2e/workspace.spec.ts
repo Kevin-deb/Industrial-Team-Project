@@ -177,6 +177,99 @@ test('E community separates feed, forum, personal activity and scrollable direct
   await expect(page.getByText(messageBody, { exact: true })).toBeVisible();
 });
 
+test('E tab navigation and panel origins remain stable across short and long views', async ({
+  page,
+  request,
+}) => {
+  await page.goto('/community');
+  await expect(page.locator('.community-view')).toBeVisible();
+  await expect
+    .poll(() =>
+      page.locator('.community-view-heading').evaluate((el) => el.getBoundingClientRect().y),
+    )
+    .toBeGreaterThan(100);
+  const origin = await page.locator('.community-tabs').boundingBox();
+  const panel = await page
+    .locator('.community-view-heading')
+    .evaluate((el) => ({ y: el.getBoundingClientRect().y }));
+  for (const name of ['专科圈子', '同行私信', '社区设置', '社区首页', '同行私信', '社区首页']) {
+    await page.getByRole('link', { name, exact: true }).click();
+    await expect(page.locator('.community-view-heading h2')).toHaveText(name);
+    await expect(page.locator('.community-view')).toBeVisible();
+    const next = await page.locator('.community-tabs').boundingBox();
+    const nextPanel = await page
+      .locator('.community-view-heading')
+      .evaluate((el) => ({ y: el.getBoundingClientRect().y }));
+    expect(Math.abs(next!.x - origin!.x)).toBeLessThanOrEqual(1);
+    expect(Math.abs(next!.y - origin!.y)).toBeLessThanOrEqual(1);
+    expect(Math.abs(nextPanel!.y - panel!.y)).toBeLessThanOrEqual(1);
+  }
+  const patient = (await (await request.get('/api/v1/patients?pageSize=1')).json()).data[0];
+  await page.goto('/health');
+  await page.getByRole('searchbox', { name: '搜索健康管理患者' }).fill(patient.id);
+  await page.getByRole('button', { name: new RegExp(patient.id) }).click();
+  await expect(page.locator('.health-panel')).toBeVisible();
+  const tabs = await page.locator('.health-tabs').boundingBox();
+  const healthPanel = await page.locator('.health-panel').boundingBox();
+  for (const name of ['管理计划', '健康评估', '随访提醒', '管理计划', '健康观测']) {
+    await page.getByRole('button', { name, exact: true }).click();
+    await expect(page.locator('.health-panel')).toBeVisible();
+    const next = await page.locator('.health-tabs').boundingBox();
+    const nextPanel = await page.locator('.health-panel').boundingBox();
+    expect(Math.abs(next!.x - tabs!.x)).toBeLessThanOrEqual(1);
+    expect(Math.abs(next!.y - tabs!.y)).toBeLessThanOrEqual(1);
+    expect(Math.abs(nextPanel!.y - healthPanel!.y)).toBeLessThanOrEqual(1);
+  }
+});
+
+test('E content editor and deletion confirmations persist through the API', async ({
+  page,
+  request,
+}) => {
+  const created = await request.post('/api/v1/social/posts', {
+    data: {
+      commandId: `edit-test-${Date.now()}`,
+      groupId: 'GROUP-GERIATRICS',
+      displayMode: 'anonymous',
+      title: '界面编辑测试',
+      body: '编辑前',
+      tags: ['随访管理'],
+      containsCaseMaterial: false,
+      deidentificationConfirmed: false,
+    },
+  });
+  expect(created.status()).toBe(201);
+  const post = (await created.json()).data;
+  await page.goto(`/community/posts/${post.id}`);
+  const thread = page.locator('.community-thread-post');
+  await thread.getByRole('button', { name: '编辑', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: '编辑内容' });
+  await editor.getByLabel('主题标题').fill('编辑后的标题');
+  await editor.getByLabel('内容', { exact: true }).fill('编辑后的正文');
+  await expect(editor.getByLabel('操作原因（留痕）')).toHaveCount(0);
+  await editor.getByRole('button', { name: '确认', exact: true }).click();
+  await expect(thread.getByRole('heading', { name: '编辑后的标题' })).toBeVisible();
+  await page.getByRole('textbox', { name: '回复内容' }).fill('待删除评论');
+  await page.getByRole('button', { name: '发表回复' }).click();
+  const reply = page.locator('.community-comments article').filter({ hasText: '待删除评论' });
+  await reply.getByRole('button', { name: '点赞回复', exact: true }).click();
+  await reply.getByRole('button', { name: '删除', exact: true }).click();
+  const remove = page.getByRole('dialog', { name: '删除内容' });
+  await expect(remove.getByLabel('操作原因（留痕）')).toHaveCount(0);
+  await remove.getByRole('button', { name: '确认', exact: true }).click();
+  await expect(page.getByText('该评论已被删除', { exact: true })).toBeVisible();
+  await thread.getByRole('button', { name: '删除帖子', exact: true }).click();
+  await remove.getByRole('button', { name: '确认', exact: true }).click();
+  await expect(thread.getByRole('heading', { name: '该帖子已被删除' })).toBeVisible();
+  await expect(page.locator('.community-comments')).toHaveCount(0);
+  const history = (await (await request.get(`/api/v1/social/posts/${post.id}/history`)).json())
+    .data;
+  expect(history.map((item: { action: string }) => item.action)).toEqual(['edit', 'delete']);
+  expect(history[0].before_json).toContain('编辑前');
+  expect(history[0].after_json).toContain('编辑后的正文');
+  expect(history[1].before_json).toContain('编辑后的正文');
+});
+
 test('API failure is visible and recoverable', async ({ page }) => {
   await page.route('**/api/v1/dashboard', (route) => route.abort('failed'));
   await page.goto('/');

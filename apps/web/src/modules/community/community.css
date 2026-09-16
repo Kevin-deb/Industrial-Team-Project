@@ -1,7 +1,17 @@
 .community-workspace {
+  overflow-anchor: none;
   max-width: 1120px;
   margin: -14px auto 0;
   color: #29434b;
+}
+.community-workspace > .community-view {
+  max-height: calc(100dvh - 240px);
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+.community-forum-search {
+  flex: 1;
+  min-width: 230px;
 }
 .community-sticky-header {
   position: sticky;
@@ -329,6 +339,18 @@
   color: #8b9aa0;
   font-size: 9px;
 }
+.community-comments article > .community-comment-actions {
+  justify-content: flex-start;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.community-comments .community-comment-actions button {
+  margin-right: 0;
+}
+.community-content-editor {
+  width: min(520px, calc(100vw - 32px));
+}
 .community-comments article p {
   margin-top: 6px;
   color: #405a62;
@@ -337,7 +359,9 @@
 .community-comments article button {
   margin-top: 7px;
   padding: 0;
-  display: flex;
+  display: inline-flex;
+  margin-right: 16px;
+  align-items: center;
   gap: 4px;
   border: 0;
   background: transparent;
@@ -388,10 +412,10 @@
   width: min(520px, 100%);
   height: auto;
 }
-.community-post-dialog form {
+.community-dialog.community-post-dialog form {
   height: auto;
-  padding: 12px 16px 14px;
-  gap: 8px;
+  padding: 10px 16px 12px;
+  gap: 6px;
   max-height: calc(100dvh - 96px);
 }
 .community-post-dialog .community-mixed-composer > textarea {
@@ -445,7 +469,11 @@
   opacity: 0.45;
 }
 .community-confirm-slot {
-  min-height: 38px;
+  min-height: 32px;
+}
+.community-dialog.community-post-dialog .community-confirm {
+  padding: 6px 8px;
+  font-size: 11px;
 }
 .community-confirm-slot .hidden {
   visibility: hidden;
@@ -463,8 +491,18 @@
 }
 .community-forum-search span input {
   min-width: 0;
+  width: 100%;
+  flex: 1;
   padding-left: 0;
   border: 0;
+}
+.community-forum-search span:focus-within {
+  outline: 2px solid #63bdb0;
+  outline-offset: 2px;
+}
+.community-forum-search span input:focus {
+  outline: none;
+  box-shadow: none;
 }
 .community-tag-filters {
   min-width: 0;
@@ -571,15 +609,18 @@
   background: #fff5f3;
   font-size: 11px;
 }
+.community-home {
+  width: 100%;
+}
 .community-personal-menu {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 10px;
-  padding: 18px;
+  gap: 6px;
+  padding: 12px 18px;
 }
 .community-personal-menu > button {
-  min-height: 74px;
-  padding: 14px;
+  min-height: 56px;
+  padding: 10px 12px;
   display: flex;
   align-items: center;
   gap: 13px;

@@ -34,6 +34,23 @@ function envelope(data: unknown) {
 }
 
 describe('CommunityPage', () => {
+  it('refreshes unread notifications on a realtime event without leaving community home', async () => {
+    let listener: ((event: SocialRealtimeEvent) => void) | undefined;
+    window.carelinkRealtime = { subscribe(callback) { listener = callback; return () => { listener = undefined; }; } };
+    let count = 1;
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).includes('/preferences')) return envelope({ enabled: true, notificationsEnabled: true });
+      if (String(input).includes('/notifications')) return envelope(Array.from({ length: count }, (_, index) => ({ id: `LIVE-${index}`, kind: 'like', postId: post.id, actorDisplayName: '周明', createdAt: post.createdAt })));
+      return envelope({ items: [], total: 0, page: 1, pageSize: 20 });
+    }));
+    renderWithEProviders(<I18nProvider><MemoryRouter initialEntries={['/community']}><Routes><Route path="/community/*" element={<CommunityPage />} /></Routes></MemoryRouter></I18nProvider>);
+    const entry = await screen.findByRole('button', { name: /我的消息/ });
+    await waitFor(() => expect(entry).toHaveTextContent('1'));
+    count = 2;
+    listener?.({ type: 'social.notifications.changed', occurredAt: '2026-09-16T12:00:00+08:00' } as SocialRealtimeEvent);
+    await waitFor(() => expect(entry).toHaveTextContent('2'));
+    delete window.carelinkRealtime;
+  });
   it('shows unavailable content rather than loading forever after moderation', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ error: { code: 'SOCIAL_RESOURCE_NOT_FOUND', message: '未找到该社区内容。' } }), { status: 404 })));
     renderWithEProviders(<I18nProvider><MemoryRouter initialEntries={['/posts/POST-001']}>

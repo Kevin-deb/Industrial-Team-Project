@@ -1,6 +1,6 @@
 import { Search, Send, X } from 'lucide-react';
 import type { SocialPeer } from '@doctor/contracts';
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useI18n } from '../../shared/i18n';
 import { Button } from '../../shared/ui';
@@ -12,7 +12,6 @@ import {
   usePeerSearch,
   useSendMessage,
 } from './queries';
-import { useSocialRealtime } from './realtime';
 import { ContentBlocks } from './ContentBlocks';
 import {
   MixedContentComposer,
@@ -57,19 +56,6 @@ export function DirectMessages() {
     readRequests.current.add(active);
     void markRead.mutateAsync(active).finally(() => readRequests.current.delete(active));
   }, [active, conversation?.unreadCount, markRead]);
-  const handleRealtime = useCallback(
-    (event: import('@doctor/contracts').SocialRealtimeEvent) => {
-      void queryClient.invalidateQueries({ queryKey: socialKeys.conversations });
-      if (event.conversationId === active)
-        void queryClient.invalidateQueries({ queryKey: socialKeys.messages(active) });
-    },
-    [active, queryClient],
-  );
-  const reconcileRealtime = useCallback(() => {
-    void queryClient.invalidateQueries({ queryKey: socialKeys.conversations });
-    if (active) void queryClient.invalidateQueries({ queryKey: socialKeys.messages(active) });
-  }, [active, queryClient]);
-  useSocialRealtime(handleRealtime, reconcileRealtime);
   async function loadEarlier() {
     const container = messageScroll.current;
     const previousHeight = container?.scrollHeight ?? 0;

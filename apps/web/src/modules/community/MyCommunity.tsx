@@ -35,7 +35,7 @@ export function MyCommunity() {
     },
   ] as const;
   return (
-    <section className="community-view">
+    <section className="community-view community-home">
       <div className="community-view-heading">
         <div>
           <h2>{t('社区首页')}</h2>
