@@ -1,5 +1,6 @@
 /** Public, opt-in community boundary. It exposes no automatic clinical-data import. */
 export { socialMigration } from './migration.js';
+export { socialCommentReactionsMigration } from './comment-reactions-migration.js';
 export { socialEvolutionMigration } from './evolution-migration.js';
 export { socialViewsMigration } from './views-migration.js';
 export { socialRichContentMigration } from './rich-content-migration.js';
@@ -24,5 +25,7 @@ export type {
   SocialAuditPort,
   SocialMedicalMetricCardSourcePort,
   SocialPeerDirectoryPort,
+  SocialModerationResult,
+  SocialModerationResultPort,
 } from './ports.js';
 export type { SocialRealtimeListener, SocialRealtimePort } from './realtime.js';

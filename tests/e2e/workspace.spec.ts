@@ -141,6 +141,11 @@ test('E community separates feed, forum, personal activity and scrollable direct
   await page.getByRole('textbox', { name: '回复内容' }).fill(replyBody);
   await page.getByRole('button', { name: '发表回复' }).click();
   await expect(page.getByText(replyBody, { exact: true })).toBeVisible();
+  const reply = page.locator('.community-comments article').filter({ hasText: replyBody });
+  await reply.getByRole('button', { name: '点赞回复', exact: true }).click();
+  await expect(reply.getByRole('button', { name: '取消点赞回复', exact: true })).toContainText('1');
+  await reply.getByRole('button', { name: '收藏回复', exact: true }).click();
+  await expect(reply.getByRole('button', { name: '取消收藏回复', exact: true })).toContainText('1');
   await thread.getByRole('button', { name: '举报' }).click();
   await expect(page.getByRole('dialog', { name: '举报主题' })).toBeVisible();
   await page.getByRole('button', { name: '提交举报' }).click();

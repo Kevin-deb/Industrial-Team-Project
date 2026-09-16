@@ -12,6 +12,7 @@ import {
 } from './composer/MixedContentComposer';
 import {
   useCreateComment,
+  useCommentReaction,
   usePost,
   usePostReaction,
   useRecordPostView,
@@ -25,6 +26,7 @@ export function PostPage() {
   const { postId = '' } = useParams();
   const post = usePost(postId);
   const comment = useCreateComment(postId);
+  const replyReaction = useCommentReaction(postId);
   const like = usePostReaction(postId, 'like');
   const bookmark = usePostReaction(postId, 'bookmark');
   const report = useReportPost(postId);
@@ -39,6 +41,7 @@ export function PostPage() {
     viewedPostIds.add(postId);
     view.mutate(undefined, { onError: () => viewedPostIds.delete(postId) });
   }, [data?.id, postId]);
+  if (post.isError) return <section className="community-view"><p role="alert">{t('主题暂不可用，可能已被处理或无权访问。')}</p><Link to="/community/groups">{t('返回论坛')}</Link></section>;
   if (!data) return <div className="community-loading">{t('正在加载主题…')}</div>;
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -123,8 +126,17 @@ export function PostPage() {
               <Reply size={13} />
               {t('回复')}
             </button>
+            <button disabled={replyReaction.isPending} aria-label={t(item.likedByMe ? '取消点赞回复' : '点赞回复')}
+              onClick={() => replyReaction.mutate({ commentId: item.id, kind: 'like', value: !item.likedByMe })}>
+              <Heart size={13} />{t(item.likedByMe ? '取消点赞' : '点赞')} · {item.likeCount ?? 0}
+            </button>
+            <button disabled={replyReaction.isPending} aria-label={t(item.bookmarkedByMe ? '取消收藏回复' : '收藏回复')}
+              onClick={() => replyReaction.mutate({ commentId: item.id, kind: 'bookmark', value: !item.bookmarkedByMe })}>
+              <Bookmark size={13} />{t(item.bookmarkedByMe ? '取消收藏' : '收藏')} · {item.bookmarkCount ?? 0}
+            </button>
           </article>
         ))}
+        {replyReaction.isError && <p role="alert" className="community-action-error">{t('操作未保存，请重试。')}</p>}
         <form className="community-reply-form" onSubmit={submit}>
           {replyTo && (
             <div>

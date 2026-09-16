@@ -186,6 +186,16 @@ export function registerSocialRoutes(
     );
   }
   // Compatibility with the first local E prototype; new callers use plural resource routes above.
+  for (const [path, kind] of [['likes', 'like'], ['bookmarks', 'bookmark']] as const) {
+    for (const method of ['POST', 'DELETE'] as const) {
+      app.route<{ Params: { id: string }; Body: { commandId: string } }>({
+        method, url: `/api/v1/social/comments/:id/${path}`,
+        schema: { params: idParams, body: commandBody },
+        handler: async (request, reply) => socialReply(request, reply, () =>
+          service.setCommentReaction(request.params.id, kind, method === 'POST', request.body.commandId, context())),
+      });
+    }
+  }
   for (const action of ['like', 'bookmark'] as const)
     app.post<{ Params: { id: string }; Body: { commandId: string; value: boolean } }>(
       `/api/v1/social/posts/:id/${action}`,

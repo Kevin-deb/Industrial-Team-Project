@@ -12,6 +12,7 @@ import {
   socialEvolutionMigration,
   socialRichContentMigration,
   socialNotificationMigration,
+  socialCommentReactionsMigration,
   socialViewsMigration,
 } from '../social/index.js';
 import { seedDemo } from './seed.js';
@@ -30,6 +31,7 @@ export const migrations = [
   socialViewsMigration,
   socialRichContentMigration,
   socialNotificationMigration,
+  socialCommentReactionsMigration,
 ];
 
 /** Refuse a newer or inconsistent migration history instead of silently running incompatible code. */

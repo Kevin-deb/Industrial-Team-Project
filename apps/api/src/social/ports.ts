@@ -1,5 +1,16 @@
 import type { MedicalMetricCard, SocialPeer } from '@doctor/contracts';
 
+/** Trusted composition-root input only. Never expose this port to the doctor HTTP API. */
+export interface SocialModerationResult {
+  eventId: string;
+  reportId: string;
+  outcome: 'upheld' | 'rejected';
+  reviewedAt: string;
+}
+export interface SocialModerationResultPort {
+  receiveModerationResult(result: SocialModerationResult): void;
+}
+
 export interface SocialAuditEvent {
   actorId: string;
   action: string;

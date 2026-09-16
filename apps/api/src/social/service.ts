@@ -27,6 +27,7 @@ import {
 } from './repository.js';
 import type { SocialAuditPort, SocialPeerDirectoryPort } from './ports.js';
 import type { SocialRealtimePort } from './realtime.js';
+import type { SocialModerationResult } from './ports.js';
 import { validateContentBlocks } from './content-blocks.js';
 
 export class CommunityDisabled extends Error {}
@@ -231,6 +232,18 @@ export class SocialService {
   }
   setBookmark(postId: string, bookmarked: boolean, commandId: string, context: RequestContext) {
     return this.setReaction(postId, bookmarked, commandId, context, 'bookmark');
+  }
+  setCommentReaction(commentId: string, kind: 'like' | 'bookmark', value: boolean, commandId: string, context: RequestContext): SocialPostDetail {
+    this.assertEnabled(context);
+    const target = this.repository.findCommentAuthor(commentId);
+    if (!target) throw new SocialNotFound();
+    this.getPost(target.postId, context);
+    return this.execute('social.comment.reaction', commandId, { commentId, kind, value }, context, () => {
+      const changed = this.repository.setCommentReaction(commentId, context.actorId, kind, value, context.now);
+      if (changed && value && target.authorId !== context.actorId)
+        this.notify(target.authorId, context.actorId, target.postId, kind, context.now, commentId);
+      return this.repository.findPost(target.postId, context.actorId)!;
+    }, commentId);
   }
   recordView(postId: string, commandId: string, context: RequestContext): SocialPostDetail {
     this.assertEnabled(context);
@@ -438,6 +451,25 @@ export class SocialService {
       },
       'report',
     );
+  }
+  /** Adapter-owned callback; ordinary doctors cannot submit moderation decisions. */
+  receiveModerationResult(input: SocialModerationResult): void {
+    if (!input.eventId.trim() || !['upheld', 'rejected'].includes(input.outcome) || !Number.isFinite(Date.parse(input.reviewedAt)))
+      throw new SocialValidationFailure();
+    const report = this.repository.findReportForModeration(input.reportId);
+    if (!report) throw new SocialNotFound();
+    const reporterId = String(report.reporter_id);
+    this.execute('social.report.result', input.eventId, input, { actorId: reporterId, now: input.reviewedAt }, () => {
+      if (report.status !== 'pending') throw new SocialConflict('Moderation result conflict');
+      this.repository.applyReportOutcome(input.reportId, input.outcome, input.reviewedAt);
+      const postId = report.post_id ? String(report.post_id) : '';
+      this.notify(reporterId, reporterId, postId, input.outcome === 'upheld' ? 'report-upheld' : 'report-rejected', input.reviewedAt);
+      if (input.outcome === 'upheld') {
+        const authorId = postId ? this.repository.findPostAuthor(postId) : this.repository.findMessageAuthorForModeration(String(report.reported_message_id));
+        if (authorId) this.notify(authorId, authorId, postId, 'content-moderated', input.reviewedAt);
+      }
+      return { id: input.reportId, status: input.outcome };
+    }, input.reportId);
   }
   private assertEnabled(context: RequestContext) {
     if (!this.repository.getPreferences(context.actorId).enabled) throw new CommunityDisabled();

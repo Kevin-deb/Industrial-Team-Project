@@ -41,6 +41,10 @@ export interface SocialPostSummary {
   bookmarkedByMe: boolean;
 }
 export interface SocialComment {
+  likeCount?: number;
+  bookmarkCount?: number;
+  likedByMe?: boolean;
+  bookmarkedByMe?: boolean;
   id: string;
   postId: string;
   parentCommentId?: string;

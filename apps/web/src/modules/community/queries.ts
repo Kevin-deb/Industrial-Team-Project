@@ -249,6 +249,16 @@ export function usePostReaction(postId: string, kind: 'like' | 'bookmark') {
       ]),
   });
 }
+export function useCommentReaction(postId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { commentId: string; kind: 'like' | 'bookmark'; value: boolean }) =>
+      requestEApi<SocialPostDetail>(`/social/comments/${encodeURIComponent(input.commentId)}/${input.kind === 'like' ? 'likes' : 'bookmarks'}`, {
+        method: input.value ? 'POST' : 'DELETE', body: { commandId: commandId() },
+      }),
+    onSuccess: (result) => client.setQueryData(socialKeys.post(postId), result),
+  });
+}
 
 function updateReactionCache(
   current: unknown,

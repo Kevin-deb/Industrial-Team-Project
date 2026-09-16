@@ -8,15 +8,73 @@ import {
   SocialNotFound,
   SocialService,
   SocialValidationFailure,
+  SocialConflict,
 } from '../src/social/service.js';
 import { DEMO_DOCTOR_ID } from '../src/database/seed.js';
 import { createApp } from '../src/app.js';
 import { SocialRealtimeHub } from '../src/social/realtime.js';
 
+test('trusted moderation results notify reporter and content author once', () => {
+  const db = openDatabase(':memory:');
+  try {
+    db.prepare("DELETE FROM social_notifications WHERE kind IN ('report-upheld','content-moderated')").run();
+    const service = new SocialService(new SqliteSocialRepository(db));
+    const context = { actorId: DEMO_DOCTOR_ID, now: '2026-09-16T10:00:00+08:00' };
+    const report = service.createReport({ commandId: 'report-result-test', postId: 'POST-001', reason: 'other' }, context);
+    const result = { eventId: 'moderation-result-test', reportId: report.id, outcome: 'upheld' as const, reviewedAt: context.now };
+    service.receiveModerationResult(result);
+    service.receiveModerationResult(result);
+    assert.equal(db.prepare('SELECT status FROM social_reports WHERE id=?').get(report.id)!.status, 'upheld');
+    assert.equal(db.prepare("SELECT COUNT(*) n FROM social_notifications WHERE kind='report-upheld'").get()!.n, 1);
+    assert.equal(db.prepare("SELECT COUNT(*) n FROM social_notifications WHERE kind='content-moderated'").get()!.n, 1);
+    assert.throws(() => service.getPost('POST-001', context), SocialNotFound);
+    assert.throws(() => service.receiveModerationResult({ ...result, outcome: 'rejected' }), SocialConflict);
+  } finally { db.close(); }
+});
+
+test('private-message report results have no invalid post link and cannot be submitted by doctors', async () => {
+  const db = openDatabase(':memory:');
+  const service = new SocialService(new SqliteSocialRepository(db));
+  const context = { actorId: DEMO_DOCTOR_ID, now: '2026-09-16T12:00:00+08:00' };
+  const app = await createApp({ database: db });
+  try {
+    const message = service.listMessages('CONVERSATION-1', undefined, context).items[0]!;
+    const report = service.createReport({ commandId: 'message-report-result', messageId: message.id, reason: 'harassment' }, context);
+    service.receiveModerationResult({ eventId: 'message-report-rejected', reportId: report.id, outcome: 'rejected', reviewedAt: context.now });
+    const notice = service.listNotifications(context).find(n => n.kind === 'report-rejected' && n.createdAt === context.now)!;
+    assert.equal(notice.postId, '');
+    assert.equal((await app.inject({ method: 'POST', url: `/api/v1/social/reports/${report.id}/result`, payload: { outcome: 'upheld' } })).statusCode, 404);
+  } finally { await app.close(); db.close(); }
+});
+
+test('reply reactions persist counts and notify the reply author without duplicates', () => {
+  const db = openDatabase(':memory:');
+  try {
+    const service = new SocialService(new SqliteSocialRepository(db));
+    const context = { actorId: DEMO_DOCTOR_ID, now: '2026-09-16T11:00:00+08:00' };
+    const post = service.getPost('POST-001', context);
+    const target = post.comments.find(c => c.author.id !== DEMO_DOCTOR_ID)!;
+    db.prepare('DELETE FROM social_likes WHERE post_id=? AND identity_id=?').run(post.id, context.actorId);
+    db.prepare('DELETE FROM social_bookmarks WHERE post_id=? AND identity_id=?').run(post.id, context.actorId);
+    const updated = service.setCommentReaction(target.id, 'like', true, 'reply-like-test', context);
+    assert.equal(updated.comments.find(c => c.id === target.id)!.likeCount, 1);
+    assert.equal(updated.comments.find(c => c.id === target.id)!.likedByMe, true);
+    assert.ok(service.listMyLikes({}, context).items.some(p => p.id === post.id));
+    service.setCommentReaction(target.id, 'like', true, 'reply-like-again', context);
+    assert.equal(db.prepare("SELECT COUNT(*) n FROM social_notifications WHERE comment_id=? AND kind='like'").get(target.id)!.n, 1);
+    service.setCommentReaction(target.id, 'bookmark', true, 'reply-bookmark-test', context);
+    assert.ok(service.listMyBookmarks({}, context).items.some(p => p.id === post.id));
+    const removed = service.setCommentReaction(target.id, 'like', false, 'reply-unlike-test', context);
+    assert.equal(removed.comments.find(c => c.id === target.id)!.likeCount, 0);
+    assert.equal(removed.comments.find(c => c.id === target.id)!.bookmarkCount, 1);
+    assert.throws(() => service.setCommentReaction('missing', 'like', true, 'reply-missing-test', context), SocialNotFound);
+  } finally { db.close(); }
+});
+
 test('social migrations remain clinically isolated and fixtures are idempotent', () => {
   const db = openDatabase(':memory:');
   try {
-    assert.equal(db.prepare('SELECT COUNT(*) count FROM schema_migrations').get()!.count, 12);
+    assert.equal(db.prepare('SELECT COUNT(*) count FROM schema_migrations').get()!.count, 13);
     const tables = db
       .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'social_%'")
       .all();

@@ -244,7 +244,19 @@ export class SqliteSocialRepository {
       'comment',
       comments.map((item) => item.id),
     );
-    for (const comment of comments) comment.contentBlocks = commentBlocks.get(comment.id) ?? [];
+    const reactions = this.db.prepare(`SELECT r.comment_id,r.kind,COUNT(*) n,
+      MAX(CASE WHEN r.identity_id=? THEN 1 ELSE 0 END) mine
+      FROM social_comment_reactions r JOIN social_comments c ON c.id=r.comment_id
+      WHERE c.post_id=? GROUP BY r.comment_id,r.kind`).all(actorId, id);
+    for (const comment of comments) {
+      comment.contentBlocks = commentBlocks.get(comment.id) ?? [];
+      comment.likeCount = 0; comment.bookmarkCount = 0;
+      comment.likedByMe = false; comment.bookmarkedByMe = false;
+      for (const reaction of reactions.filter(r => r.comment_id === comment.id)) {
+        if (reaction.kind === 'like') { comment.likeCount = Number(reaction.n); comment.likedByMe = Boolean(reaction.mine); }
+        else { comment.bookmarkCount = Number(reaction.n); comment.bookmarkedByMe = Boolean(reaction.mine); }
+      }
+    }
     return {
       ...mapPost(row),
       body: String(row.body),
@@ -264,6 +276,12 @@ export class SqliteSocialRepository {
   findCommentAuthor(id: string) {
     const row = this.db.prepare('SELECT author_id,post_id FROM social_comments WHERE id=?').get(id);
     return row ? { authorId: String(row.author_id), postId: String(row.post_id) } : undefined;
+  }
+
+  setCommentReaction(id: string, actorId: string, kind: 'like' | 'bookmark', value: boolean, now: string): boolean {
+    return value
+      ? this.db.prepare('INSERT OR IGNORE INTO social_comment_reactions(comment_id,identity_id,kind,created_at) VALUES(?,?,?,?)').run(id, actorId, kind, now).changes > 0
+      : this.db.prepare('DELETE FROM social_comment_reactions WHERE comment_id=? AND identity_id=? AND kind=?').run(id, actorId, kind).changes > 0;
   }
   createPost(post: SocialPostDetail, authorId: string) {
     this.db
@@ -339,8 +357,8 @@ export class SqliteSocialRepository {
       kind === 'author'
         ? 'p.author_id=:actorId'
         : kind === 'like'
-          ? 'EXISTS(SELECT 1 FROM social_likes mine WHERE mine.post_id=p.id AND mine.identity_id=:actorId)'
-          : 'EXISTS(SELECT 1 FROM social_bookmarks mine WHERE mine.post_id=p.id AND mine.identity_id=:actorId)';
+          ? "(EXISTS(SELECT 1 FROM social_likes mine WHERE mine.post_id=p.id AND mine.identity_id=:actorId) OR EXISTS(SELECT 1 FROM social_comment_reactions r JOIN social_comments c ON c.id=r.comment_id WHERE c.post_id=p.id AND r.identity_id=:actorId AND r.kind='like'))"
+          : "(EXISTS(SELECT 1 FROM social_bookmarks mine WHERE mine.post_id=p.id AND mine.identity_id=:actorId) OR EXISTS(SELECT 1 FROM social_comment_reactions r JOIN social_comments c ON c.id=r.comment_id WHERE c.post_id=p.id AND r.identity_id=:actorId AND r.kind='bookmark'))";
     const params = { actorId, limit: pageSize, offset: (page - 1) * pageSize };
     const total = Number(
       this.db
@@ -387,7 +405,7 @@ export class SqliteSocialRepository {
         item.id,
         recipientId,
         actorId,
-        item.postId,
+        item.postId || null,
         item.commentId ?? null,
         item.kind,
         item.createdAt,
@@ -555,6 +573,21 @@ export class SqliteSocialRepository {
         item.status,
         item.createdAt,
       );
+  }
+
+  findReportForModeration(id: string) {
+    return this.db.prepare('SELECT * FROM social_reports WHERE id=?').get(id);
+  }
+  applyReportOutcome(id: string, outcome: 'upheld' | 'rejected', reviewedAt: string) {
+    this.db.prepare("UPDATE social_reports SET status=?,reviewed_at=? WHERE id=? AND status='pending'")
+      .run(outcome, reviewedAt, id);
+    if (outcome === 'upheld') {
+      const report = this.findReportForModeration(id);
+      if (report?.post_id) this.db.prepare("UPDATE social_posts SET moderation_status='removed' WHERE id=?").run(report.post_id);
+    }
+  }
+  findMessageAuthorForModeration(id: string): string | undefined {
+    return this.db.prepare('SELECT sender_id FROM social_direct_messages WHERE id=?').get(id)?.sender_id as string | undefined;
   }
 
   createAttachment(item: SocialAttachmentRecord) {
@@ -786,7 +819,7 @@ function mapNotification(r: Row): SocialNotification {
     id: String(r.id),
     kind: r.kind as SocialNotification['kind'],
     actorDisplayName: String(r.actor_name),
-    postId: String(r.post_id),
+    postId: r.post_id ? String(r.post_id) : '',
     ...(r.comment_id ? { commentId: String(r.comment_id) } : {}),
     createdAt: String(r.created_at),
     ...(r.read_at ? { readAt: String(r.read_at) } : {}),

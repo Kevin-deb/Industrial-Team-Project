@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../../shared/i18n';
 import { renderWithEProviders } from '../e-shared/test-utils';
 import { CommunityPage } from './CommunityPage';
+import { PostPage } from './PostPage';
 
 const post = {
   id: 'POST-001',
@@ -33,6 +34,30 @@ function envelope(data: unknown) {
 }
 
 describe('CommunityPage', () => {
+  it('shows unavailable content rather than loading forever after moderation', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ error: { code: 'SOCIAL_RESOURCE_NOT_FOUND', message: '未找到该社区内容。' } }), { status: 404 })));
+    renderWithEProviders(<I18nProvider><MemoryRouter initialEntries={['/posts/POST-001']}>
+      <Routes><Route path="/posts/:postId" element={<PostPage />} /></Routes>
+    </MemoryRouter></I18nProvider>);
+    expect(await screen.findByRole('alert', {}, { timeout: 3000 })).toHaveTextContent('主题暂不可用，可能已被处理或无权访问。');
+  });
+  it('offers compact reply reactions and updates from the API', async () => {
+    const reply = { id: 'COMMENT-1', postId: post.id, body: '回复测试内容', author: post.author,
+      displayMode: 'named', contentBlocks: [], createdAt: post.createdAt,
+      likeCount: 0, bookmarkCount: 0, likedByMe: false, bookmarkedByMe: false };
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).includes('/comments/COMMENT-1/likes')) reply.likedByMe = true;
+      return envelope({ ...post, body: '主题正文', contentBlocks: [], comments: [reply] });
+    }));
+    renderWithEProviders(<I18nProvider><MemoryRouter initialEntries={['/posts/POST-001']}>
+      <Routes><Route path="/posts/:postId" element={<PostPage />} /></Routes>
+    </MemoryRouter></I18nProvider>);
+    const body = await screen.findByText('回复测试内容');
+    const article = body.closest('article')!;
+    fireEvent.click(within(article).getByRole('button', { name: '点赞回复' }));
+    await waitFor(() => expect(within(article).getByRole('button', { name: '取消点赞回复' })).toBeInTheDocument());
+    expect(within(article).getByRole('button', { name: '收藏回复' })).toBeInTheDocument();
+  });
   beforeEach(() => {
     availableTags = ['老年医学', '随访管理', '同行经验', '健康教育'];
     localStorage.setItem('carelink-language', 'zh-CN');
