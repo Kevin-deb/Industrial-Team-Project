@@ -37,6 +37,7 @@ export class SocialValidationFailure extends Error {}
 export class SocialTagNotAllowed extends SocialValidationFailure {}
 
 export class SocialService {
+  private noticeRecipients?: Set<string>;
   constructor(
     private readonly repository: SqliteSocialRepository,
     private readonly audit?: SocialAuditPort,
@@ -177,9 +178,80 @@ export class SocialService {
       'post',
     );
   }
+  changeContent(
+    kind: 'post' | 'comment',
+    id: string,
+    input: {
+      commandId: string;
+      action: 'edit' | 'delete';
+      body?: string;
+      title?: string;
+      reason?: string;
+    },
+    context: RequestContext,
+  ) {
+    this.assertEnabled(context);
+    if (this.repository.findReceipt(context.actorId, input.commandId))
+      return this.execute(
+        `social.${kind}.${input.action}`,
+        input.commandId,
+        { id, ...input },
+        context,
+        () => {
+          throw new SocialNotFound();
+        },
+        id,
+      );
+    const target = kind === 'comment' ? this.repository.findCommentAuthor(id) : undefined;
+    const post = this.getPost(kind === 'post' ? id : (target?.postId ?? ''), context);
+    const owner = kind === 'post' ? this.repository.findPostAuthor(id) : target?.authorId;
+    const comment = kind === 'comment' ? post.comments.find((c) => c.id === id) : undefined;
+    if (post.deleted || (kind === 'comment' && (!comment || comment.deleted)))
+      throw new SocialNotFound();
+    if (
+      owner !== context.actorId &&
+      !(
+        input.action === 'delete' &&
+        kind === 'comment' &&
+        this.repository.findPostAuthor(post.id) === context.actorId
+      )
+    )
+      throw new SocialNotFound();
+    if (
+      input.action === 'edit' &&
+      (!input.body?.trim() ||
+        input.body.length > 20000 ||
+        (kind === 'post' && (!input.title?.trim() || input.title.length > 120)))
+    )
+      throw new SocialValidationFailure();
+    return this.execute(
+      `social.${kind}.${input.action}`,
+      input.commandId,
+      { id, ...input },
+      context,
+      () => this.repository.changeContent(kind, id, context.actorId, { ...input, reason: input.action === 'edit' ? '用户编辑' : '用户删除' }, context.now),
+      id,
+    );
+  }
+  contentHistory(kind: 'post' | 'comment', id: string, context: RequestContext) {
+    this.assertEnabled(context);
+    const target = kind === 'comment' ? this.repository.findCommentAuthor(id) : undefined;
+    const post = this.getPost(kind === 'post' ? id : (target?.postId ?? ''), context);
+    if (
+      this.repository.findPostAuthor(post.id) !== context.actorId &&
+      target?.authorId !== context.actorId
+    )
+      throw new SocialNotFound();
+    return this.repository.contentHistory(kind, id);
+  }
   createComment(input: CreateCommentInput, context: RequestContext): SocialComment {
     this.assertEnabled(context);
     const post = this.getPost(input.postId, context);
+    if (
+      post.deleted ||
+      (input.parentCommentId && post.comments.find((c) => c.id === input.parentCommentId)?.deleted)
+    )
+      throw new SocialNotFound();
     if (input.parentCommentId && !post.comments.some((item) => item.id === input.parentCommentId))
       throw new SocialValidationFailure();
     const blocks = validateContentBlocks(input.contentBlocks);
@@ -233,21 +305,49 @@ export class SocialService {
   setBookmark(postId: string, bookmarked: boolean, commandId: string, context: RequestContext) {
     return this.setReaction(postId, bookmarked, commandId, context, 'bookmark');
   }
-  setCommentReaction(commentId: string, kind: 'like' | 'bookmark', value: boolean, commandId: string, context: RequestContext): SocialPostDetail {
+  setCommentReaction(
+    commentId: string,
+    kind: 'like' | 'bookmark',
+    value: boolean,
+    commandId: string,
+    context: RequestContext,
+  ): SocialPostDetail {
     this.assertEnabled(context);
     const target = this.repository.findCommentAuthor(commentId);
     if (!target) throw new SocialNotFound();
-    this.getPost(target.postId, context);
-    return this.execute('social.comment.reaction', commandId, { commentId, kind, value }, context, () => {
-      const changed = this.repository.setCommentReaction(commentId, context.actorId, kind, value, context.now);
-      if (changed && value && target.authorId !== context.actorId)
-        this.notify(target.authorId, context.actorId, target.postId, kind, context.now, commentId);
-      return this.repository.findPost(target.postId, context.actorId)!;
-    }, commentId);
+    const post = this.getPost(target.postId, context);
+    if (post.deleted || post.comments.find((c) => c.id === commentId)?.deleted)
+      throw new SocialNotFound();
+    return this.execute(
+      'social.comment.reaction',
+      commandId,
+      { commentId, kind, value },
+      context,
+      () => {
+        const changed = this.repository.setCommentReaction(
+          commentId,
+          context.actorId,
+          kind,
+          value,
+          context.now,
+        );
+        if (changed && value && target.authorId !== context.actorId)
+          this.notify(
+            target.authorId,
+            context.actorId,
+            target.postId,
+            kind,
+            context.now,
+            commentId,
+          );
+        return this.repository.findPost(target.postId, context.actorId)!;
+      },
+      commentId,
+    );
   }
   recordView(postId: string, commandId: string, context: RequestContext): SocialPostDetail {
     this.assertEnabled(context);
-    this.getPost(postId, context);
+    if (this.getPost(postId, context).deleted) throw new SocialNotFound();
     return this.execute(
       'social.post.view',
       commandId,
@@ -268,7 +368,7 @@ export class SocialService {
     kind: 'like' | 'bookmark',
   ): SocialPostDetail {
     this.assertEnabled(context);
-    this.getPost(postId, context);
+    if (this.getPost(postId, context).deleted) throw new SocialNotFound();
     return this.execute(
       `social.${kind}.set`,
       commandId,
@@ -380,6 +480,8 @@ export class SocialService {
       input,
       context,
       () => {
+        if (!this.repository.getPreferences(input.recipientId).enabled)
+          throw new SocialValidationFailure();
         const existingConversation = this.repository.findDirectConversation(
           context.actorId,
           input.recipientId,
@@ -419,6 +521,15 @@ export class SocialService {
   }
   createReport(input: CreateReportInput, context: RequestContext): SocialReport {
     this.assertEnabled(context);
+    if (input.commentId) {
+      const target = this.repository.findCommentAuthor(input.commentId);
+      if (
+        !target ||
+        target.postId !== input.postId ||
+        this.getPost(target.postId, context).comments.find((c) => c.id === input.commentId)?.deleted
+      )
+        throw new SocialNotFound();
+    }
     if ((!input.postId && !input.messageId) || (input.postId && input.messageId))
       throw new SocialValidationFailure();
     if (input.postId && !this.repository.findPost(input.postId, context.actorId))
@@ -440,6 +551,7 @@ export class SocialService {
           createdAt: context.now,
         };
         this.repository.createReport(item, context.actorId, input.description);
+        if (input.commentId) this.repository.setReportComment(item.id, input.commentId);
         this.notify(
           context.actorId,
           context.actorId,
@@ -454,22 +566,44 @@ export class SocialService {
   }
   /** Adapter-owned callback; ordinary doctors cannot submit moderation decisions. */
   receiveModerationResult(input: SocialModerationResult): void {
-    if (!input.eventId.trim() || !['upheld', 'rejected'].includes(input.outcome) || !Number.isFinite(Date.parse(input.reviewedAt)))
+    if (
+      !input.eventId.trim() ||
+      !['upheld', 'rejected'].includes(input.outcome) ||
+      !Number.isFinite(Date.parse(input.reviewedAt))
+    )
       throw new SocialValidationFailure();
     const report = this.repository.findReportForModeration(input.reportId);
     if (!report) throw new SocialNotFound();
     const reporterId = String(report.reporter_id);
-    this.execute('social.report.result', input.eventId, input, { actorId: reporterId, now: input.reviewedAt }, () => {
-      if (report.status !== 'pending') throw new SocialConflict('Moderation result conflict');
-      this.repository.applyReportOutcome(input.reportId, input.outcome, input.reviewedAt);
-      const postId = report.post_id ? String(report.post_id) : '';
-      this.notify(reporterId, reporterId, postId, input.outcome === 'upheld' ? 'report-upheld' : 'report-rejected', input.reviewedAt);
-      if (input.outcome === 'upheld') {
-        const authorId = postId ? this.repository.findPostAuthor(postId) : this.repository.findMessageAuthorForModeration(String(report.reported_message_id));
-        if (authorId) this.notify(authorId, authorId, postId, 'content-moderated', input.reviewedAt);
-      }
-      return { id: input.reportId, status: input.outcome };
-    }, input.reportId);
+    this.execute(
+      'social.report.result',
+      input.eventId,
+      input,
+      { actorId: reporterId, now: input.reviewedAt },
+      () => {
+        if (report.status !== 'pending') throw new SocialConflict('Moderation result conflict');
+        this.repository.applyReportOutcome(input.reportId, input.outcome, input.reviewedAt);
+        const postId = report.post_id ? String(report.post_id) : '';
+        this.notify(
+          reporterId,
+          reporterId,
+          postId,
+          input.outcome === 'upheld' ? 'report-upheld' : 'report-rejected',
+          input.reviewedAt,
+        );
+        if (input.outcome === 'upheld') {
+          const authorId = report.comment_id
+            ? this.repository.findCommentAuthor(String(report.comment_id))?.authorId
+            : postId
+              ? this.repository.findPostAuthor(postId)
+              : this.repository.findMessageAuthorForModeration(String(report.reported_message_id));
+          if (authorId)
+            this.notify(authorId, authorId, postId, 'content-moderated', input.reviewedAt);
+        }
+        return { id: input.reportId, status: input.outcome };
+      },
+      input.reportId,
+    );
   }
   private assertEnabled(context: RequestContext) {
     if (!this.repository.getPreferences(context.actorId).enabled) throw new CommunityDisabled();
@@ -518,6 +652,7 @@ export class SocialService {
       recipientId,
       actorId,
     );
+    this.noticeRecipients?.add(recipientId);
   }
   private execute<T>(
     operation: string,
@@ -529,25 +664,38 @@ export class SocialService {
   ): T {
     const digest = createHash('sha256').update(stableJson({ operation, input })).digest('hex');
     let replayed = false;
-    const result = this.repository.transaction(() => {
-      const receipt = this.repository.findReceipt(context.actorId, commandId);
-      if (receipt) {
-        replayed = true;
-        return replay<T>(receipt, operation, digest);
-      }
-      const result = work();
-      this.repository.saveReceipt({
-        actorId: context.actorId,
-        commandId,
-        operation,
-        requestDigest: digest,
-        resourceId: objectId(result, resourceId),
-        responseJson: JSON.stringify(result),
-        createdAt: context.now,
+    const recipients = new Set<string>();
+    const previousRecipients = this.noticeRecipients;
+    this.noticeRecipients = recipients;
+    let result: T;
+    try {
+      result = this.repository.transaction(() => {
+        const receipt = this.repository.findReceipt(context.actorId, commandId);
+        if (receipt) {
+          replayed = true;
+          return replay<T>(receipt, operation, digest);
+        }
+        const result = work();
+        this.repository.saveReceipt({
+          actorId: context.actorId,
+          commandId,
+          operation,
+          requestDigest: digest,
+          resourceId: objectId(result, resourceId),
+          responseJson: JSON.stringify(result),
+          createdAt: context.now,
+        });
+        return result;
       });
-      return result;
-    });
+    } finally {
+      this.noticeRecipients = previousRecipients;
+    }
     if (!replayed) {
+      if (recipients.size)
+        this.realtime?.publish([...recipients], {
+          type: 'social.notifications.changed',
+          occurredAt: context.now,
+        });
       void this.audit?.record({
         actorId: context.actorId,
         action: operation,

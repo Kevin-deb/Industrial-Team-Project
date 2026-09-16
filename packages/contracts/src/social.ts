@@ -24,6 +24,9 @@ export interface SocialAuthor {
   avatarInitials: string;
 }
 export interface SocialPostSummary {
+  deleted?: boolean;
+  canEdit?: boolean;
+  canDelete?: boolean;
   id: string;
   groupId: string;
   groupName: string;
@@ -41,6 +44,9 @@ export interface SocialPostSummary {
   bookmarkedByMe: boolean;
 }
 export interface SocialComment {
+  deleted?: boolean;
+  canEdit?: boolean;
+  canDelete?: boolean;
   likeCount?: number;
   bookmarkCount?: number;
   likedByMe?: boolean;
@@ -114,6 +120,10 @@ export interface ConversationReadResult {
 }
 
 export type SocialRealtimeEvent =
+  | {
+      type: 'social.notifications.changed';
+      occurredAt: string;
+    }
   | {
       type: 'social.message.created';
       conversationId: string;
@@ -223,6 +233,7 @@ export interface CreateMessageInput {
   contentBlocks?: CreateSocialContentBlockInput[];
 }
 export interface CreateReportInput {
+  commentId?: string;
   commandId: string;
   postId?: string;
   messageId?: string;

@@ -32,6 +32,20 @@ export const migrations = [
   socialRichContentMigration,
   socialNotificationMigration,
   socialCommentReactionsMigration,
+  {
+    version: 14,
+    name: 'social_content_history_and_soft_deletion',
+    sql: `
+    ALTER TABLE social_comments ADD COLUMN deleted_at TEXT;
+    ALTER TABLE social_reports ADD COLUMN comment_id TEXT REFERENCES social_comments(id);
+    CREATE TABLE social_content_history (
+      id TEXT PRIMARY KEY, entity_type TEXT NOT NULL, entity_id TEXT NOT NULL,
+      actor_id TEXT NOT NULL REFERENCES identities(id), action TEXT NOT NULL,
+      reason TEXT NOT NULL, before_json TEXT NOT NULL, after_json TEXT NOT NULL, created_at TEXT NOT NULL
+    );
+    CREATE INDEX social_history_entity ON social_content_history(entity_type,entity_id,created_at);
+  `,
+  },
 ];
 
 /** Refuse a newer or inconsistent migration history instead of silently running incompatible code. */

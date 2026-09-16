@@ -232,9 +232,10 @@ export class SqliteSocialRepository {
   }
   findPost(id: string, actorId: string): SocialPostDetail | undefined {
     const row = this.db
-      .prepare(`${postSelect()} WHERE p.id=:id AND p.moderation_status='published'`)
+      .prepare(`${postSelect()} WHERE p.id=:id AND p.moderation_status IN ('published','deleted')`)
       .get({ id, actorId }) as Row | undefined;
     if (!row) return undefined;
+    const deleted = row.moderation_status !== 'published';
     const comments = this.db
       .prepare(`${commentSelect()} WHERE c.post_id=? ORDER BY c.created_at,c.id`)
       .all(id)
@@ -244,24 +245,45 @@ export class SqliteSocialRepository {
       'comment',
       comments.map((item) => item.id),
     );
-    const reactions = this.db.prepare(`SELECT r.comment_id,r.kind,COUNT(*) n,
+    const reactions = this.db
+      .prepare(
+        `SELECT r.comment_id,r.kind,COUNT(*) n,
       MAX(CASE WHEN r.identity_id=? THEN 1 ELSE 0 END) mine
       FROM social_comment_reactions r JOIN social_comments c ON c.id=r.comment_id
-      WHERE c.post_id=? GROUP BY r.comment_id,r.kind`).all(actorId, id);
+      WHERE c.post_id=? GROUP BY r.comment_id,r.kind`,
+      )
+      .all(actorId, id);
     for (const comment of comments) {
-      comment.contentBlocks = commentBlocks.get(comment.id) ?? [];
-      comment.likeCount = 0; comment.bookmarkCount = 0;
-      comment.likedByMe = false; comment.bookmarkedByMe = false;
-      for (const reaction of reactions.filter(r => r.comment_id === comment.id)) {
-        if (reaction.kind === 'like') { comment.likeCount = Number(reaction.n); comment.likedByMe = Boolean(reaction.mine); }
-        else { comment.bookmarkCount = Number(reaction.n); comment.bookmarkedByMe = Boolean(reaction.mine); }
+      comment.canEdit =
+        this.findCommentAuthor(comment.id)?.authorId === actorId && !comment.deleted;
+      comment.canDelete = !comment.deleted && (comment.canEdit || row.author_id === actorId);
+      comment.contentBlocks = comment.deleted ? [] : (commentBlocks.get(comment.id) ?? []);
+      comment.likeCount = 0;
+      comment.bookmarkCount = 0;
+      comment.likedByMe = false;
+      comment.bookmarkedByMe = false;
+      for (const reaction of reactions.filter((r) => r.comment_id === comment.id)) {
+        if (reaction.kind === 'like') {
+          comment.likeCount = Number(reaction.n);
+          comment.likedByMe = Boolean(reaction.mine);
+        } else {
+          comment.bookmarkCount = Number(reaction.n);
+          comment.bookmarkedByMe = Boolean(reaction.mine);
+        }
       }
     }
     return {
       ...mapPost(row),
-      body: String(row.body),
-      contentBlocks: postBlocks.get(id) ?? [],
-      comments,
+      canEdit: row.author_id === actorId && !deleted,
+      canDelete: row.author_id === actorId && !deleted,
+      body: deleted ? '' : String(row.body),
+      contentBlocks: deleted ? [] : (postBlocks.get(id) ?? []),
+      comments: deleted
+        ? []
+        : comments.filter(
+            (comment) => !comment.deleted || comment.likedByMe || comment.bookmarkedByMe,
+          ),
+      commentCount: deleted ? 0 : comments.filter((comment) => !comment.deleted).length,
       containsCaseMaterial: Boolean(row.contains_case_material),
       deidentificationConfirmed: Boolean(row.deidentification_confirmed_at),
     };
@@ -269,6 +291,56 @@ export class SqliteSocialRepository {
   findPostAuthor(id: string) {
     const row = this.db.prepare('SELECT author_id FROM social_posts WHERE id=?').get(id);
     return row ? String(row.author_id) : undefined;
+  }
+  changeContent(
+    kind: 'post' | 'comment',
+    id: string,
+    actorId: string,
+    input: { action: 'edit' | 'delete'; body?: string; title?: string; reason: string },
+    now: string,
+  ) {
+    const table = kind === 'post' ? 'social_posts' : 'social_comments';
+    const before = this.db.prepare(`SELECT * FROM ${table} WHERE id=?`).get(id);
+    if (!before) throw new Error('Missing content');
+    if (input.action === 'delete') {
+      if (kind === 'post')
+        this.db.prepare("UPDATE social_posts SET moderation_status='deleted' WHERE id=?").run(id);
+      else
+        this.db
+          .prepare(
+            `WITH RECURSIVE descendants(id) AS (SELECT id FROM social_comments WHERE id=? UNION ALL SELECT c.id FROM social_comments c JOIN descendants d ON c.parent_comment_id=d.id) UPDATE social_comments SET deleted_at=? WHERE id IN (SELECT id FROM descendants)`,
+          )
+          .run(id, now);
+    } else if (kind === 'post')
+      this.db
+        .prepare('UPDATE social_posts SET title=?,body=?,last_activity_at=? WHERE id=?')
+        .run(input.title ?? before.title!, input.body!, now, id);
+    else this.db.prepare('UPDATE social_comments SET body=? WHERE id=?').run(input.body!, id);
+    const after = this.db.prepare(`SELECT * FROM ${table} WHERE id=?`).get(id);
+    this.db
+      .prepare('INSERT INTO social_content_history VALUES(?,?,?,?,?,?,?,?,?)')
+      .run(
+        randomUUID(),
+        kind,
+        id,
+        actorId,
+        input.action,
+        input.reason,
+        JSON.stringify(before),
+        JSON.stringify(after),
+        now,
+      );
+    return { id, action: input.action };
+  }
+  contentHistory(kind: 'post' | 'comment', id: string) {
+    return this.db
+      .prepare(
+        'SELECT * FROM social_content_history WHERE entity_type=? AND entity_id=? ORDER BY created_at,id',
+      )
+      .all(kind, id);
+  }
+  setReportComment(reportId: string, commentId: string) {
+    this.db.prepare('UPDATE social_reports SET comment_id=? WHERE id=?').run(commentId, reportId);
   }
   incrementPostView(id: string) {
     this.db.prepare('UPDATE social_posts SET view_count=view_count+1 WHERE id=?').run(id);
@@ -278,10 +350,24 @@ export class SqliteSocialRepository {
     return row ? { authorId: String(row.author_id), postId: String(row.post_id) } : undefined;
   }
 
-  setCommentReaction(id: string, actorId: string, kind: 'like' | 'bookmark', value: boolean, now: string): boolean {
+  setCommentReaction(
+    id: string,
+    actorId: string,
+    kind: 'like' | 'bookmark',
+    value: boolean,
+    now: string,
+  ): boolean {
     return value
-      ? this.db.prepare('INSERT OR IGNORE INTO social_comment_reactions(comment_id,identity_id,kind,created_at) VALUES(?,?,?,?)').run(id, actorId, kind, now).changes > 0
-      : this.db.prepare('DELETE FROM social_comment_reactions WHERE comment_id=? AND identity_id=? AND kind=?').run(id, actorId, kind).changes > 0;
+      ? this.db
+          .prepare(
+            'INSERT OR IGNORE INTO social_comment_reactions(comment_id,identity_id,kind,created_at) VALUES(?,?,?,?)',
+          )
+          .run(id, actorId, kind, now).changes > 0
+      : this.db
+          .prepare(
+            'DELETE FROM social_comment_reactions WHERE comment_id=? AND identity_id=? AND kind=?',
+          )
+          .run(id, actorId, kind).changes > 0;
   }
   createPost(post: SocialPostDetail, authorId: string) {
     this.db
@@ -362,14 +448,12 @@ export class SqliteSocialRepository {
     const params = { actorId, limit: pageSize, offset: (page - 1) * pageSize };
     const total = Number(
       this.db
-        .prepare(
-          `SELECT COUNT(*) count FROM social_posts p WHERE p.moderation_status='published' AND ${condition}`,
-        )
+        .prepare(`SELECT COUNT(*) count FROM social_posts p WHERE ${condition}`)
         .get({ actorId })!.count,
     );
     const items = this.db
       .prepare(
-        `${postSelect()} WHERE p.moderation_status='published' AND ${condition} ORDER BY p.last_activity_at DESC LIMIT :limit OFFSET :offset`,
+        `${postSelect()} WHERE ${condition} ORDER BY p.last_activity_at DESC LIMIT :limit OFFSET :offset`,
       )
       .all(params)
       .map((row) => mapPost(row as Row));
@@ -579,15 +663,28 @@ export class SqliteSocialRepository {
     return this.db.prepare('SELECT * FROM social_reports WHERE id=?').get(id);
   }
   applyReportOutcome(id: string, outcome: 'upheld' | 'rejected', reviewedAt: string) {
-    this.db.prepare("UPDATE social_reports SET status=?,reviewed_at=? WHERE id=? AND status='pending'")
+    this.db
+      .prepare("UPDATE social_reports SET status=?,reviewed_at=? WHERE id=? AND status='pending'")
       .run(outcome, reviewedAt, id);
     if (outcome === 'upheld') {
       const report = this.findReportForModeration(id);
-      if (report?.post_id) this.db.prepare("UPDATE social_posts SET moderation_status='removed' WHERE id=?").run(report.post_id);
+      if (report?.comment_id)
+        this.changeContent(
+          'comment',
+          String(report.comment_id),
+          String(report.reporter_id),
+          { action: 'delete', reason: '外部审核举报成立' },
+          reviewedAt,
+        );
+      else if (report?.post_id)
+        this.db
+          .prepare("UPDATE social_posts SET moderation_status='removed' WHERE id=?")
+          .run(report.post_id);
     }
   }
   findMessageAuthorForModeration(id: string): string | undefined {
-    return this.db.prepare('SELECT sender_id FROM social_direct_messages WHERE id=?').get(id)?.sender_id as string | undefined;
+    return this.db.prepare('SELECT sender_id FROM social_direct_messages WHERE id=?').get(id)
+      ?.sender_id as string | undefined;
   }
 
   createAttachment(item: SocialAttachmentRecord) {
@@ -731,12 +828,12 @@ export class SqliteSocialRepository {
            WHERE block.attachment_id=? AND (
              (block.entity_type='post' AND EXISTS(
                SELECT 1 FROM social_posts post JOIN social_memberships member ON member.group_id=post.group_id
-               WHERE post.id=block.entity_id AND member.identity_id=?
+               WHERE post.id=block.entity_id AND post.moderation_status='published' AND member.identity_id=?
              )) OR
              (block.entity_type='comment' AND EXISTS(
                SELECT 1 FROM social_comments comment JOIN social_posts post ON post.id=comment.post_id
                JOIN social_memberships member ON member.group_id=post.group_id
-               WHERE comment.id=block.entity_id AND member.identity_id=?
+               WHERE comment.id=block.entity_id AND comment.deleted_at IS NULL AND post.moderation_status='published' AND member.identity_id=?
              )) OR
              (block.entity_type='message' AND EXISTS(
                SELECT 1 FROM social_direct_messages message
@@ -784,14 +881,16 @@ function author(r: Row) {
   };
 }
 function mapPost(r: Row): SocialPostSummary {
+  const deleted = r.moderation_status !== 'published';
   return {
+    deleted,
     id: String(r.id),
     groupId: String(r.group_id),
     groupName: String(r.group_name),
     author: author(r),
-    title: String(r.title),
-    excerpt: String(r.body).slice(0, 180),
-    tags: JSON.parse(String(r.tags_json)),
+    title: deleted ? '该帖子已被删除' : String(r.title),
+    excerpt: deleted ? '' : String(r.body).slice(0, 180),
+    tags: deleted ? [] : JSON.parse(String(r.tags_json)),
     createdAt: String(r.created_at),
     lastActivityAt: String(r.last_activity_at),
     commentCount: Number(r.comment_count),
@@ -804,12 +903,13 @@ function mapPost(r: Row): SocialPostSummary {
 }
 function mapComment(r: Row): SocialComment {
   return {
+    deleted: Boolean(r.deleted_at),
     id: String(r.id),
     postId: r.post_id ? String(r.post_id) : '',
     ...(r.parent_comment_id ? { parentCommentId: String(r.parent_comment_id) } : {}),
     author: author(r),
     displayMode: r.display_mode as SocialComment['displayMode'],
-    body: String(r.body),
+    body: r.deleted_at ? '该评论已被删除' : String(r.body),
     contentBlocks: [],
     createdAt: String(r.created_at),
   };
