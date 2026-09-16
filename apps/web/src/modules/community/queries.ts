@@ -44,6 +44,25 @@ export const socialKeys = {
   messages: (id: string) => ['social', 'messages', id] as const,
 };
 const commandId = () => globalThis.crypto?.randomUUID?.() ?? `cmd-${Date.now()}-${Math.random()}`;
+export function useChangeContent() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      kind: 'post' | 'comment';
+      id: string;
+      action: 'edit' | 'delete';
+      body?: string;
+      title?: string;
+    }) => {
+      const { kind, id, ...body } = input;
+      return requestEApi(
+        `/social/${kind === 'post' ? 'posts' : 'comments'}/${encodeURIComponent(id)}/content`,
+        { method: 'PATCH', body: { ...body, commandId: commandId() } },
+      );
+    },
+    onSuccess: () => client.invalidateQueries({ queryKey: socialKeys.all }),
+  });
+}
 export const useSocialPreferences = () =>
   useLocalizedEQuery(
     useQuery({
@@ -249,6 +268,20 @@ export function usePostReaction(postId: string, kind: 'like' | 'bookmark') {
       ]),
   });
 }
+export function useCommentReaction(postId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { commentId: string; kind: 'like' | 'bookmark'; value: boolean }) =>
+      requestEApi<SocialPostDetail>(
+        `/social/comments/${encodeURIComponent(input.commentId)}/${input.kind === 'like' ? 'likes' : 'bookmarks'}`,
+        {
+          method: input.value ? 'POST' : 'DELETE',
+          body: { commandId: commandId() },
+        },
+      ),
+    onSuccess: (result) => client.setQueryData(socialKeys.post(postId), result),
+  });
+}
 
 function updateReactionCache(
   current: unknown,
@@ -409,12 +442,12 @@ export function useDeleteTemporaryAttachment() {
       }),
   });
 }
-export function useReportPost(postId: string) {
+export function useReportPost(postId: string, commentId?: string) {
   return useMutation({
     mutationFn: (reason: string) =>
       requestEApi('/social/reports', {
         method: 'POST',
-        body: { commandId: commandId(), postId, reason },
+        body: { commandId: commandId(), postId, reason, ...(commentId ? { commentId } : {}) },
       }),
   });
 }

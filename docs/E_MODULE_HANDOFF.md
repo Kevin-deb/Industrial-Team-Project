@@ -1,5 +1,14 @@
 # E module local handoff
 
+## Content editing and deletion (2026-09-16)
+
+- `PATCH /api/v1/social/posts/:id/content` and `comments/:id/content`: commandId and action (`edit` / `delete`); edits also carry body and post title. No user-entered reason is required. Existing attachments remain unchanged.
+- Authors can edit/delete their own content, including anonymous content. A post author may delete comments on their own post but cannot edit other authors' comments. Ownership is enforced server-side.
+- Deletion is logical: original rows and media references are retained. A deleted post returns no body, media or replies. Deleted comments recursively hide descendants; existing reaction holders receive a text-only tombstone. Personal post reactions remain present.
+- Migration 14 stores actor, automatic action description, timestamp and before/after snapshots in `social_content_history` inside the command transaction. `GET .../:id/history` is restricted to the content author or containing post author; command retries replay without another history record.
+- Comment reports carry commentId with postId. Review remains an external adapter callback, not an ordinary doctor's permission.
+- E panels scroll locally with reserved scroll gutters. A browser geometry regression checks tab and panel origins across short/long views (1px tolerance).
+
 This branch implements only the E-owned modules: health management and the optional peer community. It is source code for Windows and macOS development; no installer or package was produced, and nothing in this work requires a GitHub push.
 
 ## Implemented scope
@@ -32,6 +41,28 @@ The default local composition uses the existing synthetic patient repository onl
 - Community preferences are stored in SQLite. Disabling participation clears other E-community caches and prevents forum, personal activity, notification, and message queries from being mounted.
 
 ## E API notes for teammates
+
+### Completion additions (16 September 2026)
+
+- Recipient opt-out is checked inside the private-message write transaction; disabled recipients cannot be sent new messages and failed writes leave no message record.
+- Committed interaction notifications publish metadata-only `social.notifications.changed` events through the existing WebSocket/Electron bridge. The enabled community workspace owns a single subscription across tabs, invalidates only relevant notification/conversation/message queries, and reconciles on reconnect. Disabling community unmounts the subscription. Command replays and rolled-back notification writes do not publish new notification events. This is process-local signalling with API reload on reconnect, not a durable external event broker.
+- Added isolated two-doctor/two-patient interaction tests and a test-only patient notification inbox. Inbox receipt tests verify patient targeting and idempotency, not real SMS/email or a patient application. No clinical data is copied into social event frames.
+
+- Reply reactions: `POST` / `DELETE /api/v1/social/comments/:id/likes` and `/bookmarks`, with a `commandId` body. Post details include reply counts and current-doctor reaction flags. Repeated likes do not generate duplicate notifications; removing a reaction updates persisted counts. Personal likes/bookmarks include the containing topic when a reply is reacted to.
+- Moderation callback: `SocialModerationResultPort.receiveModerationResult({eventId, reportId, outcome, reviewedAt})`, where outcome is `upheld` or `rejected`. Wire only from the trusted moderation adapter at the composition root. No doctor-facing HTTP endpoint grants review permissions. Replayed events are idempotent; conflicting decisions are rejected. Report state and notifications commit together. Upheld topic reports remove the topic from published queries; its original data remains stored. Private-message notices have no fabricated topic link.
+- Notification preferences and community opt-out apply to result notices as well. Result history is persisted even when notifications are disabled.
+- Migration **13**, `social_comment_reactions`, is append-only. Coordinate this version with A before merging with other migrations. Never renumber an already deployed migration.
+- Tests exercise accepted/upheld/rejected notices, callback replay/conflict, removed-topic handling, private-message report persistence, unavailable-topic UI, reply reaction counts and the selection-only label policy.
+- Verification for this change: `npm run check` passed (46 API, 22 frontend, 6 desktop protocol tests and builds); browser E2E 8/8 passed. Whole-application desktop UI tests passed 2/3: the English-page audit fails on C's `/consultations` Chinese clinician name/department labels. This is recorded without modifying C-owned UI. Windows real-hardware acceptance was not run.
+
+### Remaining external integration, not implemented by E
+
+- A/B: authenticated request contexts, production patient access and directory adapters.
+- A notification service: connect `HealthNotificationPort` for real patient delivery. Until then reminders truthfully remain planned; test-provider behavior does not prove real delivery.
+- Hospital/device provider: supply authorized monitoring observations through an agreed adapter. Local synthetic readings and manual entry are not a live hospital/device connection.
+- Moderation owner: perform review and deliver trusted result callbacks. E supplies result consumption and doctor notifications, not a moderation administration UI.
+- Clinical owner: approve reference-range rules. Current age-specific reference rules are explicitly demonstration metadata, not validated clinical guidance.
+- Platform release QA: Windows/macOS real-hardware recording and release acceptance; this change does not build installers.
 
 - Public reaction resources use `POST` / `DELETE /api/v1/social/posts/:id/likes` and `/bookmarks`.
 - Personal notifications use `GET /api/v1/social/me/notifications`; clicking an item marks it read and opens the referenced post.

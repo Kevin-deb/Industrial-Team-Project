@@ -40,7 +40,7 @@ export function CommunityNotifications({ onClose }: { onClose: () => void }) {
                 <strong>
                   {item.kind.startsWith('report-') || item.kind === 'content-moderated'
                     ? t(noticeText(item.kind))
-                    : `${item.actorDisplayName} ${t(noticeText(item.kind))}`}
+                    : `${item.actorDisplayName} ${t(item.commentId && item.kind === 'like' ? '点赞了你的回复' : item.commentId && item.kind === 'bookmark' ? '收藏了你的回复' : noticeText(item.kind))}`}
                 </strong>
                 <small>
                   {formatDate(item.createdAt, { dateStyle: 'medium', timeStyle: 'short' })}

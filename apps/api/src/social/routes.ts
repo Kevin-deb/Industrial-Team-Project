@@ -54,6 +54,52 @@ export function registerSocialRoutes(
     status = 200,
   ) => replySocial(request, reply, context().actorId, work, status);
   if (attachments) registerAttachmentRoutes(app, attachments, context);
+  for (const [resource, kind] of [
+    ['posts', 'post'],
+    ['comments', 'comment'],
+  ] as const) {
+    app.patch<{
+      Params: { id: string };
+      Body: {
+        commandId: string;
+        action: 'edit' | 'delete';
+        body?: string;
+        title?: string;
+        reason?: string;
+      };
+    }>(
+      `/api/v1/social/${resource}/:id/content`,
+      {
+        schema: {
+          params: idParams,
+          body: {
+            type: 'object',
+            required: ['commandId', 'action'],
+            additionalProperties: false,
+            properties: {
+              commandId,
+              action: { type: 'string', enum: ['edit', 'delete'] },
+              body: { type: 'string', maxLength: 20000 },
+              title: { type: 'string', maxLength: 120 },
+              reason: { type: 'string', minLength: 1, maxLength: 200 },
+            },
+          },
+        },
+      },
+      async (request, reply) =>
+        socialReply(request, reply, () =>
+          service.changeContent(kind, request.params.id, request.body, context()),
+        ),
+    );
+    app.get<{ Params: { id: string } }>(
+      `/api/v1/social/${resource}/:id/history`,
+      { schema: { params: idParams } },
+      async (request, reply) =>
+        socialReply(request, reply, () =>
+          service.contentHistory(kind, request.params.id, context()),
+        ),
+    );
+  }
   app.get('/api/v1/social/preferences', async (request, reply) =>
     socialReply(request, reply, () => service.getPreferences(context())),
   );
@@ -186,6 +232,28 @@ export function registerSocialRoutes(
     );
   }
   // Compatibility with the first local E prototype; new callers use plural resource routes above.
+  for (const [path, kind] of [
+    ['likes', 'like'],
+    ['bookmarks', 'bookmark'],
+  ] as const) {
+    for (const method of ['POST', 'DELETE'] as const) {
+      app.route<{ Params: { id: string }; Body: { commandId: string } }>({
+        method,
+        url: `/api/v1/social/comments/:id/${path}`,
+        schema: { params: idParams, body: commandBody },
+        handler: async (request, reply) =>
+          socialReply(request, reply, () =>
+            service.setCommentReaction(
+              request.params.id,
+              kind,
+              method === 'POST',
+              request.body.commandId,
+              context(),
+            ),
+          ),
+      });
+    }
+  }
   for (const action of ['like', 'bookmark'] as const)
     app.post<{ Params: { id: string }; Body: { commandId: string; value: boolean } }>(
       `/api/v1/social/posts/:id/${action}`,
@@ -528,6 +596,7 @@ const reportBody = {
   required: ['commandId', 'reason'],
   additionalProperties: false,
   properties: {
+    commentId: { type: 'string', maxLength: 140 },
     commandId,
     postId: { type: 'string', maxLength: 140 },
     messageId: { type: 'string', maxLength: 140 },
@@ -593,7 +662,15 @@ async function replySocial<T>(
         '该操作编号已用于另一项修改，请重新操作。',
       );
     if (error instanceof SocialTagNotAllowed)
-      return fail(request, reply, actorId, durationMs, 400, 'SOCIAL_TAG_NOT_ALLOWED', '只能选择本圈子已有的标签。');
+      return fail(
+        request,
+        reply,
+        actorId,
+        durationMs,
+        400,
+        'SOCIAL_TAG_NOT_ALLOWED',
+        '只能选择本圈子已有的标签。',
+      );
     if (error instanceof SocialValidationFailure)
       return fail(
         request,

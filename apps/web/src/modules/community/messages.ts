@@ -98,6 +98,13 @@ for (let index = 1; index <= 36; index += 1) {
 
 /** Owned by the community module. Keep source keys stable and translate at render time. */
 export const communityMessages: Record<string, string> = {
+  '点赞回复': 'Like reply',
+  '取消点赞回复': 'Unlike reply',
+  '收藏回复': 'Bookmark reply',
+  '取消收藏回复': 'Remove reply bookmark',
+  '点赞了你的回复': 'liked your reply',
+  '收藏了你的回复': 'bookmarked your reply',
+  '主题暂不可用，可能已被处理或无权访问。': 'This topic is unavailable. It may have been moderated or you may not have access.',
   ...demoCommunityMessages,
   同行社区: 'Peer community',
   '面向医生的专业论坛与同行私信，和患者临床资料严格分开。':

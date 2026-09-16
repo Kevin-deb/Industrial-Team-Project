@@ -8,6 +8,12 @@ export function PostRow({ post }: { post: SocialPostSummary }) {
   const { t, formatDate } = useI18n();
   const like = usePostReaction(post.id, 'like'),
     bookmark = usePostReaction(post.id, 'bookmark');
+  if (post.deleted)
+    return (
+      <article className="community-post-row">
+        <Link to={`/community/posts/${post.id}`}>{t('该帖子已被删除')}</Link>
+      </article>
+    );
   return (
     <article className="community-post-row">
       <div className="community-author-avatar">{post.author.avatarInitials}</div>
