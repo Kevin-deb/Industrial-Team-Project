@@ -29,7 +29,7 @@ export const features: Feature[] = [
     name: '患者档案维护',
     domain: 'patients',
     status: 'demo',
-    description: '支持合成患者资料保存、档案历史与并发版本校验；建档和批量分组尚未上线。',
+    description: '支持合成患者资料保存、档案历史、病种/状态分组及批量状态更新；患者建档尚未上线。',
     iteration: 'Iteration 1',
   },
   {

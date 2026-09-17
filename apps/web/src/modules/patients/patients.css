@@ -2,6 +2,51 @@
   padding-top: 16px;
   border-top: 1px solid #dce2e3;
 }
+.patients-directory-controls {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.patients-batch {
+  padding: 16px 0;
+  border-bottom: 1px solid #dce2e3;
+}
+.patients-batch-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+.patients-batch-form strong {
+  align-self: center;
+  font-size: 13px;
+}
+.patients-batch-form label {
+  flex: 1 1 190px;
+}
+.patients-batch-results {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  padding-left: 20px;
+  font-size: 13px;
+}
+.patients-group-heading th {
+  background: #eef5f1;
+  white-space: normal;
+}
+.patients-group-heading span {
+  margin-left: 16px;
+  font-weight: normal;
+  font-size: 12px;
+}
+.patients-page input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  accent-color: #267268;
+}
 .patients-search-form {
   display: flex;
   flex-wrap: wrap;

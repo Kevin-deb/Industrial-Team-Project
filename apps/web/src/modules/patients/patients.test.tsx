@@ -43,6 +43,122 @@ function detail() {
 }
 
 describe('Patients workflows', () => {
+  it('shows generic unavailable feedback without listing inaccessible IDs', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (path: string, init?: RequestInit) => {
+        if (init?.method === 'POST')
+          return new Response(
+            JSON.stringify({
+              error: { code: 'PATIENT_BATCH_UNAVAILABLE', message: 'unavailable' },
+            }),
+            { status: 404 },
+          );
+        return path.endsWith('/summary')
+          ? response({ total: 1 })
+          : response([patient], { total: 1 });
+      }),
+    );
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    render(
+      <I18nProvider>
+        <MemoryRouter>
+          <PatientsPage />
+        </MemoryRouter>
+      </I18nProvider>,
+    );
+    fireEvent.click(await screen.findByLabelText('选择患者 PAT-001'));
+    fireEvent.change(screen.getByLabelText('批量修改原因'), { target: { value: 'Review' } });
+    fireEvent.click(screen.getByRole('button', { name: '批量更新状态' }));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('部分患者已不可用或超出当前授权范围');
+    expect(alert).not.toHaveTextContent('PAT-001');
+    expect(screen.getByRole('button', { name: '批量更新状态' })).toBeDisabled();
+    expect(screen.getByLabelText('选择患者 PAT-001')).toBeChecked();
+  });
+
+  it('groups server results and submits only editable selected patients with their versions', async () => {
+    const fetch = vi.fn(async (path: string, init?: RequestInit) => {
+      if (init?.method === 'POST')
+        return response({
+          committed: true,
+          results: [{ id: patient.id, outcome: 'updated', version: 2 }],
+        });
+      if (path.endsWith('/summary'))
+        return response({ total: 8, stable: 8, attention: 0, followUp: 0 });
+      return response(
+        [
+          { ...patient, groupKey: '高血压' },
+          { ...patient, id: 'PAT-002', canEdit: false, groupKey: '高血压' },
+        ],
+        { total: 8, groups: [{ key: '高血压', count: 8 }] },
+      );
+    });
+    vi.stubGlobal('fetch', fetch);
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    render(
+      <I18nProvider>
+        <MemoryRouter initialEntries={['/patients?groupBy=disease']}>
+          <PatientsPage />
+        </MemoryRouter>
+      </I18nProvider>,
+    );
+    await screen.findByText('匹配 8 位 · 本页 2 位');
+    expect(screen.getByLabelText('选择患者 PAT-002')).toBeDisabled();
+    fireEvent.click(screen.getByLabelText('全选当前页可编辑患者'));
+    expect(screen.getByText('已选择 1 位患者')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '批量更新状态' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('修改原因不能为空');
+    fireEvent.change(screen.getByLabelText('批量修改原因'), { target: { value: 'Review' } });
+    fireEvent.change(screen.getByLabelText('目标管理状态'), { target: { value: 'attention' } });
+    fireEvent.click(screen.getByRole('button', { name: '批量更新状态' }));
+    await screen.findByText('批量更新完成');
+    const call = fetch.mock.calls.find(([, init]) => init?.method === 'POST')!;
+    expect(JSON.parse(String(call[1]?.body))).toEqual({
+      patients: [{ id: patient.id, expectedVersion: 1 }],
+      status: 'attention',
+      changeReason: 'Review',
+    });
+    await screen.findByText('已选择 0 位患者');
+    fireEvent.click(screen.getByLabelText('选择患者 PAT-001'));
+    fireEvent.click(screen.getByRole('button', { name: '按状态分组' }));
+    await waitFor(() =>
+      expect(fetch.mock.calls.some(([path]) => path.includes('groupBy=status'))).toBe(true),
+    );
+    await screen.findByText('已选择 0 位患者');
+  });
+
+  it('preserves batch selection and reason on a stale batch and requires refresh', async () => {
+    const fetch = vi.fn(async (path: string, init?: RequestInit) => {
+      if (init?.method === 'POST')
+        return response({
+          committed: false,
+          results: [{ id: patient.id, outcome: 'stale', version: 2 }],
+        });
+      if (path.endsWith('/summary')) return response({ total: 1 });
+      return response([patient], { total: 1 });
+    });
+    vi.stubGlobal('fetch', fetch);
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    render(
+      <I18nProvider>
+        <MemoryRouter>
+          <PatientsPage />
+        </MemoryRouter>
+      </I18nProvider>,
+    );
+    fireEvent.click(await screen.findByLabelText('选择患者 PAT-001'));
+    fireEvent.change(screen.getByLabelText('批量修改原因'), { target: { value: 'Draft reason' } });
+    fireEvent.click(screen.getByRole('button', { name: '批量更新状态' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('本批次未保存任何修改');
+    expect(screen.getByLabelText('选择患者 PAT-001')).toBeChecked();
+    expect(screen.getByLabelText('批量修改原因')).toHaveValue('Draft reason');
+    expect(screen.getByRole('button', { name: '批量更新状态' })).toBeDisabled();
+    expect(fetch.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: '刷新患者列表' }));
+    await screen.findByText('已选择 0 位患者');
+  });
+
   it('uses server search, metadata pagination and resets the page when filtering', async () => {
     const requested: string[] = [];
     vi.stubGlobal(

@@ -10,12 +10,4 @@ export const patientsCommands: readonly PlannedCommand[] = [
     tables: ['patients', 'patient_archive_versions'],
     providers: [],
   },
-  {
-    method: 'POST',
-    path: '/patients/batch',
-    domain: 'patients',
-    capability: 'patient-edit',
-    tables: ['patients', 'audit_events'],
-    providers: [],
-  },
 ];

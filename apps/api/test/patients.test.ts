@@ -25,6 +25,232 @@ function input(
   return { ...fields, changeReason: 'Synthetic archive review', ...overrides };
 }
 
+test('grouped directory counts cover all scoped matches, with deterministic paginated rows', async () => {
+  const db = openDatabase(':memory:');
+  const app = await createApp({ database: db });
+  try {
+    for (const groupBy of ['disease', 'status']) {
+      const all = (
+        await app.inject('/api/v1/patients?groupBy=' + groupBy + '&pageSize=100')
+      ).json();
+      const page = (
+        await app.inject('/api/v1/patients?groupBy=' + groupBy + '&pageSize=2&page=2')
+      ).json();
+      assert.equal(
+        all.meta.groups.reduce((sum: number, group: { count: number }) => sum + group.count, 0),
+        8,
+      );
+      assert.deepEqual(page.meta.groups, all.meta.groups);
+      assert.deepEqual(page.data, all.data.slice(2, 4));
+      assert.ok(
+        all.data.every(
+          (item: PatientArchive & { groupKey: string }) =>
+            item.version && item.canEdit && item.groupKey,
+        ),
+      );
+      assert.equal(
+        all.data.some((item: PatientArchive) => item.id === 'PAT-RESTRICTED'),
+        false,
+      );
+    }
+    const status = (await app.inject('/api/v1/patients/PAT-001')).json().data.status;
+    const filtered = (
+      await app.inject('/api/v1/patients?groupBy=status&q=PAT-001&status=' + status)
+    ).json();
+    assert.deepEqual(filtered.meta.groups, [{ key: status, count: 1 }]);
+    assert.equal((await app.inject('/api/v1/patients?groupBy=custom')).statusCode, 400);
+  } finally {
+    await app.close();
+    db.close();
+  }
+});
+
+test('batch status writes independent immutable versions and audits, skipping unchanged records', async () => {
+  const db = openDatabase(':memory:');
+  const app = await createApp({ database: db });
+  try {
+    db.exec("UPDATE patients SET status='stable' WHERE id IN ('PAT-001','PAT-002')");
+    const payload = {
+      patients: [
+        { id: 'PAT-001', expectedVersion: 1 },
+        { id: 'PAT-002', expectedVersion: 1 },
+      ],
+      status: 'attention',
+      changeReason: 'Synthetic batch review',
+    };
+    const batch = (
+      await app.inject({ method: 'POST', url: '/api/v1/patients/batch', payload })
+    ).json().data;
+    assert.equal(batch.committed, true);
+    assert.deepEqual(
+      batch.results.map((item: { outcome: string; version: number }) => [
+        item.outcome,
+        item.version,
+      ]),
+      [
+        ['updated', 2],
+        ['updated', 2],
+      ],
+    );
+    for (const item of payload.patients) {
+      const history = (await app.inject('/api/v1/patients/' + item.id + '/versions')).json().data;
+      assert.equal(history[0].snapshot.status, 'attention');
+      assert.equal(history[0].snapshot.id, item.id);
+      assert.equal(history[0].authoredBy, DEMO_DOCTOR_ID);
+      assert.equal(history[0].changeReason, payload.changeReason);
+      assert.ok(history[1].snapshotCapturedAt);
+    }
+    assert.equal(
+      db
+        .prepare(
+          "SELECT COUNT(*) count FROM audit_events WHERE action='patient.batch-status' AND outcome='success'",
+        )
+        .get()!.count,
+      2,
+    );
+    const repeat = (
+      await app.inject({
+        method: 'POST',
+        url: '/api/v1/patients/batch',
+        payload: {
+          ...payload,
+          patients: payload.patients.map((item) => ({ ...item, expectedVersion: 2 })),
+        },
+      })
+    ).json().data;
+    assert.ok(repeat.results.every((item: { outcome: string }) => item.outcome === 'unchanged'));
+    assert.equal(
+      db
+        .prepare(
+          "SELECT MAX(version) version FROM patient_archive_versions WHERE patient_id='PAT-001'",
+        )
+        .get()!.version,
+      2,
+    );
+    const summary = (await app.inject('/api/v1/patients/summary')).json().data;
+    const groups = (await app.inject('/api/v1/patients?groupBy=status')).json().meta.groups;
+    assert.equal(
+      groups.find((item: { key: string }) => item.key === 'attention').count,
+      summary.attention,
+    );
+  } finally {
+    await app.close();
+    db.close();
+  }
+});
+
+test('batch stale, unavailable and temporary read-only patients block the entire batch', async () => {
+  const db = openDatabase(':memory:');
+  const app = await createApp({ database: db });
+  try {
+    const before = (await app.inject('/api/v1/patients/PAT-001')).json().data;
+    const send = (id: string, expectedVersion = 1) =>
+      app.inject({
+        method: 'POST',
+        url: '/api/v1/patients/batch',
+        payload: {
+          patients: [
+            { id: 'PAT-001', expectedVersion: 1 },
+            { id, expectedVersion },
+          ],
+          status: 'attention',
+          changeReason: 'Synthetic review',
+        },
+      });
+    assert.equal((await send('PAT-002', 99)).json().data.results[1].outcome, 'stale');
+    const unavailable = await send('PAT-RESTRICTED');
+    const missing = await send('PAT-NOT-EXISTS');
+    assert.equal(unavailable.statusCode, 404);
+    assert.equal(missing.statusCode, 404);
+    assert.deepEqual(unavailable.json().error, missing.json().error);
+    assert.equal(unavailable.body.includes('PAT-RESTRICTED'), false);
+    assert.equal(missing.body.includes('PAT-NOT-EXISTS'), false);
+    db.prepare('INSERT INTO access_grants VALUES(?,?,?,?,?,?,?,?)').run(
+      'batch-read',
+      DEMO_DOCTOR_ID,
+      'PAT-RESTRICTED',
+      'patient:read',
+      null,
+      '2099-01-01T00:00:00Z',
+      null,
+      '2026-09-01T00:00:00Z',
+    );
+    assert.equal((await send('PAT-RESTRICTED')).json().data.results[1].outcome, 'forbidden');
+    db.exec("DELETE FROM role_permissions WHERE permission='patient:write'");
+    assert.equal((await send('PAT-002')).json().data.committed, false);
+    assert.deepEqual((await app.inject('/api/v1/patients/PAT-001')).json().data, {
+      ...before,
+      canEdit: false,
+    });
+    assert.equal(
+      db
+        .prepare(
+          "SELECT MAX(version) version FROM patient_archive_versions WHERE patient_id='PAT-001'",
+        )
+        .get()!.version,
+      1,
+    );
+  } finally {
+    await app.close();
+    db.close();
+  }
+});
+
+test('batch validates IDs, reasons, versions and size; late audit failure rolls back all writes', async () => {
+  const db = openDatabase(':memory:');
+  const app = await createApp({ database: db });
+  try {
+    const payload = {
+      patients: [
+        { id: 'PAT-001', expectedVersion: 1 },
+        { id: 'PAT-002', expectedVersion: 1 },
+      ],
+      status: 'attention',
+      changeReason: 'Synthetic review',
+    };
+    const send = (body: Record<string, unknown>) =>
+      app.inject({ method: 'POST', url: '/api/v1/patients/batch', payload: body });
+    assert.equal(
+      (await send({ ...payload, patients: [payload.patients[0], payload.patients[0]] })).statusCode,
+      422,
+    );
+    assert.equal((await send({ ...payload, changeReason: '  ' })).statusCode, 422);
+    for (const patients of [
+      [],
+      Array.from({ length: 51 }, (_, index) => ({ id: String(index), expectedVersion: 1 })),
+      [{ id: 'PAT-001', expectedVersion: 0 }],
+    ])
+      assert.equal((await send({ ...payload, patients })).statusCode, 400);
+    db.exec(
+      "UPDATE patients SET status='stable' WHERE id IN ('PAT-001','PAT-002'); CREATE TRIGGER fail_batch_audit BEFORE INSERT ON audit_events WHEN NEW.action='patient.batch-status' AND NEW.target_id='PAT-002' BEGIN SELECT RAISE(ABORT,'synthetic failure'); END;",
+    );
+    assert.equal((await send(payload)).statusCode, 503);
+    for (const item of payload.patients) {
+      assert.equal(
+        db.prepare('SELECT status FROM patients WHERE id=?').get(item.id)!.status,
+        'stable',
+      );
+      assert.equal(
+        db
+          .prepare('SELECT MAX(version) version FROM patient_archive_versions WHERE patient_id=?')
+          .get(item.id)!.version,
+        1,
+      );
+    }
+    assert.equal(
+      db
+        .prepare(
+          "SELECT COUNT(*) count FROM audit_events WHERE action='patient.batch-status' AND outcome='success'",
+        )
+        .get()!.count,
+      0,
+    );
+  } finally {
+    await app.close();
+    db.close();
+  }
+});
+
 test('version 14 databases upgrade without rewriting legacy archive payloads', async () => {
   const folder = mkdtempSync(join(tmpdir(), 'carelink-patient-upgrade-'));
   const path = join(folder, 'legacy.sqlite');
