@@ -2,7 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { platformMigration } from '../platform/index.js';
-import { patientsMigration } from '../patients/index.js';
+import { patientsMigration, patientsArchiveMigration } from '../patients/index.js';
 import { encountersMigration } from '../encounters/index.js';
 import { clinicalMigration } from '../clinical/index.js';
 import { healthEvolutionMigration, healthMigration, seedHealthDemo } from '../health/index.js';
@@ -46,6 +46,7 @@ export const migrations = [
     CREATE INDEX social_history_entity ON social_content_history(entity_type,entity_id,created_at);
   `,
   },
+  patientsArchiveMigration,
 ];
 
 /** Refuse a newer or inconsistent migration history instead of silently running incompatible code. */

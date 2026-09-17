@@ -1,5 +1,13 @@
 import type { DatabaseSync, SQLInputValue } from 'node:sqlite';
-import type { Patient, PatientQuery } from '@doctor/contracts';
+import { randomUUID } from 'node:crypto';
+import type {
+  Patient,
+  PatientQuery,
+  PatientArchive,
+  PatientArchiveVersion,
+  PatientSnapshot,
+  UpdatePatientRequest,
+} from '@doctor/contracts';
 import { patientScopeSql, type RequestContext } from '../platform/index.js';
 
 export interface PatientRepository {
@@ -38,7 +46,7 @@ export class SqlitePatientRepository implements PatientRepository {
     const params: Record<string, SQLInputValue> = { ...context };
     if (query.q) {
       conditions.push(
-        "instr(lower(p.name || ' ' || p.id || ' ' || p.medical_history_json || ' ' || p.care_summary),lower(:q))>0",
+        "instr(lower(p.name || ' ' || p.id || ' ' || p.diagnosis || ' ' || p.tags_json || ' ' || p.symptoms_json || ' ' || p.medical_history_json || ' ' || p.care_summary),lower(:q))>0",
       );
       params.q = query.q.trim();
     }
@@ -67,5 +75,168 @@ export class SqlitePatientRepository implements PatientRepository {
       .prepare('SELECT p.* FROM patients p WHERE p.id=:id AND ' + patientScopeSql)
       .get({ ...context, id });
     return row ? map(row) : undefined;
+  }
+
+  archive(id: string, context: RequestContext): PatientArchive | undefined {
+    const row = this.db
+      .prepare('SELECT p.* FROM patients p WHERE p.id=:id AND ' + patientScopeSql)
+      .get({ ...context, id });
+    if (!row) return undefined;
+    const version = Number(
+      this.db
+        .prepare(
+          'SELECT COALESCE(MAX(version),1) version FROM patient_archive_versions WHERE patient_id=?',
+        )
+        .get(id)!.version,
+    );
+    return {
+      ...map(row),
+      version,
+      symptoms: JSON.parse(String(row.symptoms_json)),
+      allergyStatus: row.allergy_status as PatientArchive['allergyStatus'],
+      canEdit: this.canEdit(id, context),
+    };
+  }
+
+  canEdit(id: string, context: RequestContext): boolean {
+    // Read-only temporary consultation access must never imply archive write access.
+    return !!this.db
+      .prepare(
+        `SELECT 1 FROM patients p WHERE p.id=:id AND p.assigned_doctor_id=:actorId
+      AND ${patientScopeSql} AND EXISTS (
+        SELECT 1 FROM identity_roles ir JOIN role_permissions rp ON rp.role_id=ir.role_id
+        WHERE ir.identity_id=:actorId AND rp.permission='patient:write'
+      )`,
+      )
+      .get({ id, ...context });
+  }
+
+  stats(context: RequestContext) {
+    const row = this.db
+      .prepare(
+        `SELECT COUNT(*) total,
+      COALESCE(SUM(p.status='stable'),0) stable, COALESCE(SUM(p.status='attention'),0) attention,
+      COALESCE(SUM(p.status='follow-up'),0) followUp FROM patients p WHERE ${patientScopeSql}`,
+      )
+      .get({ ...context })!;
+    return {
+      total: Number(row.total),
+      stable: Number(row.stable),
+      attention: Number(row.attention),
+      followUp: Number(row.followUp),
+    };
+  }
+
+  versions(id: string, context: RequestContext): PatientArchiveVersion[] | undefined {
+    if (!this.findById(id, context)) return undefined;
+    const baseline = this.db
+      .prepare('SELECT * FROM patient_archive_baselines WHERE patient_id=?')
+      .get(id);
+    return this.db
+      .prepare(
+        `SELECT v.*,i.display_name author_name FROM patient_archive_versions v
+      JOIN identities i ON i.id=v.authored_by WHERE v.patient_id=? ORDER BY v.version DESC`,
+      )
+      .all(id)
+      .map((row) => {
+        const payload = JSON.parse(String(row.payload_json)) as Partial<PatientSnapshot>;
+        const captured = !payload.id && baseline?.version === row.version;
+        return {
+          version: Number(row.version),
+          authoredBy: String(row.authored_by),
+          authorName: String(row.author_name),
+          createdAt: String(row.created_at),
+          changeReason: String(row.change_reason),
+          snapshot: payload.id
+            ? (payload as PatientSnapshot)
+            : captured
+              ? (JSON.parse(String(baseline!.payload_json)) as PatientSnapshot)
+              : null,
+          ...(captured ? { snapshotCapturedAt: String(baseline!.captured_at) } : {}),
+        };
+      });
+  }
+
+  update(
+    id: string,
+    expectedVersion: number,
+    input: UpdatePatientRequest,
+    context: RequestContext,
+    recordAudit: () => void,
+  ):
+    | { kind: 'saved'; patient: PatientArchive }
+    | { kind: 'not-found' }
+    | { kind: 'forbidden' }
+    | { kind: 'unchanged' }
+    | { kind: 'stale'; version: number } {
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      const current = this.archive(id, context);
+      if (!current) {
+        this.db.exec('ROLLBACK');
+        return { kind: 'not-found' };
+      }
+      if (!current.canEdit) {
+        this.db.exec('ROLLBACK');
+        return { kind: 'forbidden' };
+      }
+      if (current.version !== expectedVersion) {
+        this.db.exec('ROLLBACK');
+        return { kind: 'stale', version: current.version };
+      }
+      const { changeReason, ...fields } = input;
+      if (
+        Object.entries(fields).every(
+          ([key, value]) =>
+            JSON.stringify(current[key as keyof PatientArchive]) === JSON.stringify(value),
+        )
+      ) {
+        this.db.exec('ROLLBACK');
+        return { kind: 'unchanged' };
+      }
+      const { canEdit: _canEdit, ...before } = current;
+      // Legacy seed versions were partial. Capture a labelled baseline without rewriting history.
+      this.db
+        .prepare('INSERT OR IGNORE INTO patient_archive_baselines VALUES(?,?,?,?)')
+        .run(id, current.version, JSON.stringify(before), context.now);
+      const next: PatientSnapshot = { ...before, ...fields, version: current.version + 1 };
+      this.db
+        .prepare(
+          `UPDATE patients SET name=?,gender=?,age=?,phone=?,diagnosis=?,tags_json=?,status=?,
+        allergies_json=?,medical_history_json=?,care_summary=?,symptoms_json=?,allergy_status=? WHERE id=?`,
+        )
+        .run(
+          next.name,
+          next.gender,
+          next.age,
+          next.phone,
+          next.diagnosis,
+          JSON.stringify(next.tags),
+          next.status,
+          JSON.stringify(next.allergies),
+          JSON.stringify(next.medicalHistory),
+          next.careSummary,
+          JSON.stringify(next.symptoms),
+          next.allergyStatus,
+          id,
+        );
+      this.db
+        .prepare('INSERT INTO patient_archive_versions VALUES(?,?,?,?,?,?,?)')
+        .run(
+          randomUUID(),
+          id,
+          next.version,
+          JSON.stringify(next),
+          context.actorId,
+          context.now,
+          changeReason,
+        );
+      recordAudit();
+      this.db.exec('COMMIT');
+      return { kind: 'saved', patient: { ...next, canEdit: true } };
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
   }
 }

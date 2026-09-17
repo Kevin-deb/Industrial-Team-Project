@@ -1,0 +1,174 @@
+.patients-directory {
+  padding-top: 16px;
+  border-top: 1px solid #dce2e3;
+}
+.patients-search-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin: 20px 0;
+}
+.patients-search-form label {
+  flex: 1 1 230px;
+}
+.patients-page label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 13px;
+  color: #354144;
+}
+.patients-page input,
+.patients-page select,
+.patients-editor input,
+.patients-editor select,
+.patients-editor textarea,
+.patients-history select {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid #b7c6c9;
+  border-radius: 6px;
+  background: #fff;
+  color: #263335;
+  font: inherit;
+}
+.patients-page input:focus,
+.patients-page select:focus,
+.patients-editor textarea:focus {
+  outline: 2px solid #35897c;
+  outline-offset: 2px;
+}
+.patients-pagination,
+.patients-page-controls,
+.patients-actions,
+.patients-detail-heading {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: space-between;
+}
+.patients-pagination {
+  padding: 18px 0;
+  border-top: 1px solid #dce2e3;
+  font-size: 13px;
+}
+.patients-pagination label {
+  flex-direction: row;
+  align-items: center;
+}
+.patients-pagination select {
+  width: 76px;
+}
+.patients-page-controls button {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  justify-content: center;
+}
+.patients-page-controls span {
+  min-width: 135px;
+  text-align: center;
+}
+.patients-detail-heading .feature-person-header {
+  margin-bottom: 12px;
+}
+.patients-editor fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.patients-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.patients-editor label,
+.patients-history > label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+}
+.patients-editor textarea {
+  resize: vertical;
+  min-height: 70px;
+}
+.patients-full-width {
+  grid-column: 1 / -1;
+}
+.patients-actions {
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+.patients-error {
+  color: #a02e3d;
+  padding: 12px 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.patients-success {
+  color: #267268;
+}
+.patients-history h4 {
+  margin: 24px 0 12px;
+  font-size: 15px;
+}
+.patients-history-meta,
+.patients-snapshot {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.patients-history dt {
+  font-size: 12px;
+  color: #657376;
+  margin-bottom: 6px;
+}
+.patients-history dd {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+}
+.patients-history-meta div:last-child {
+  grid-column: 1 / -1;
+}
+.patients-baseline {
+  padding: 12px 0;
+  color: #896329;
+  font-size: 13px;
+}
+.patients-diff {
+  min-width: 540px;
+  table-layout: fixed;
+}
+.patients-diff th:first-child {
+  width: 20%;
+}
+.patients-diff td {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 640px) {
+  .patients-form-grid,
+  .patients-history-meta,
+  .patients-snapshot {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .patients-search-form label {
+    flex-basis: 100%;
+  }
+  .patients-pagination {
+    align-items: flex-start;
+  }
+  .patients-page-controls {
+    width: 100%;
+    justify-content: space-between;
+  }
+}

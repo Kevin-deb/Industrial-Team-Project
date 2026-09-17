@@ -11,14 +11,6 @@ export const patientsCommands: readonly PlannedCommand[] = [
     providers: [],
   },
   {
-    method: 'PATCH',
-    path: '/patients/:id',
-    domain: 'patients',
-    capability: 'patient-edit',
-    tables: ['patients', 'patient_archive_versions', 'audit_events'],
-    providers: [],
-  },
-  {
     method: 'POST',
     path: '/patients/batch',
     domain: 'patients',

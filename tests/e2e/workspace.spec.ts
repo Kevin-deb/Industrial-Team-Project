@@ -46,7 +46,7 @@ test('global search, scoped detail and upcoming actions behave honestly', async 
   await page.goto('/');
   await page.getByRole('textbox', { name: '全局患者搜索' }).fill(patient.name);
   await page.getByRole('textbox', { name: '全局患者搜索' }).press('Enter');
-  await expect(page.getByRole('textbox', { name: '搜索患者姓名、编号或疾病' })).toHaveValue(
+  await expect(page.getByRole('textbox', { name: '搜索患者姓名、编号或症状' })).toHaveValue(
     patient.name,
   );
   await expect(page.locator('tbody tr')).toHaveCount(1);

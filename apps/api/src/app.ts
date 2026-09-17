@@ -3,14 +3,14 @@ import fastifyStatic from '@fastify/static';
 import fastifyMultipart from '@fastify/multipart';
 import fastifyWebsocket from '@fastify/websocket';
 import type { DatabaseSync } from 'node:sqlite';
-import type { Dashboard, PatientQuery } from '@doctor/contracts';
+import type { Dashboard } from '@doctor/contracts';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { dirname, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { openDatabase } from './database/connection.js';
 import { DEMO_DOCTOR_ID, DEMO_DATE } from './database/seed.js';
-import { SqlitePatientRepository } from './patients/index.js';
+import { SqlitePatientRepository, registerPatientRoutes } from './patients/index.js';
 import { SqliteEncounterRepository } from './encounters/index.js';
 import { registerClinicalRoutes, SqliteClinicalRepository } from './clinical/index.js';
 import { HealthService, registerHealthRoutes, SqliteHealthRepository } from './health/index.js';
@@ -206,73 +206,7 @@ export async function createApp(options: AppOptions = {}) {
       disclaimer: '仅供项目演示：全部患者及临床资料均为合成数据，当前无真实登录与诊疗功能。',
     }),
   );
-  app.get<{ Querystring: PatientQuery }>(
-    '/api/v1/patients',
-    {
-      schema: {
-        querystring: {
-          type: 'object',
-          additionalProperties: false,
-          properties: {
-            q: { type: 'string', maxLength: 100 },
-            status: { type: 'string', enum: ['stable', 'attention', 'follow-up'] },
-            disease: { type: 'string', maxLength: 100 },
-            page: { type: 'integer', minimum: 1, maximum: 100000 },
-            pageSize: { type: 'integer', minimum: 1, maximum: 100 },
-          },
-        },
-      },
-    },
-    async (request) => {
-      const result = patients.list(request.query, context());
-      platform.recordAccess({
-        actorId: DEMO_DOCTOR_ID,
-        action: 'patient.list',
-        targetType: 'patient-collection',
-        targetId: 'scoped',
-        outcome: 'success',
-        description: '访问本机演示患者列表',
-      });
-      return envelope(request, result.items, {
-        page: result.page,
-        pageSize: result.pageSize,
-        total: result.total,
-      });
-    },
-  );
-  app.get<{ Params: { id: string } }>(
-    '/api/v1/patients/:id',
-    {
-      schema: {
-        params: {
-          type: 'object',
-          required: ['id'],
-          additionalProperties: false,
-          properties: { id: { type: 'string', minLength: 1, maxLength: 80 } },
-        },
-      },
-    },
-    async (request, reply) => {
-      const patient = patients.findById(request.params.id, context());
-      platform.recordAccess({
-        actorId: DEMO_DOCTOR_ID,
-        action: 'patient.view',
-        targetType: 'patient',
-        targetId: request.params.id,
-        outcome: patient ? 'success' : 'denied',
-        description: patient ? '访问本机演示患者档案' : '请求的患者不存在或不在演示身份授权范围',
-      });
-      if (!patient)
-        return fail(
-          request,
-          reply,
-          404,
-          'PATIENT_NOT_FOUND',
-          '未找到患者，或该患者不在当前医生的授权范围。',
-        );
-      return envelope(request, patient);
-    },
-  );
+  registerPatientRoutes(app, { patients, platform, context });
   app.get('/api/v1/encounters', async (request) => envelope(request, encounters.list(context())));
   registerClinicalRoutes(app, { clinical, encounters, platform, context });
   app.get('/api/v1/consultations', async (request) =>
