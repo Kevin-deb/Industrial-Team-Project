@@ -24,3 +24,40 @@ export interface PatientQuery {
   page?: number;
   pageSize?: number;
 }
+
+export type AllergyStatus = 'unknown' | 'none' | 'recorded';
+
+/** Additional detail fields keep the existing patient summary contract compatible. */
+export interface PatientArchive extends Patient {
+  symptoms: string[];
+  allergyStatus: AllergyStatus;
+  version: number;
+  canEdit: boolean;
+}
+
+export interface UpdatePatientRequest {
+  name: string;
+  gender: Patient['gender'];
+  age: number;
+  phone: string;
+  diagnosis: string;
+  tags: string[];
+  status: PatientStatus;
+  symptoms: string[];
+  allergies: string[];
+  allergyStatus: AllergyStatus;
+  medicalHistory: string[];
+  careSummary: string;
+  changeReason: string;
+}
+
+export type PatientSnapshot = Omit<PatientArchive, 'canEdit'>;
+export interface PatientArchiveVersion {
+  version: number;
+  authoredBy: string;
+  authorName: string;
+  createdAt: string;
+  changeReason: string;
+  snapshot: PatientSnapshot | null;
+  snapshotCapturedAt?: string;
+}

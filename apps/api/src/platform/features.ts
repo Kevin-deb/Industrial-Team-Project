@@ -13,8 +13,8 @@ export const features: Feature[] = [
     name: '患者档案检索',
     domain: 'patients',
     status: 'demo',
-    description: '支持演示患者检索、状态筛选与档案预览。',
-    iteration: 'Iteration 0',
+    description: '支持授权范围内的患者检索、疾病和状态筛选与分页。',
+    iteration: 'Iteration 1',
   },
   {
     id: 'identity',
@@ -28,8 +28,8 @@ export const features: Feature[] = [
     id: 'patient-edit',
     name: '患者档案维护',
     domain: 'patients',
-    status: 'planned',
-    description: '资料维护、档案版本与批量分组将在基础迭代实现。',
+    status: 'demo',
+    description: '支持合成患者资料保存、档案历史与并发版本校验；建档和批量分组尚未上线。',
     iteration: 'Iteration 1',
   },
   {

@@ -3,3 +3,5 @@ export { patientsMigration } from './migration.js';
 export { patientsCommands } from './commands.js';
 export { SqlitePatientRepository } from './repository.js';
 export type { PatientRepository } from './repository.js';
+export { patientsArchiveMigration } from './archive-migration.js';
+export { registerPatientRoutes } from './routes.js';

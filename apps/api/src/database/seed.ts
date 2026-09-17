@@ -18,6 +18,7 @@ export function seedDemo(db: DatabaseSync): void {
     db.prepare('INSERT INTO identity_roles VALUES(?,?)').run(DEMO_DOCTOR_ID, 'attending');
     for (const permission of [
       'patient:read',
+      'patient:write',
       'clinical:read',
       'encounter:read',
       'health:read',
@@ -513,6 +514,9 @@ export function seedDemo(db: DatabaseSync): void {
         0,
         '2026-09-10T00:00:00+08:00',
       );
+    db.exec(
+      "UPDATE patients SET allergy_status='recorded' WHERE json_array_length(allergies_json)>0",
+    );
     db.exec('COMMIT');
   } catch (error) {
     db.exec('ROLLBACK');
