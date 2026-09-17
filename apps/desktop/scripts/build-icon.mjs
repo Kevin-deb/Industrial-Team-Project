@@ -3,7 +3,7 @@ import { writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// Small code-native product mark: a white medical cross and pulse on a teal tile.
+// Small code-native product mark: a white medical cross and pulse on a blue tile.
 // PNG-in-ICO is supported by every supported Windows version and needs no native build tool.
 const size = 256;
 const bytes = Buffer.alloc((size * 4 + 1) * size);
@@ -32,9 +32,9 @@ for (let y = 0; y < size; y++)
       (x >= 112 && x <= 143 && y >= 48 && y <= 112) || (x >= 95 && x <= 160 && y >= 65 && y <= 96);
     const line = pulse.slice(1).some((p, i) => segmentDistance(x, y, pulse[i], p) <= 5);
     const offset = y * (size * 4 + 1) + 1 + x * 4;
-    bytes[offset] = cross || line ? 255 : 11;
-    bytes[offset + 1] = cross || line ? 255 : Math.round(140 + (20 * y) / size);
-    bytes[offset + 2] = cross || line ? 255 : Math.round(147 + (16 * y) / size);
+    bytes[offset] = cross || line ? 255 : 31;
+    bytes[offset + 1] = cross || line ? 255 : Math.round(88 + (24 * y) / size);
+    bytes[offset + 2] = cross || line ? 255 : Math.round(175 + (20 * y) / size);
     bytes[offset + 3] = inside ? 255 : 0;
   }
 function crc32(bytes) {

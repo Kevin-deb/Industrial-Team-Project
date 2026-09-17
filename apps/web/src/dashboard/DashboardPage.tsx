@@ -472,8 +472,8 @@ function Trend({ observations }: { observations: HealthOverview['observations'] 
       <svg viewBox={`0 0 ${width} 96`} role="img" aria-label={t('患者最近七次模拟收缩压趋势')}>
         <defs>
           <linearGradient id="trend-fill" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="#42b2a1" stopOpacity=".2" />
-            <stop offset="100%" stopColor="#42b2a1" stopOpacity="0" />
+            <stop offset="0%" stopColor="#4274b2" stopOpacity=".2" />
+            <stop offset="100%" stopColor="#4274b2" stopOpacity="0" />
           </linearGradient>
         </defs>
         <line x1="0" y1="25" x2={width} y2="25" stroke="#eaf0f1" strokeDasharray="4 4" />
@@ -482,7 +482,7 @@ function Trend({ observations }: { observations: HealthOverview['observations'] 
         <polyline
           points={points.join(' ')}
           fill="none"
-          stroke="#42a997"
+          stroke="#4270a9"
           strokeWidth="2.5"
           strokeLinejoin="round"
           strokeLinecap="round"
@@ -490,7 +490,7 @@ function Trend({ observations }: { observations: HealthOverview['observations'] 
         {points.map((point, i) => {
           const [cx, cy] = point.split(',');
           return (
-            <circle key={i} cx={cx} cy={cy} r="3" fill="white" stroke="#42a997" strokeWidth="2" />
+            <circle key={i} cx={cx} cy={cy} r="3" fill="white" stroke="#4270a9" strokeWidth="2" />
           );
         })}
       </svg>
