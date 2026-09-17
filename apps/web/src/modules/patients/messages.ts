@@ -12,6 +12,33 @@ export const patientsMessages: Record<string, string> = {
   修改历史: 'Revision history',
   修改原因: 'Reason for change',
   修改原因不能为空: 'Reason for change cannot be empty',
+  不分组: 'Ungrouped',
+  按病种分组: 'Group by disease',
+  按状态分组: 'Group by status',
+  '匹配 {total} 位 · 本页 {count} 位': '{total} matching · {count} on this page',
+  '已选择 {count} 位患者': '{count} patients selected',
+  '选择患者 {id}': 'Select patient {id}',
+  全选当前页可编辑患者: 'Select all editable patients on this page',
+  目标管理状态: 'Target management status',
+  批量修改原因: 'Reason for batch change',
+  批量更新状态: 'Update selected statuses',
+  '确认将 {count} 位患者更新为“{status}”？': 'Update {count} patients to “{status}”?',
+  批量更新完成: 'Batch update completed',
+  '本批次未保存任何修改，请刷新后重新选择。':
+    'No changes were saved in this batch. Refresh and select again.',
+  '批量更新未确认成功，请刷新档案后核对。':
+    'Batch update could not be confirmed. Refresh the records to verify.',
+  刷新患者列表: 'Refresh patient list',
+  '部分患者已不可用或超出当前授权范围，请刷新后重新选择。':
+    'Some patients are unavailable or outside your current access scope. Refresh and select again.',
+  已更新: 'Updated',
+  状态未改变: 'Status unchanged',
+  版本已更新: 'Version changed',
+  患者不可访问: 'Patient unavailable',
+  没有修改权限: 'No edit permission',
+  未执行: 'Not applied',
+  '修改原因不能为空，患者不能重复。':
+    'A change reason is required and patients must not be repeated.',
   修改人: 'Changed by',
   修改时间: 'Changed at',
   编辑档案: 'Edit record',
@@ -59,8 +86,8 @@ export const patientsMessages: Record<string, string> = {
     'The previous version uses a captured migration baseline. Changes are compared against that baseline.',
   '支持授权范围内的患者检索、疾病和状态筛选与分页。':
     'Patient search, condition/status filters and pagination within the authorized scope.',
-  '支持合成患者资料保存、档案历史与并发版本校验；建档和批量分组尚未上线。':
-    'Synthetic record editing, history and concurrency checks are available; registration and batch grouping are not yet available.',
+  '支持合成患者资料保存、档案历史、病种/状态分组及批量状态更新；患者建档尚未上线。':
+    'Synthetic record editing, history, disease/status grouping and batch status updates are available; patient registration is not yet available.',
   状态平稳: 'Stable',
   需要关注: 'Needs attention',
   待随访: 'Follow-up due',

@@ -1,5 +1,9 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import type { PatientQuery, UpdatePatientRequest } from '@doctor/contracts';
+import type {
+  BatchPatientStatusRequest,
+  PatientQuery,
+  UpdatePatientRequest,
+} from '@doctor/contracts';
 import type { PlatformRepository, RequestContext } from '../platform/index.js';
 import type { SqlitePatientRepository } from './repository.js';
 
@@ -69,6 +73,7 @@ export function registerPatientRoutes(
             status: { type: 'string', enum: ['stable', 'attention', 'follow-up'] },
             page: { type: 'integer', minimum: 1, maximum: 100000 },
             pageSize: { type: 'integer', minimum: 1, maximum: 100 },
+            groupBy: { type: 'string', enum: ['disease', 'status'] },
           },
         },
       },
@@ -81,7 +86,73 @@ export function registerPatientRoutes(
         page: result.page,
         pageSize: result.pageSize,
         total: result.total,
+        groups: result.groups,
       });
+    },
+  );
+  app.post<{ Body: BatchPatientStatusRequest }>(
+    '/api/v1/patients/batch',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['patients', 'status', 'changeReason'],
+          properties: {
+            patients: {
+              type: 'array',
+              minItems: 1,
+              maxItems: 50,
+              items: {
+                type: 'object',
+                additionalProperties: false,
+                required: ['id', 'expectedVersion'],
+                properties: {
+                  id: text(80, 1),
+                  expectedVersion: {
+                    type: 'integer',
+                    minimum: 1,
+                    maximum: Number.MAX_SAFE_INTEGER,
+                  },
+                },
+              },
+            },
+            status: { type: 'string', enum: ['stable', 'attention', 'follow-up'] },
+            changeReason: text(500, 1),
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const input = { ...request.body, changeReason: request.body.changeReason.trim() };
+      if (
+        !input.changeReason ||
+        new Set(input.patients.map((item) => item.id)).size !== input.patients.length
+      )
+        return fail(
+          request,
+          reply,
+          422,
+          'INVALID_PATIENT_BATCH',
+          '修改原因不能为空，患者不能重复。',
+        );
+      const context = deps.context();
+      const result = deps.patients.batchStatus(input, context, (id) =>
+        audit(context, 'patient.batch-status', id, 'success'),
+      );
+      if (!result.committed)
+        for (const item of result.results)
+          if (item.outcome === 'unavailable' || item.outcome === 'forbidden')
+            audit(context, 'patient.batch-status', item.id, 'denied');
+      if (result.results.some((item) => item.outcome === 'unavailable'))
+        return fail(
+          request,
+          reply,
+          404,
+          'PATIENT_BATCH_UNAVAILABLE',
+          '部分患者已不可用或超出当前授权范围，请刷新后重新选择。',
+        );
+      return envelope(request, result);
     },
   );
   app.get<{ Params: { id: string } }>(

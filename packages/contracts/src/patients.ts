@@ -23,6 +23,30 @@ export interface PatientQuery {
   disease?: string;
   page?: number;
   pageSize?: number;
+  groupBy?: 'disease' | 'status';
+}
+
+export interface PatientDirectoryItem extends Patient {
+  version: number;
+  canEdit: boolean;
+  groupKey?: string;
+}
+export interface PatientGroup {
+  key: string;
+  count: number;
+}
+export interface BatchPatientStatusRequest {
+  patients: { id: string; expectedVersion: number }[];
+  status: PatientStatus;
+  changeReason: string;
+}
+export interface BatchPatientStatusResult {
+  committed: boolean;
+  results: {
+    id: string;
+    outcome: 'updated' | 'unchanged' | 'stale' | 'unavailable' | 'forbidden' | 'not-applied';
+    version?: number;
+  }[];
 }
 
 export type AllergyStatus = 'unknown' | 'none' | 'recorded';

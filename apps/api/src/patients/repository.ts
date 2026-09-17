@@ -7,6 +7,9 @@ import type {
   PatientArchiveVersion,
   PatientSnapshot,
   UpdatePatientRequest,
+  BatchPatientStatusRequest,
+  BatchPatientStatusResult,
+  PatientGroup,
 } from '@doctor/contracts';
 import { patientScopeSql, type RequestContext } from '../platform/index.js';
 
@@ -59,16 +62,39 @@ export class SqlitePatientRepository implements PatientRepository {
       params.disease = query.disease.trim();
     }
     const where = conditions.join(' AND ');
+    const groupColumn = query.groupBy === 'disease' ? 'p.diagnosis' : 'p.status';
+    const groups: PatientGroup[] = query.groupBy
+      ? this.db
+          .prepare(
+            `SELECT ${groupColumn} AS key, COUNT(*) AS count FROM patients p WHERE ${where} GROUP BY ${groupColumn} ORDER BY ${groupColumn}`,
+          )
+          .all(params)
+          .map((row) => ({ key: String(row.key), count: Number(row.count) }))
+      : [];
     const total = Number(
       this.db.prepare('SELECT COUNT(*) AS total FROM patients p WHERE ' + where).get(params)!.total,
     );
     const items = this.db
       .prepare(
-        'SELECT p.* FROM patients p WHERE ' + where + ' ORDER BY p.id LIMIT :limit OFFSET :offset',
+        'SELECT p.* FROM patients p WHERE ' +
+          where +
+          ' ORDER BY ' +
+          (query.groupBy ? groupColumn + ',' : '') +
+          'p.id LIMIT :limit OFFSET :offset',
       )
       .all({ ...params, limit: pageSize, offset: (page - 1) * pageSize })
-      .map(map);
-    return { items, total, page, pageSize };
+      .map((row) => {
+        const archive = this.archive(String(row.id), context)!;
+        return {
+          ...map(row),
+          version: archive.version,
+          canEdit: archive.canEdit,
+          ...(query.groupBy
+            ? { groupKey: String(query.groupBy === 'disease' ? row.diagnosis : row.status) }
+            : {}),
+        };
+      });
+    return { items, total, page, pageSize, groups };
   }
   findById(id: string, context: RequestContext): Patient | undefined {
     const row = this.db
@@ -163,80 +189,139 @@ export class SqlitePatientRepository implements PatientRepository {
     input: UpdatePatientRequest,
     context: RequestContext,
     recordAudit: () => void,
+  ) {
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      const result = this.updateInTransaction(id, expectedVersion, input, context, recordAudit);
+      this.db.exec(result.kind === 'saved' ? 'COMMIT' : 'ROLLBACK');
+      return result;
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
+  batchStatus(
+    input: BatchPatientStatusRequest,
+    context: RequestContext,
+    recordAudit: (id: string) => void,
+  ): BatchPatientStatusResult {
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      const originals = input.patients.map((item) => this.archive(item.id, context));
+      const results: BatchPatientStatusResult['results'] = input.patients.map((item, index) => {
+        const patient = originals[index];
+        if (!patient) return { id: item.id, outcome: 'unavailable' };
+        if (!patient.canEdit) return { id: item.id, outcome: 'forbidden' };
+        if (patient.version !== item.expectedVersion)
+          return { id: item.id, outcome: 'stale', version: patient.version };
+        return {
+          id: item.id,
+          outcome: patient.status === input.status ? 'unchanged' : 'not-applied',
+        };
+      });
+      if (results.some((item) => ['unavailable', 'forbidden', 'stale'].includes(item.outcome))) {
+        this.db.exec('ROLLBACK');
+        return { committed: false, results };
+      }
+      for (let index = 0; index < results.length; index++) {
+        if (results[index].outcome === 'unchanged') continue;
+        const {
+          id,
+          version,
+          canEdit: _canEdit,
+          lastVisit: _lastVisit,
+          nextFollowUp: _nextFollowUp,
+          assignedDoctorId: _doctor,
+          ...fields
+        } = originals[index]!;
+        const saved = this.updateInTransaction(
+          id,
+          version,
+          { ...fields, status: input.status, changeReason: input.changeReason },
+          context,
+          () => recordAudit(id),
+        );
+        if (saved.kind !== 'saved') throw new Error('Batch patient invariant failed');
+        results[index] = { id, outcome: 'updated', version: saved.patient.version };
+      }
+      this.db.exec('COMMIT');
+      return { committed: true, results };
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
+  private updateInTransaction(
+    id: string,
+    expectedVersion: number,
+    input: UpdatePatientRequest,
+    context: RequestContext,
+    recordAudit: () => void,
   ):
     | { kind: 'saved'; patient: PatientArchive }
     | { kind: 'not-found' }
     | { kind: 'forbidden' }
     | { kind: 'unchanged' }
     | { kind: 'stale'; version: number } {
-    this.db.exec('BEGIN IMMEDIATE');
-    try {
-      const current = this.archive(id, context);
-      if (!current) {
-        this.db.exec('ROLLBACK');
-        return { kind: 'not-found' };
-      }
-      if (!current.canEdit) {
-        this.db.exec('ROLLBACK');
-        return { kind: 'forbidden' };
-      }
-      if (current.version !== expectedVersion) {
-        this.db.exec('ROLLBACK');
-        return { kind: 'stale', version: current.version };
-      }
-      const { changeReason, ...fields } = input;
-      if (
-        Object.entries(fields).every(
-          ([key, value]) =>
-            JSON.stringify(current[key as keyof PatientArchive]) === JSON.stringify(value),
-        )
-      ) {
-        this.db.exec('ROLLBACK');
-        return { kind: 'unchanged' };
-      }
-      const { canEdit: _canEdit, ...before } = current;
-      // Legacy seed versions were partial. Capture a labelled baseline without rewriting history.
-      this.db
-        .prepare('INSERT OR IGNORE INTO patient_archive_baselines VALUES(?,?,?,?)')
-        .run(id, current.version, JSON.stringify(before), context.now);
-      const next: PatientSnapshot = { ...before, ...fields, version: current.version + 1 };
-      this.db
-        .prepare(
-          `UPDATE patients SET name=?,gender=?,age=?,phone=?,diagnosis=?,tags_json=?,status=?,
-        allergies_json=?,medical_history_json=?,care_summary=?,symptoms_json=?,allergy_status=? WHERE id=?`,
-        )
-        .run(
-          next.name,
-          next.gender,
-          next.age,
-          next.phone,
-          next.diagnosis,
-          JSON.stringify(next.tags),
-          next.status,
-          JSON.stringify(next.allergies),
-          JSON.stringify(next.medicalHistory),
-          next.careSummary,
-          JSON.stringify(next.symptoms),
-          next.allergyStatus,
-          id,
-        );
-      this.db
-        .prepare('INSERT INTO patient_archive_versions VALUES(?,?,?,?,?,?,?)')
-        .run(
-          randomUUID(),
-          id,
-          next.version,
-          JSON.stringify(next),
-          context.actorId,
-          context.now,
-          changeReason,
-        );
-      recordAudit();
-      this.db.exec('COMMIT');
-      return { kind: 'saved', patient: { ...next, canEdit: true } };
-    } catch (error) {
-      this.db.exec('ROLLBACK');
-      throw error;
+    const current = this.archive(id, context);
+    if (!current) {
+      return { kind: 'not-found' };
     }
+    if (!current.canEdit) {
+      return { kind: 'forbidden' };
+    }
+    if (current.version !== expectedVersion) {
+      return { kind: 'stale', version: current.version };
+    }
+    const { changeReason, ...fields } = input;
+    if (
+      Object.entries(fields).every(
+        ([key, value]) =>
+          JSON.stringify(current[key as keyof PatientArchive]) === JSON.stringify(value),
+      )
+    ) {
+      return { kind: 'unchanged' };
+    }
+    const { canEdit: _canEdit, ...before } = current;
+    // Legacy seed versions were partial. Capture a labelled baseline without rewriting history.
+    this.db
+      .prepare('INSERT OR IGNORE INTO patient_archive_baselines VALUES(?,?,?,?)')
+      .run(id, current.version, JSON.stringify(before), context.now);
+    const next: PatientSnapshot = { ...before, ...fields, version: current.version + 1 };
+    this.db
+      .prepare(
+        `UPDATE patients SET name=?,gender=?,age=?,phone=?,diagnosis=?,tags_json=?,status=?,
+        allergies_json=?,medical_history_json=?,care_summary=?,symptoms_json=?,allergy_status=? WHERE id=?`,
+      )
+      .run(
+        next.name,
+        next.gender,
+        next.age,
+        next.phone,
+        next.diagnosis,
+        JSON.stringify(next.tags),
+        next.status,
+        JSON.stringify(next.allergies),
+        JSON.stringify(next.medicalHistory),
+        next.careSummary,
+        JSON.stringify(next.symptoms),
+        next.allergyStatus,
+        id,
+      );
+    this.db
+      .prepare('INSERT INTO patient_archive_versions VALUES(?,?,?,?,?,?,?)')
+      .run(
+        randomUUID(),
+        id,
+        next.version,
+        JSON.stringify(next),
+        context.actorId,
+        context.now,
+        changeReason,
+      );
+    recordAudit();
+    return { kind: 'saved', patient: { ...next, canEdit: true } };
   }
 }
