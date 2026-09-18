@@ -167,8 +167,8 @@ export function PatientDetail({
                     items={[
                       { label: '联系电话', value: patient.phone || t('未记录') },
                       { label: '健康分类', value: shown.diagnosis },
-                      { label: '最近就诊', value: formatDate(patient.lastVisit) },
-                      { label: '下次随访', value: formatDate(patient.nextFollowUp) },
+                      { label: '最近就诊', value: patient.lastVisit ? formatDate(patient.lastVisit) : t('未记录') },
+                      { label: '下次随访', value: patient.nextFollowUp ? formatDate(patient.nextFollowUp) : t('未记录') },
                     ]}
                   />
                   <h4 className="feature-small-heading">{t('照护摘要')}</h4>

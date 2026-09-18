@@ -58,8 +58,8 @@ test('global search, scoped detail and upcoming actions behave honestly', async 
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.getByRole('button', { name: /患者建档/ }).click();
-  await expect(page.getByRole('dialog')).toContainText('尚未上线');
-  await expect(page.getByRole('dialog')).toContainText('不会创建诊疗记录');
+  await expect(page.getByRole('dialog')).toContainText('新建患者档案');
+  await expect(page.getByRole('button', { name: '创建档案', exact: true })).toBeEnabled();
   await page.keyboard.press('Escape');
   await page.getByRole('textbox', { name: '全局患者搜索' }).fill('不存在的患者');
   await page.getByRole('textbox', { name: '全局患者搜索' }).press('Enter');

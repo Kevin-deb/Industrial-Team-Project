@@ -3,9 +3,16 @@ import type {
   BatchPatientStatusRequest,
   PatientQuery,
   UpdatePatientRequest,
+  CreatePatientRequest,
 } from '@doctor/contracts';
 import type { PlatformRepository, RequestContext } from '../platform/index.js';
 import type { SqlitePatientRepository } from './repository.js';
+import {
+  archiveBodySchema,
+  invalidArchive,
+  normalizeArchive,
+  validOptionalDate,
+} from './validation.js';
 
 const params = {
   type: 'object',
@@ -14,12 +21,6 @@ const params = {
   properties: { id: { type: 'string', minLength: 1, maxLength: 80 } },
 };
 const text = (maxLength: number, minLength = 0) => ({ type: 'string', maxLength, minLength });
-const lines = (maxLength: number) => ({
-  type: 'array',
-  maxItems: 50,
-  uniqueItems: true,
-  items: text(maxLength, 1),
-});
 const envelope = <T>(request: FastifyRequest, data: T, extra = {}) => ({
   data,
   meta: { requestId: request.id, mode: 'demo', ...extra },
@@ -59,6 +60,87 @@ export function registerPatientRoutes(
     });
   app.get('/api/v1/patients/summary', async (request) =>
     envelope(request, deps.patients.stats(deps.context())),
+  );
+  app.post<{ Body: CreatePatientRequest }>(
+    '/api/v1/patients',
+    {
+      schema: {
+        body: {
+          ...archiveBodySchema,
+          properties: {
+            ...archiveBodySchema.properties,
+            lastVisit: text(10),
+            nextFollowUp: text(10),
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const context = deps.context();
+      if (!deps.patients.canRegister(context)) {
+        audit(context, 'patient.register', 'new', 'denied');
+        return fail(request, reply, 403, 'PATIENT_REGISTER_DENIED', '当前医生没有患者建档权限。');
+      }
+      const key = request.headers['idempotency-key'];
+      if (
+        typeof key !== 'string' ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(key)
+      )
+        return fail(
+          request,
+          reply,
+          428,
+          'REGISTRATION_KEY_REQUIRED',
+          '患者建档必须携带有效的提交标识。',
+        );
+      const input = {
+        ...normalizeArchive(request.body),
+        lastVisit: request.body.lastVisit ?? '',
+        nextFollowUp: request.body.nextFollowUp ?? '',
+      };
+      if (invalidArchive(input))
+        return fail(
+          request,
+          reply,
+          422,
+          'INVALID_PATIENT_FIELDS',
+          '请填写有效的姓名、健康分类和修改原因，列表项目不能为空或重复。',
+        );
+      if (!/^[0-9+() -]*$/.test(input.phone))
+        return fail(request, reply, 422, 'INVALID_PATIENT_PHONE', '联系电话格式不正确。');
+      if ((input.allergyStatus === 'recorded') !== input.allergies.length > 0)
+        return fail(request, reply, 422, 'INVALID_ALLERGY_STATUS', '过敏状态与过敏记录不一致。');
+      if (
+        !validOptionalDate(input.lastVisit) ||
+        !validOptionalDate(input.nextFollowUp) ||
+        (input.lastVisit && input.nextFollowUp && input.nextFollowUp < input.lastVisit)
+      )
+        return fail(
+          request,
+          reply,
+          422,
+          'INVALID_PATIENT_DATES',
+          '请填写有效日期，下次随访不能早于最近就诊。',
+        );
+      const result = deps.patients.create(input, key.toLowerCase(), context, (id) =>
+        audit(context, 'patient.register', id, 'success'),
+      );
+      if (result.kind === 'forbidden')
+        return fail(request, reply, 403, 'PATIENT_REGISTER_DENIED', '当前医生没有患者建档权限。');
+      if (result.kind === 'conflict')
+        return fail(
+          request,
+          reply,
+          409,
+          'REGISTRATION_KEY_CONFLICT',
+          '该提交标识已用于其他建档内容，请先核对是否已建档。',
+        );
+      return reply
+        .code(result.kind === 'created' ? 201 : 200)
+        .header('ETag', `"patient-v${result.patient.version}"`)
+        .header('Location', '/api/v1/patients/' + encodeURIComponent(result.patient.id))
+        .send(envelope(request, result.patient));
+    },
   );
   app.get<{ Querystring: PatientQuery }>(
     '/api/v1/patients',
@@ -196,40 +278,7 @@ export function registerPatientRoutes(
     {
       schema: {
         params,
-        body: {
-          type: 'object',
-          additionalProperties: false,
-          required: [
-            'name',
-            'gender',
-            'age',
-            'phone',
-            'diagnosis',
-            'tags',
-            'status',
-            'symptoms',
-            'allergies',
-            'allergyStatus',
-            'medicalHistory',
-            'careSummary',
-            'changeReason',
-          ],
-          properties: {
-            name: text(100, 1),
-            gender: { type: 'string', enum: ['女', '男'] },
-            age: { type: 'integer', minimum: 0, maximum: 130 },
-            phone: text(30),
-            diagnosis: text(200, 1),
-            tags: lines(100),
-            status: { type: 'string', enum: ['stable', 'attention', 'follow-up'] },
-            symptoms: lines(500),
-            allergies: lines(500),
-            allergyStatus: { type: 'string', enum: ['unknown', 'none', 'recorded'] },
-            medicalHistory: lines(2000),
-            careSummary: text(5000),
-            changeReason: text(500, 1),
-          },
-        },
+        body: archiveBodySchema,
       },
     },
     async (request, reply) => {
@@ -258,27 +307,10 @@ export function registerPatientRoutes(
       const match = /^"patient-v([1-9]\d*)"$/.exec(request.headers['if-match'] ?? '');
       if (!match || !Number.isSafeInteger(Number(match[1])))
         return fail(request, reply, 428, 'VERSION_REQUIRED', '保存档案前必须携带当前版本。');
-      const input = {
-        ...request.body,
-        name: request.body.name.trim(),
-        diagnosis: request.body.diagnosis.trim(),
-        phone: request.body.phone.trim(),
-        careSummary: request.body.careSummary.trim(),
-        changeReason: request.body.changeReason.trim(),
-      };
+      const input = normalizeArchive(request.body);
       if (input.phone !== current.phone && !/^[0-9+() -]*$/.test(input.phone))
         return fail(request, reply, 422, 'INVALID_PATIENT_PHONE', '联系电话格式不正确。');
-      for (const key of ['tags', 'symptoms', 'allergies', 'medicalHistory'] as const)
-        input[key] = input[key].map((value) => value.trim());
-      if (
-        !input.name ||
-        !input.diagnosis ||
-        !input.changeReason ||
-        ['tags', 'symptoms', 'allergies', 'medicalHistory'].some((key) => {
-          const values = input[key as 'tags'];
-          return values.some((value) => !value) || new Set(values).size !== values.length;
-        })
-      )
+      if (invalidArchive(input))
         return fail(
           request,
           reply,

@@ -1,5 +1,5 @@
 import type { DatabaseSync, SQLInputValue } from 'node:sqlite';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type {
   Patient,
   PatientQuery,
@@ -10,6 +10,7 @@ import type {
   BatchPatientStatusRequest,
   BatchPatientStatusResult,
   PatientGroup,
+  CreatePatientRequest,
 } from '@doctor/contracts';
 import { patientScopeSql, type RequestContext } from '../platform/index.js';
 
@@ -42,6 +43,121 @@ function map(row: Row): Patient {
 }
 export class SqlitePatientRepository implements PatientRepository {
   constructor(private readonly db: DatabaseSync) {}
+  canRegister(context: RequestContext): boolean {
+    return ['patient:read', 'patient:write'].every(
+      (permission) =>
+        !!this.db
+          .prepare(
+            `SELECT 1 FROM identity_roles ir JOIN role_permissions rp ON rp.role_id=ir.role_id
+       WHERE ir.identity_id=? AND rp.permission=?`,
+          )
+          .get(context.actorId, permission),
+    );
+  }
+
+  create(
+    input: CreatePatientRequest,
+    requestKey: string,
+    context: RequestContext,
+    recordAudit: (id: string) => void,
+  ):
+    | { kind: 'created' | 'replayed'; patient: PatientArchive }
+    | { kind: 'forbidden' }
+    | { kind: 'conflict' } {
+    // Fingerprint normalized fields in a fixed order, independent of JSON property order.
+    const fingerprint = createHash('sha256')
+      .update(
+        JSON.stringify([
+          input.name,
+          input.gender,
+          input.age,
+          input.phone,
+          input.diagnosis,
+          input.tags,
+          input.status,
+          input.symptoms,
+          input.allergies,
+          input.allergyStatus,
+          input.medicalHistory,
+          input.careSummary,
+          input.changeReason,
+          input.lastVisit ?? '',
+          input.nextFollowUp ?? '',
+        ]),
+      )
+      .digest('hex');
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      if (!this.canRegister(context)) {
+        this.db.exec('ROLLBACK');
+        return { kind: 'forbidden' };
+      }
+      const existing = this.db
+        .prepare('SELECT * FROM patient_registration_requests WHERE actor_id=? AND request_key=?')
+        .get(context.actorId, requestKey);
+      if (existing) {
+        const patient = this.archive(String(existing.patient_id), context);
+        this.db.exec('ROLLBACK');
+        if (!patient?.canEdit) return { kind: 'forbidden' };
+        return existing.request_hash === fingerprint
+          ? { kind: 'replayed', patient }
+          : { kind: 'conflict' };
+      }
+      const id = 'PAT-' + randomUUID();
+      const { changeReason, ...fields } = input;
+      const snapshot: PatientSnapshot = {
+        ...fields,
+        id,
+        lastVisit: input.lastVisit ?? '',
+        nextFollowUp: input.nextFollowUp ?? '',
+        assignedDoctorId: context.actorId,
+        version: 1,
+      };
+      this.db
+        .prepare(
+          `INSERT INTO patients(id,name,gender,age,phone,diagnosis,tags_json,status,last_visit,next_follow_up,assigned_doctor_id,allergies_json,medical_history_json,care_summary,symptoms_json,allergy_status)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        )
+        .run(
+          id,
+          snapshot.name,
+          snapshot.gender,
+          snapshot.age,
+          snapshot.phone,
+          snapshot.diagnosis,
+          JSON.stringify(snapshot.tags),
+          snapshot.status,
+          snapshot.lastVisit,
+          snapshot.nextFollowUp,
+          context.actorId,
+          JSON.stringify(snapshot.allergies),
+          JSON.stringify(snapshot.medicalHistory),
+          snapshot.careSummary,
+          JSON.stringify(snapshot.symptoms),
+          snapshot.allergyStatus,
+        );
+      this.db
+        .prepare('INSERT INTO patient_archive_versions VALUES(?,?,?,?,?,?,?)')
+        .run(
+          randomUUID(),
+          id,
+          1,
+          JSON.stringify(snapshot),
+          context.actorId,
+          context.now,
+          changeReason,
+        );
+      this.db
+        .prepare('INSERT INTO patient_registration_requests VALUES(?,?,?,?,?)')
+        .run(context.actorId, requestKey, fingerprint, id, context.now);
+      recordAudit(id);
+      this.db.exec('COMMIT');
+      return { kind: 'created', patient: { ...snapshot, canEdit: true } };
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
   list(query: PatientQuery, context: RequestContext) {
     const page = query.page ?? 1,
       pageSize = query.pageSize ?? 20;
@@ -150,6 +266,7 @@ export class SqlitePatientRepository implements PatientRepository {
       stable: Number(row.stable),
       attention: Number(row.attention),
       followUp: Number(row.followUp),
+      canRegister: this.canRegister(context),
     };
   }
 

@@ -14,6 +14,7 @@ export function PatientEditor({
   onReload,
   onDirty,
   onBusy,
+  registrationKey,
 }: {
   patient: PatientArchive;
   etag: string | null;
@@ -22,9 +23,14 @@ export function PatientEditor({
   onReload: () => void;
   onDirty: (value: boolean) => void;
   onBusy: (value: boolean) => void;
+  registrationKey?: string;
 }) {
   const { t } = useI18n();
-  const [fields, setFields] = useState(editableFields(patient));
+  const creating = registrationKey !== undefined;
+  const initialFields = { ...editableFields(patient), gender: creating ? '' : patient.gender };
+  const [fields, setFields] = useState(initialFields);
+  const [lastVisit, setLastVisit] = useState('');
+  const [nextFollowUp, setNextFollowUp] = useState('');
   const [arrays, setArrays] = useState({
     tags: patient.tags.join('\n'),
     symptoms: patient.symptoms.join('\n'),
@@ -39,27 +45,32 @@ export function PatientEditor({
   const [conflict, setConflict] = useState(false);
   const input: UpdatePatientRequest = {
     ...fields,
+    gender: fields.gender as PatientArchive['gender'],
     ...Object.fromEntries(Object.entries(arrays).map(([key, value]) => [key, parseLines(value)])),
     changeReason: reason.trim(),
   };
   const dirty =
-    JSON.stringify({ ...fields, ...arrays, reason }) !==
+    JSON.stringify({ ...fields, ...arrays, reason, lastVisit, nextFollowUp }) !==
     JSON.stringify({
-      ...editableFields(patient),
+      ...initialFields,
       tags: patient.tags.join('\n'),
       symptoms: patient.symptoms.join('\n'),
       allergies: patient.allergies.join('\n'),
       medicalHistory: patient.medicalHistory.join('\n'),
       reason: '',
+      lastVisit: '',
+      nextFollowUp: '',
     });
   useEffect(() => {
     onDirty(dirty);
   }, [dirty, onDirty]);
-  const changed = Object.keys(editableFields(patient)).some(
-    (key) =>
-      JSON.stringify(input[key as keyof UpdatePatientRequest]) !==
-      JSON.stringify(patient[key as keyof PatientArchive]),
-  );
+  const changed =
+    creating ||
+    Object.keys(editableFields(patient)).some(
+      (key) =>
+        JSON.stringify(input[key as keyof UpdatePatientRequest]) !==
+        JSON.stringify(patient[key as keyof PatientArchive]),
+    );
   const update = <K extends keyof typeof fields>(key: K, value: (typeof fields)[K]) =>
     setFields((previous) => ({ ...previous, [key]: value }));
   async function save(event: FormEvent) {
@@ -79,8 +90,12 @@ export function PatientEditor({
     setError(null);
     try {
       const result = await requestApi<PatientArchive>(
-        '/patients/' + encodeURIComponent(patient.id),
-        { method: 'PATCH', headers: { 'If-Match': etag ?? '' }, body: JSON.stringify(input) },
+        creating ? '/patients' : '/patients/' + encodeURIComponent(patient.id),
+        {
+          method: creating ? 'POST' : 'PATCH',
+          headers: creating ? { 'Idempotency-Key': registrationKey } : { 'If-Match': etag ?? '' },
+          body: JSON.stringify(creating ? { ...input, lastVisit, nextFollowUp } : input),
+        },
       );
       onDirty(false);
       onSaved(result.data, result.etag);
@@ -115,9 +130,15 @@ export function PatientEditor({
           <label>
             {t('性别')}
             <select
+              required
               value={fields.gender}
               onChange={(event) => update('gender', event.target.value as PatientArchive['gender'])}
             >
+              {creating && (
+                <option value="" disabled>
+                  {t('请选择性别')}
+                </option>
+              )}
               {['女', '男'].map((value) => (
                 <option key={value} value={value}>
                   {t(value)}
@@ -205,10 +226,10 @@ export function PatientEditor({
             />
           </label>
           <label className="patients-full-width">
-            {t('修改原因')}
+            {t(creating ? '建档原因' : '修改原因')}
             <textarea
               ref={reasonInput}
-              aria-label={t('修改原因')}
+              aria-label={t(creating ? '建档原因' : '修改原因')}
               required
               rows={2}
               maxLength={500}
@@ -227,10 +248,31 @@ export function PatientEditor({
             />
             {reasonError && (
               <span id="patient-change-reason-error" className="patients-error" role="alert">
-                {t('修改原因不能为空')}
+                {t(creating ? '建档原因不能为空' : '修改原因不能为空')}
               </span>
             )}
           </label>
+          {creating && (
+            <>
+              <label>
+                {t('最近就诊（可选）')}
+                <input
+                  type="date"
+                  value={lastVisit}
+                  onChange={(event) => setLastVisit(event.target.value)}
+                />
+              </label>
+              <label>
+                {t('下次随访（可选）')}
+                <input
+                  type="date"
+                  min={lastVisit || undefined}
+                  value={nextFollowUp}
+                  onChange={(event) => setNextFollowUp(event.target.value)}
+                />
+              </label>
+            </>
+          )}
         </div>
       </fieldset>
       {error && (
@@ -246,11 +288,11 @@ export function PatientEditor({
       <div className="patients-actions">
         <Button variant="secondary" disabled={saving} onClick={onCancel}>
           <X size={16} />
-          {t('取消编辑')}
+          {t(creating ? '取消建档' : '取消编辑')}
         </Button>
         <Button type="submit" disabled={saving || !changed || conflict}>
           <Save size={16} />
-          {t(saving ? '正在保存' : '保存档案')}
+          {t(saving ? '正在保存' : creating ? '创建档案' : '保存档案')}
         </Button>
       </div>
     </form>
