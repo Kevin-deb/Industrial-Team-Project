@@ -75,6 +75,11 @@ export interface UpdatePatientRequest {
   changeReason: string;
 }
 
+export interface CreatePatientRequest extends UpdatePatientRequest {
+  lastVisit?: string;
+  nextFollowUp?: string;
+}
+
 export type PatientSnapshot = Omit<PatientArchive, 'canEdit'>;
 export interface PatientArchiveVersion {
   version: number;

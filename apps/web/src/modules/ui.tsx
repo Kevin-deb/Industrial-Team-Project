@@ -26,13 +26,17 @@ export function FeatureDialog({
   const { t } = useI18n();
   const titleId = useId();
   const dialog = useRef<HTMLDivElement>(null);
+  const closeHandler = useRef(onClose);
+  useEffect(() => {
+    closeHandler.current = onClose;
+  }, [onClose]);
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
     const oldOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     dialog.current?.focus();
     function keydown(event: KeyboardEvent) {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') closeHandler.current();
       if (event.key === 'Tab') {
         const focusable = dialog.current?.querySelectorAll<HTMLElement>(
           'button, [href], input, select, textarea, [tabindex="0"]',
@@ -62,7 +66,7 @@ export function FeatureDialog({
       document.removeEventListener('keydown', keydown);
       previous?.focus();
     };
-  }, [onClose]);
+  }, []);
   return (
     <div
       className="feature-overlay"

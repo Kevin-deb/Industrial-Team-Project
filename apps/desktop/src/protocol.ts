@@ -90,7 +90,7 @@ export function createProtocolHandler(services: FastifyInstance, rendererRoot: s
         if (payload && payload.length > maxBodySize) return response('Request too large', 413);
         // Preserve the API's local-only origin/host guards. Never forward caller-supplied host.
         const headers: Record<string, string> = { host: '127.0.0.1', origin: 'http://127.0.0.1' };
-        for (const name of ['accept', 'content-type', 'accept-language', 'range', 'if-match']) {
+        for (const name of ['accept', 'content-type', 'accept-language', 'range', 'if-match', 'idempotency-key']) {
           const value = request.headers.get(name);
           if (value) headers[name] = value;
         }

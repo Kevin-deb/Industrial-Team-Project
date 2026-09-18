@@ -5,6 +5,7 @@ import type { PatientArchive } from '@doctor/contracts';
 import { I18nProvider } from '../../shared/i18n';
 import { PatientsPage } from './index';
 import { PatientDetail } from './PatientDetail';
+import { PatientRegistration } from './PatientRegistration';
 import { editableFields } from './fields';
 
 const patient: PatientArchive = {
@@ -43,6 +44,77 @@ function detail() {
 }
 
 describe('Patients workflows', () => {
+  it('keeps name input focused when the first character makes registration dirty', async () => {
+    const close = vi.fn();
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    render(<I18nProvider><PatientRegistration onClose={close} onCreated={vi.fn()} /></I18nProvider>);
+    const name = screen.getByLabelText('姓名');
+    name.focus();
+    fireEvent.change(name, { target: { value: 'S' } });
+    expect(name).toHaveFocus();
+    fireEvent.change(name, { target: { value: 'Synthetic' } });
+    expect(name).toHaveFocus();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(confirm).toHaveBeenCalled();
+    expect(close).not.toHaveBeenCalled();
+    expect(name).toHaveFocus();
+  });
+
+  it('keeps the registration draft and submission key when saving fails', async () => {
+    const saved = vi.fn();
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: { message: 'Try again' } }), { status: 503 }),
+      )
+      .mockResolvedValueOnce(response(patient));
+    vi.stubGlobal('fetch', fetch);
+    render(
+      <I18nProvider>
+        <PatientRegistration onClose={vi.fn()} onCreated={saved} />
+      </I18nProvider>,
+    );
+    fireEvent.change(screen.getByLabelText('姓名'), {
+      target: { value: 'Synthetic registration' },
+    });
+    fireEvent.change(screen.getByLabelText('性别'), { target: { value: '男' } });
+    fireEvent.change(screen.getByLabelText('年龄'), { target: { value: '40' } });
+    fireEvent.change(screen.getByLabelText('健康分类'), {
+      target: { value: 'Synthetic condition' },
+    });
+    fireEvent.change(screen.getByLabelText('建档原因'), {
+      target: { value: 'Initial registration' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '创建档案' }));
+    await screen.findByText('Try again');
+    expect(screen.getByLabelText('姓名')).toHaveValue('Synthetic registration');
+    fireEvent.click(screen.getByRole('button', { name: '创建档案' }));
+    await waitFor(() => expect(saved).toHaveBeenCalledTimes(1));
+    expect(fetch.mock.calls[0][1].headers['Idempotency-Key']).toBe(
+      fetch.mock.calls[1][1].headers['Idempotency-Key'],
+    );
+    expect(fetch.mock.calls[0][1].method).toBe('POST');
+    expect(JSON.parse(fetch.mock.calls[0][1].body).lastVisit).toBe('');
+  });
+
+  it('protects a dirty registration draft when cancellation is declined', async () => {
+    const close = vi.fn();
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    render(
+      <I18nProvider>
+        <PatientRegistration onClose={close} onCreated={vi.fn()} />
+      </I18nProvider>,
+    );
+    fireEvent.change(screen.getByLabelText('姓名'), { target: { value: 'Synthetic draft' } });
+    fireEvent.click(screen.getByRole('button', { name: '取消建档' }));
+    expect(confirm).toHaveBeenCalled();
+    expect(close).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('姓名')).toHaveValue('Synthetic draft');
+    confirm.mockReturnValue(true);
+    fireEvent.click(screen.getByRole('button', { name: '取消建档' }));
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
   it('shows generic unavailable feedback without listing inaccessible IDs', async () => {
     vi.stubGlobal(
       'fetch',

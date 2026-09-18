@@ -14,9 +14,10 @@ import type { PatientDirectoryItem, PatientGroup } from '@doctor/contracts';
 import { useApi } from '../../shared/api';
 import { useI18n } from '../../shared/i18n';
 import { Badge, Button, EmptyState, LoadingState, PageHeader } from '../../shared/ui';
-import { FilterTabs, LinkAction, Metric, PersonAvatar, PlannedDialog } from '../ui';
+import { FilterTabs, LinkAction, Metric, PersonAvatar } from '../ui';
 import { PatientDetail } from './PatientDetail';
 import { BatchStatus } from './BatchStatus';
+import { PatientRegistration } from './PatientRegistration';
 import { statusLabels, statusTones } from './fields';
 import './patients.css';
 const emptyPatients: PatientDirectoryItem[] = [];
@@ -45,9 +46,13 @@ export function PatientsPage() {
   const { data, meta, loading, error, reload } = useApi<PatientDirectoryItem[]>(
     '/patients?' + request.toString(),
   );
-  const summary = useApi<{ total: number; stable: number; attention: number; followUp: number }>(
-    '/patients/summary',
-  );
+  const summary = useApi<{
+    total: number;
+    stable: number;
+    attention: number;
+    followUp: number;
+    canRegister: boolean;
+  }>('/patients/summary');
   const [draftQuery, setDraftQuery] = useState(query);
   const [draftDisease, setDraftDisease] = useState(disease);
   useEffect(() => {
@@ -93,10 +98,16 @@ export function PatientsPage() {
         eyebrow="PATIENT MANAGEMENT"
         title={t('患者管理')}
         action={
-          <Button variant="secondary" onClick={() => setPlanned(true)}>
+          <Button
+            variant="secondary"
+            disabled={summary.loading || !summary.data?.canRegister || batchBusy}
+            title={
+              summary.data?.canRegister === false ? t('当前医生没有患者建档权限。') : undefined
+            }
+            onClick={() => setPlanned(true)}
+          >
             <Plus size={16} />
             {t('患者建档')}
-            <span className="feature-mini-label">{t('即将上线')}</span>
           </Button>
         }
       />
@@ -278,8 +289,14 @@ export function PatientsPage() {
                                 {t(statusLabels[patient.status])}
                               </Badge>
                             </td>
-                            <td>{formatDate(patient.lastVisit)}</td>
-                            <td>{formatDate(patient.nextFollowUp)}</td>
+                            <td>
+                              {patient.lastVisit ? formatDate(patient.lastVisit) : t('未记录')}
+                            </td>
+                            <td>
+                              {patient.nextFollowUp
+                                ? formatDate(patient.nextFollowUp)
+                                : t('未记录')}
+                            </td>
                             <td>
                               <LinkAction onClick={() => setSelected(patient.id)}>
                                 {t('查看档案')}
@@ -345,9 +362,15 @@ export function PatientsPage() {
       </section>
       {selected && <PatientDetail patientId={selected} onClose={close} onSaved={afterSave} />}
       {planned && (
-        <PlannedDialog title={t('新建患者档案')} onClose={() => setPlanned(false)}>
-          <p>{t('患者建档尚未上线。')}</p>
-        </PlannedDialog>
+        <PatientRegistration
+          onClose={() => setPlanned(false)}
+          onCreated={(patient) => {
+            setPlanned(false);
+            updateParams({ q: patient.id, disease: '', status: 'all' });
+            afterSave();
+            setSelected(patient.id);
+          }}
+        />
       )}
     </div>
   );

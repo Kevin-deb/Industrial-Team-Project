@@ -12,6 +12,21 @@ export const patientsMessages: Record<string, string> = {
   修改历史: 'Revision history',
   修改原因: 'Reason for change',
   修改原因不能为空: 'Reason for change cannot be empty',
+  建档原因: 'Reason for registration',
+  建档原因不能为空: 'Reason for registration cannot be empty',
+  请选择性别: 'Select gender',
+  创建档案: 'Create record',
+  取消建档: 'Cancel registration',
+  '最近就诊（可选）': 'Last visit (optional)',
+  '下次随访（可选）': 'Next follow-up (optional)',
+  '放弃尚未保存的建档内容？': 'Discard the unsaved registration draft?',
+  '当前医生没有患者建档权限。': 'The current doctor does not have permission to register patients.',
+  '患者建档必须携带有效的提交标识。':
+    'Patient registration requires a valid submission identifier.',
+  '该提交标识已用于其他建档内容，请先核对是否已建档。':
+    'This submission identifier was already used for different registration data. Check whether the record was created before continuing.',
+  '请填写有效日期，下次随访不能早于最近就诊。':
+    'Enter valid dates. The next follow-up cannot be earlier than the last visit.',
   不分组: 'Ungrouped',
   按病种分组: 'Group by disease',
   按状态分组: 'Group by status',
@@ -86,8 +101,8 @@ export const patientsMessages: Record<string, string> = {
     'The previous version uses a captured migration baseline. Changes are compared against that baseline.',
   '支持授权范围内的患者检索、疾病和状态筛选与分页。':
     'Patient search, condition/status filters and pagination within the authorized scope.',
-  '支持合成患者资料保存、档案历史、病种/状态分组及批量状态更新；患者建档尚未上线。':
-    'Synthetic record editing, history, disease/status grouping and batch status updates are available; patient registration is not yet available.',
+  '支持合成患者建档、资料保存、档案历史、病种/状态分组及批量状态更新。':
+    'Synthetic patient registration, record editing, history, disease/status grouping and batch status updates are available.',
   状态平稳: 'Stable',
   需要关注: 'Needs attention',
   待随访: 'Follow-up due',

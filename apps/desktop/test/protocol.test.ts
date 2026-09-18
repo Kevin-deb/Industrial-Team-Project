@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
@@ -10,6 +11,28 @@ import {
   createProtocolHandler,
   isApplicationUrl,
 } from '../src/protocol.js';
+
+test('desktop registration forwards the submission key and replays without duplicates', async () => {
+  const root = mkdtempSync(resolve(tmpdir(), 'carelink-registration-protocol-'));
+  const app = await createApp({ runtime: 'desktop-demo' });
+  const handler = createProtocolHandler(app, root);
+  const key = randomUUID();
+  const body = JSON.stringify({ name: 'Synthetic desktop registration', gender: '男', age: 40,
+    phone: '', diagnosis: 'Synthetic condition', tags: [], status: 'follow-up', symptoms: [],
+    allergies: [], allergyStatus: 'unknown', medicalHistory: [], careSummary: '', changeReason: 'Synthetic registration' });
+  const send = () => handler(new Request('carelink://app/api/v1/patients', {
+    method: 'POST', headers: { 'content-type': 'application/json', 'Idempotency-Key': key }, body,
+  }));
+  try {
+    const first = await send();
+    assert.equal(first.status, 201);
+    const patient = (await first.json()).data;
+    const retry = await send();
+    assert.equal(retry.status, 200);
+    assert.equal((await retry.json()).data.id, patient.id);
+    assert.equal(retry.headers.get('etag'), '"patient-v1"');
+  } finally { await app.close(); rmSync(root, { recursive: true, force: true }); }
+});
 
 test('private application protocol serves offline UI routes and keeps API contracts intact', async () => {
   const root = mkdtempSync(resolve(tmpdir(), 'carelink-protocol-'));
