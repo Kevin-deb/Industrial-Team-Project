@@ -90,8 +90,9 @@ test('E health workflow searches one patient and updates only its local panel', 
   const patient = (await (await request.get('/api/v1/patients?pageSize=1')).json()).data[0];
   const planTitle = `E2E 居家记录计划 ${Date.now()}`;
   let navigations = 0;
-  page.on('framenavigated', (frame) => {
-    if (frame === page.mainFrame()) navigations += 1;
+  page.on('request', (request) => {
+    // pushState preserves selection in the URL without loading a new document.
+    if (request.isNavigationRequest() && request.frame() === page.mainFrame()) navigations += 1;
   });
   await page.goto('/health');
   navigations = 0;

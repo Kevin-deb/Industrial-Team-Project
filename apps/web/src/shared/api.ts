@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, useMemo } from 'react';
 import { useI18n, localizeDemoData } from './i18n';
 import type { ApiMeta } from '@doctor/contracts';
+import { notifyPatientWrite } from './patient-sync';
 
 export type { ApiMeta } from '@doctor/contracts';
 export class ApiRequestError extends Error {
@@ -34,6 +35,7 @@ export async function requestApi<T>(
       body?.error?.code || 'UNKNOWN_ERROR',
       response.headers.get('ETag'),
     );
+  notifyPatientWrite(path, init.method ?? 'GET', body?.data);
   return { ...body, etag: response.headers.get('ETag') };
 }
 

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Pencil } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import type { PatientArchive, MedicalRecord } from '@doctor/contracts';
 import { requestApi, useApi } from '../../shared/api';
 import { localizeDemoData, useI18n } from '../../shared/i18n';
@@ -42,6 +43,7 @@ export function PatientDetail({
   onSaved: () => void;
 }) {
   const { t, formatDate, language } = useI18n();
+  const navigate = useNavigate();
   const [patient, setPatient] = useState<PatientArchive | null>(null);
   const [etag, setEtag] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -122,6 +124,17 @@ export function PatientDetail({
                 {t('编辑档案')}
               </Button>
             )}
+            {!editing && (
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  onClose();
+                  navigate('/health?patientId=' + encodeURIComponent(patient.id));
+                }}
+              >
+                {t('健康管理')}
+              </Button>
+            )}
           </div>
           {saved && (
             <p className="patients-success" role="status">
@@ -167,8 +180,16 @@ export function PatientDetail({
                     items={[
                       { label: '联系电话', value: patient.phone || t('未记录') },
                       { label: '健康分类', value: shown.diagnosis },
-                      { label: '最近就诊', value: patient.lastVisit ? formatDate(patient.lastVisit) : t('未记录') },
-                      { label: '下次随访', value: patient.nextFollowUp ? formatDate(patient.nextFollowUp) : t('未记录') },
+                      {
+                        label: '最近就诊',
+                        value: patient.lastVisit ? formatDate(patient.lastVisit) : t('未记录'),
+                      },
+                      {
+                        label: '下次随访',
+                        value: patient.nextFollowUp
+                          ? formatDate(patient.nextFollowUp)
+                          : t('未记录'),
+                      },
                     ]}
                   />
                   <h4 className="feature-small-heading">{t('照护摘要')}</h4>

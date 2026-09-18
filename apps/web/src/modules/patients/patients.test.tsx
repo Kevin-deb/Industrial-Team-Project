@@ -38,7 +38,9 @@ beforeEach(() => localStorage.clear());
 function detail() {
   return render(
     <I18nProvider>
-      <PatientDetail patientId={patient.id} onClose={vi.fn()} onSaved={vi.fn()} />
+      <MemoryRouter>
+        <PatientDetail patientId={patient.id} onClose={vi.fn()} onSaved={vi.fn()} />
+      </MemoryRouter>
     </I18nProvider>,
   );
 }
@@ -47,7 +49,11 @@ describe('Patients workflows', () => {
   it('keeps name input focused when the first character makes registration dirty', async () => {
     const close = vi.fn();
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
-    render(<I18nProvider><PatientRegistration onClose={close} onCreated={vi.fn()} /></I18nProvider>);
+    render(
+      <I18nProvider>
+        <PatientRegistration onClose={close} onCreated={vi.fn()} />
+      </I18nProvider>,
+    );
     const name = screen.getByLabelText('姓名');
     name.focus();
     fireEvent.change(name, { target: { value: 'S' } });

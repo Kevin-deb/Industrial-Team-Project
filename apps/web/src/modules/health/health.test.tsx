@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../../shared/i18n';
 import { renderWithEProviders } from '../e-shared/test-utils';
 import { HealthPage } from './HealthPage';
+import { MemoryRouter } from 'react-router-dom';
 
 const patient = {
   id: 'PAT-001',
@@ -44,6 +45,7 @@ describe('HealthPage', () => {
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
         requested.push(url);
+        if (url.includes('/patients/')) return response(patient);
         if (url.includes('/patients')) return response([patient]);
         if (url.includes('/observation-trends')) return response(trendResponse);
         if (url.includes('/observations'))
@@ -79,7 +81,9 @@ describe('HealthPage', () => {
   it('searches patients after a 250 ms debounce and shows the selected B-owned summary', async () => {
     renderWithEProviders(
       <I18nProvider>
-        <HealthPage />
+        <MemoryRouter>
+          <HealthPage />
+        </MemoryRouter>
       </I18nProvider>,
     );
 
@@ -95,6 +99,7 @@ describe('HealthPage', () => {
     expect(requested.some((url) => url.includes('/health/patients?q='))).toBe(true);
 
     fireEvent.click(screen.getByRole('button', { name: /陈建国.*PAT-001/ }));
+    await act(() => vi.advanceTimersByTimeAsync(10));
     await act(() => vi.advanceTimersByTimeAsync(0));
     expect(screen.getByText('68 岁 · 男')).toBeInTheDocument();
     expect(screen.queryByText('138****0021')).not.toBeInTheDocument();
@@ -106,12 +111,15 @@ describe('HealthPage', () => {
   it('keeps plans, assessments, and reminders inside the same patient workspace', async () => {
     renderWithEProviders(
       <I18nProvider>
-        <HealthPage />
+        <MemoryRouter>
+          <HealthPage />
+        </MemoryRouter>
       </I18nProvider>,
     );
     await act(() => vi.advanceTimersByTimeAsync(0));
     fireEvent.focus(screen.getByRole('searchbox', { name: '搜索健康管理患者' }));
     fireEvent.click(screen.getByRole('button', { name: /陈建国.*PAT-001/ }));
+    await act(() => vi.advanceTimersByTimeAsync(10));
 
     fireEvent.click(screen.getByRole('button', { name: '管理计划' }));
     expect(screen.getByRole('button', { name: '新建计划' })).toBeInTheDocument();
@@ -124,12 +132,15 @@ describe('HealthPage', () => {
   it('switches locally to complete age-referenced trend summaries without losing filters', async () => {
     renderWithEProviders(
       <I18nProvider>
-        <HealthPage />
+        <MemoryRouter>
+          <HealthPage />
+        </MemoryRouter>
       </I18nProvider>,
     );
     await act(() => vi.advanceTimersByTimeAsync(0));
     fireEvent.focus(screen.getByRole('searchbox', { name: '搜索健康管理患者' }));
     fireEvent.click(screen.getByRole('button', { name: /陈建国.*PAT-001/ }));
+    await act(() => vi.advanceTimersByTimeAsync(10));
 
     expect(screen.getByRole('button', { name: '记录列表' })).toHaveAttribute(
       'aria-pressed',

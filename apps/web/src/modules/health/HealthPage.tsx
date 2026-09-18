@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import type { HealthPatientSummary } from '@doctor/contracts';
+import { useSearchParams } from 'react-router-dom';
+import { usePatientSummary } from './queries';
 import { useI18n } from '../../shared/i18n';
 import { PatientSearch } from './PatientSearch';
 import { ObservationsPanel } from './ObservationsPanel';
@@ -12,7 +13,10 @@ type HealthTab = 'observations' | 'plans' | 'assessments' | 'reminders';
 
 export function HealthPage() {
   const { t } = useI18n();
-  const [patient, setPatient] = useState<HealthPatientSummary | null>(null);
+  const [params, setParams] = useSearchParams();
+  const patientId = params.get('patientId') ?? '';
+  const summary = usePatientSummary(patientId);
+  const patient = summary.isError ? null : (summary.data?.data ?? null);
   const [tab, setTab] = useState<HealthTab>('observations');
   const tabs: Array<{ id: HealthTab; label: string }> = [
     { id: 'observations', label: '健康观测' },
@@ -29,10 +33,19 @@ export function HealthPage() {
       <PatientSearch
         selected={patient}
         onSelect={(next) => {
-          setPatient(next);
+          setParams({ patientId: next.id });
           setTab('observations');
         }}
       />
+      {patientId && summary.isPending && <p role="status">{t('正在查找…')}</p>}
+      {patientId && summary.isError && (
+        <div className="health-inline-error" role="alert">
+          {t('患者不存在或无权访问，请重新选择。')}
+          <button type="button" onClick={() => summary.refetch()}>
+            {t('重试')}
+          </button>
+        </div>
+      )}
       {patient ? (
         <>
           <nav className="health-tabs" aria-label={t('健康管理内容')}>

@@ -1,5 +1,7 @@
 /** Owned by the health module. Keep source keys stable and translate at render time. */
 export const healthMessages: Record<string, string> = {
+  '患者不存在或无权访问，请重新选择。':
+    'Patient unavailable or access denied. Please select another patient.',
   家庭监测记录: 'Home monitoring log',
   日常健康随访: 'Routine health follow-up',
   健康数据回顾: 'Health data review',
