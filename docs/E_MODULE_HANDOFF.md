@@ -1,5 +1,17 @@
 # E module local handoff
 
+## A/B/E local integration (2026-09-18)
+
+- B patient details can open `/health?patientId=...`. E resolves that exact ID through `GET /api/v1/health/patients/:id`, using the existing patient-summary and access ports. Reload/back navigation preserves selection; unavailable and forbidden IDs both return 404.
+- Successful B registration, editing and batch operations publish metadata-only local cache invalidation. E refetches patient summaries/search without refreshing unrelated social or observation queries. Failed writes do not invalidate. This is same-renderer synchronization, not cross-device patient events.
+- A can supply a trusted, fixed identity to `createApp({ identity: { actorId } })`. Session display, B/E request contexts, audit queries and social WebSocket subscriptions use the same identity. No caller header or query parameter may choose it. Current desktop composition still defaults to the demo doctor; this is not login/logout or a production authentication system. A must create a new authenticated application context and dispose the old subscriptions/cache when integrating real account switching.
+
+## Reproducible reply notification verification (2026-09-18)
+
+After `npm run build`, run `npx tsx --test tests/integration/reply-notifications.test.ts` with the supported Node runtime and installed Playwright Chromium. Eight scenarios exercise actual browser pages, HTTP routes, WebSocket frames and an isolated SQLite database: comments and nested replies under normal, self, recipient-community-disabled and recipient-notifications-disabled conditions. Normal cases verify live unread-count changes, the correct recipient, visible notification text, click-through and persisted read state. Negative cases verify that content persists without notification rows or notification events. Screenshots are generated under `test-results/reply-notification-*.png` and are not committed. Identities are injected into two trusted test application contexts; this does not test login, Windows hardware, OS push notifications or external delivery.
+
+Known wider desktop-suite failures remain outside this change: the old patient-create placeholder assertion expects 501 rather than the implemented route's invalid-input 400, and the consultations English screen retains Chinese content. Do not interpret the scoped notification checks as a completely passing desktop suite.
+
 ## Content editing and deletion (2026-09-16)
 
 - `PATCH /api/v1/social/posts/:id/content` and `comments/:id/content`: commandId and action (`edit` / `delete`); edits also carry body and post title. No user-entered reason is required. Existing attachments remain unchanged.

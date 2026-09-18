@@ -29,6 +29,8 @@ import {
 } from './social/index.js';
 
 export interface AppOptions {
+  /** Trusted composition-root identity. Never obtained from caller-supplied IDs. */
+  identity?: { actorId: string };
   /** Desktop packages remain synthetic demos even when packaged with NODE_ENV=production. */
   runtime?: 'local-demo' | 'desktop-demo';
   databasePath?: string;
@@ -105,8 +107,9 @@ export async function createApp(options: AppOptions = {}) {
     resolve(dirname(options.databasePath!), 'social-media');
   const socialRepository = new SqliteSocialRepository(db);
   const socialRealtime = options.socialRealtime ?? new SocialRealtimeHub();
+  const actorId = options.identity?.actorId ?? DEMO_DOCTOR_ID;
   const context = () => ({
-    actorId: DEMO_DOCTOR_ID,
+    actorId,
     now: options.now?.() ?? new Date().toISOString(),
   });
   const health = new HealthService(
@@ -200,7 +203,7 @@ export async function createApp(options: AppOptions = {}) {
   });
   app.get('/api/v1/session', async (request) =>
     envelope(request, {
-      doctor: platform.doctor(DEMO_DOCTOR_ID),
+      doctor: platform.doctor(context().actorId),
       mode: 'demo',
       demoDate: DEMO_DATE,
       disclaimer: '仅供项目演示：全部患者及临床资料均为合成数据，当前无真实登录与诊疗功能。',
@@ -236,13 +239,15 @@ export async function createApp(options: AppOptions = {}) {
     new AttachmentService(socialRepository, new LocalAttachmentStorage(mediaRoot)),
   );
   app.get('/api/v1/social/events', { websocket: true }, (socket) => {
-    const unsubscribe = socialRealtime.subscribe(DEMO_DOCTOR_ID, (event) => {
+    const unsubscribe = socialRealtime.subscribe(context().actorId, (event) => {
       if (socket.readyState === 1) socket.send(JSON.stringify(event));
     });
     socket.on('close', unsubscribe);
     socket.on('error', unsubscribe);
   });
-  app.get('/api/v1/audit', async (request) => envelope(request, platform.ownAudit(DEMO_DOCTOR_ID)));
+  app.get('/api/v1/audit', async (request) =>
+    envelope(request, platform.ownAudit(context().actorId)),
+  );
   app.get('/api/v1/features', async (request) => envelope(request, features));
   app.get('/api/v1/dashboard', async (request) => {
     const current = context();
@@ -262,7 +267,7 @@ export async function createApp(options: AppOptions = {}) {
       schedule: schedule.filter((e) => e.status !== 'completed'),
       recentPatients: people.items,
       healthAlerts: healthData.alerts,
-      activity: platform.ownAudit(DEMO_DOCTOR_ID).slice(0, 5),
+      activity: platform.ownAudit(current.actorId).slice(0, 5),
     };
     return envelope(request, data);
   });

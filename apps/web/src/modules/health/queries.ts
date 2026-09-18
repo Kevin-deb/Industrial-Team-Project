@@ -49,6 +49,17 @@ export function usePatientSearch(query: string) {
   );
 }
 
+export function usePatientSummary(patientId: string) {
+  return useLocalizedEQuery(
+    useQuery({
+      queryKey: ['health', 'patient-summary', patientId],
+      queryFn: () =>
+        requestEApi<HealthPatientSummary>(`/health/patients/${encodeURIComponent(patientId)}`),
+      enabled: Boolean(patientId),
+    }),
+  );
+}
+
 export function useHealthOverview(patientId: string) {
   return useLocalizedEQuery(
     useQuery({
