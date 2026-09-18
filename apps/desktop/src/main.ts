@@ -3,6 +3,7 @@ import { resolve, isAbsolute } from 'node:path';
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { createApp } from '../../api/src/app.js';
 import { SocialRealtimeHub } from '../../api/src/social/index.js';
+import { subscribeCurrentDoctor } from './realtime.js';
 import {
   APPLICATION_URL,
   canGrantAudioCapture,
@@ -145,7 +146,7 @@ if (!app.requestSingleInstanceLock()) {
         logger: false,
         socialRealtime,
       });
-      socialRealtime.subscribe('doctor-demo-001', (event) => {
+      await subscribeCurrentDoctor(services, socialRealtime, (event) => {
         if (window && !window.isDestroyed())
           window.webContents.send('carelink:social-event', event);
       });

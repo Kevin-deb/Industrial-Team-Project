@@ -54,6 +54,13 @@ export function registerHealthRoutes(
       ),
   );
 
+  app.get<{ Params: { id: string } }>(
+    '/api/v1/health/patients/:id',
+    { schema: { params: { type: 'object', required: ['id'], properties: { id: patientId } } } },
+    async (request, reply) =>
+      healthReply(request, reply, () => service.patientSummary(request.params.id, getContext())),
+  );
+
   app.get<{ Querystring: { patientId?: string } }>(
     '/api/v1/health/overview',
     {

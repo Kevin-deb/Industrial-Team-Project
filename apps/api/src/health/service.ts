@@ -50,6 +50,13 @@ export class HealthService {
     return this.patientSummaries.search(query, context);
   }
 
+  patientSummary(patientId: string, context: RequestContext): HealthPatientSummary {
+    this.requirePatient(patientId, context);
+    const patient = this.patientSummaries.find(patientId, context);
+    if (!patient) throw new HealthResourceNotFound();
+    return patient;
+  }
+
   overview(context: RequestContext, patientId?: string): HealthOverview {
     if (patientId) this.requirePatient(patientId, context);
     const raw = this.repository.overview(context, patientId);
