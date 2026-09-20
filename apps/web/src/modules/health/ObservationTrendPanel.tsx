@@ -6,6 +6,7 @@ import type {
   ReferenceRange,
 } from '@doctor/contracts';
 import { RefreshCw } from 'lucide-react';
+import { useId, useState } from 'react';
 import { useI18n } from '../../shared/i18n';
 
 interface ObservationTrendPanelProps {
@@ -87,9 +88,16 @@ function TrendGroup({ title, series }: { title: string; series: ObservationTrend
         <div className="health-trend-legend">
           {series.map((item) => (
             <span key={item.metric} data-metric={item.metric}>
-              <i /> {t(labels[item.metric])}
+              <i className="is-line" />{' '}
+              {t('{metric}每日平均', { metric: t(labels[item.metric]) })}
             </span>
           ))}
+          <span className="health-legend-reading">
+            <i className="is-point" /> {t('单次测量')}
+          </span>
+          <span className="health-legend-outside">
+            <i className="is-point is-outside" /> {t('超出参考范围')}
+          </span>
         </div>
       </header>
       <div className="health-trend-summary-grid">
@@ -163,7 +171,22 @@ function SeriesSummary({ series }: { series: ObservationTrendSeries }) {
 }
 
 function TrendChart({ series, title }: { series: ObservationTrendSeries[]; title: string }) {
-  const { formatDate } = useI18n();
+  const { t, formatDate } = useI18n();
+  const tooltipId = useId();
+  const [active, setActive] = useState<{
+    metric: HealthMetric;
+    point: ObservationTrendPoint;
+    index: number;
+    x: number;
+    y: number;
+  }>();
+  const [activeAverage, setActiveAverage] = useState<{
+    metric: HealthMetric;
+    point: ReturnType<typeof dailyTrendPoints>[number];
+    x: number;
+    y: number;
+    unit: string;
+  }>();
   const allPoints = series.flatMap((item) => item.points);
   const ranges = series.flatMap((item) => (item.referenceRange ? [item.referenceRange] : []));
   const values = [
@@ -181,9 +204,38 @@ function TrendChart({ series, title }: { series: ObservationTrendSeries[]; title
   const x = (point: ObservationTrendPoint) =>
     44 + ((Date.parse(point.measuredAt) - firstTime) / Math.max(1, lastTime - firstTime)) * 616;
   const y = (value: number) => 20 + ((high - value) / Math.max(1, high - low)) * 150;
+  const xTicks = [0, 0.25, 0.5, 0.75, 1];
+  const activeSeries = active && series.find((item) => item.metric === active.metric);
+  const activeRange = activeSeries?.referenceRange;
+  const previousPoint = activeSeries && active && activeSeries.points[active.index - 1];
+  const pairedSeries =
+    active?.metric === 'systolic'
+      ? series.find((item) => item.metric === 'diastolic')
+      : active?.metric === 'diastolic'
+        ? series.find((item) => item.metric === 'systolic')
+        : undefined;
+  const pairedPoint =
+    active &&
+    pairedSeries?.points.find((point) => point.measuredAt === active.point.measuredAt);
+  const systolicValue =
+    active?.metric === 'systolic'
+      ? active.point.value
+      : active?.metric === 'diastolic'
+        ? pairedPoint?.value
+        : undefined;
+  const diastolicValue =
+    active?.metric === 'diastolic'
+      ? active.point.value
+      : active?.metric === 'systolic'
+        ? pairedPoint?.value
+        : undefined;
   return (
     <div className="health-trend-chart-wrap">
-      <svg viewBox="0 0 700 205" role="img" aria-label={`${title}，包含数值与演示参考范围`}>
+      <svg
+        viewBox="0 0 700 205"
+        role="img"
+        aria-label={t('{title}，包含数值与演示参考范围', { title })}
+      >
         {[0, 0.5, 1].map((ratio) => {
           const value = high - (high - low) * ratio;
           const lineY = y(value);
@@ -192,6 +244,25 @@ function TrendChart({ series, title }: { series: ObservationTrendSeries[]; title
               <line x1="44" x2="660" y1={lineY} y2={lineY} className="health-chart-grid" />
               <text x="4" y={lineY + 4} className="health-chart-axis">
                 {formatValue(value)}
+              </text>
+            </g>
+          );
+        })}
+        {xTicks.map((ratio) => {
+          const tickX = 44 + ratio * 616;
+          const tickTime = firstTime + ratio * (lastTime - firstTime);
+          return (
+            <g key={`time-${ratio}`}>
+              {ratio > 0 && ratio < 1 && (
+                <line x1={tickX} x2={tickX} y1="20" y2="170" className="health-chart-time-grid" />
+              )}
+              <text
+                x={tickX}
+                y="198"
+                textAnchor={ratio === 0 ? 'start' : ratio === 1 ? 'end' : 'middle'}
+                className="health-chart-axis"
+              >
+                {formatDate(new Date(tickTime).toISOString(), { month: 'short', day: 'numeric' })}
               </text>
             </g>
           );
@@ -209,51 +280,235 @@ function TrendChart({ series, title }: { series: ObservationTrendSeries[]; title
               />
             ),
         )}
+        {(active || activeAverage) && (
+          <line
+            x1={(active ?? activeAverage)!.x}
+            x2={(active ?? activeAverage)!.x}
+            y1="20"
+            y2="170"
+            className="health-chart-cursor"
+          />
+        )}
         {series.map((item) => {
-          const points = item.points.map((point) => `${x(point)},${y(point.value)}`).join(' ');
+          const dailyPoints = dailyTrendPoints(item.points);
+          const points = dailyPoints
+            .map((point) => `${x(point)},${y(point.value)}`)
+            .join(' ');
           return (
             <g key={item.metric} className={`health-chart-series ${item.metric}`}>
-              {item.points.length > 1 && <polyline points={points} />}
-              {item.points.map((point) => {
-                const outside = isOutside(point.value, item.referenceRange);
-                const label = `${labels[item.metric]} ${formatValue(point.value)} ${item.unit}，测量时间 ${formatDate(point.measuredAt, { dateStyle: 'medium', timeStyle: 'short' })}，接收时间 ${formatDate(point.receivedAt, { dateStyle: 'medium', timeStyle: 'short' })}，来源 ${point.sourceLabel}${outside ? '，超出演示参考区间' : ''}`;
-                return outside ? (
-                  <rect
-                    key={point.id}
-                    x={x(point) - 4}
-                    y={y(point.value) - 4}
-                    width="8"
-                    height="8"
-                    tabIndex={0}
-                    role="button"
-                    aria-label={label}
-                  >
-                    <title>{label}</title>
-                  </rect>
-                ) : (
+              {dailyPoints.length > 1 && <polyline points={points} />}
+              {dailyPoints.map((point) => {
+                const pointX = x(point);
+                const pointY = y(point.value);
+                const label = t(
+                  '{metric} {date} 每日平均 {value} {unit}，{count} 次测量',
+                  {
+                    metric: t(labels[item.metric]),
+                    date: formatDate(point.measuredAt, { dateStyle: 'medium' }),
+                    value: formatValue(point.value),
+                    unit: item.unit,
+                    count: point.sampleCount,
+                  },
+                );
+                return (
                   <circle
-                    key={point.id}
-                    cx={x(point)}
-                    cy={y(point.value)}
-                    r="3.7"
+                    key={`${item.metric}-${point.day}-average`}
+                    className="health-chart-average-target"
+                    cx={pointX}
+                    cy={pointY}
+                    r="9"
                     tabIndex={0}
                     role="button"
                     aria-label={label}
+                    onMouseEnter={() => {
+                      setActive(undefined);
+                      setActiveAverage({ metric: item.metric, point, x: pointX, y: pointY, unit: item.unit });
+                    }}
+                    onMouseLeave={() => setActiveAverage(undefined)}
+                    onFocus={() => {
+                      setActive(undefined);
+                      setActiveAverage({ metric: item.metric, point, x: pointX, y: pointY, unit: item.unit });
+                    }}
+                    onBlur={() => setActiveAverage(undefined)}
+                  />
+                );
+              })}
+              {item.points.map((point, index) => {
+                const outside = isOutside(point.value, item.referenceRange);
+                const label = t(
+                  '{metric} {value} {unit}，测量时间 {measuredAt}，接收时间 {receivedAt}，来源 {source}{status}',
+                  {
+                    metric: t(labels[item.metric]),
+                    value: formatValue(point.value),
+                    unit: item.unit,
+                    measuredAt: formatDate(point.measuredAt, {
+                      dateStyle: 'medium',
+                      timeStyle: 'short',
+                    }),
+                    receivedAt: formatDate(point.receivedAt, {
+                      dateStyle: 'medium',
+                      timeStyle: 'short',
+                    }),
+                    source: t(point.sourceLabel),
+                    status: outside ? t('，超出演示参考区间') : '',
+                  },
+                );
+                const pointX = spreadPointX(point, item.points, x);
+                const pointY = y(point.value);
+                const isActive = active?.metric === item.metric && active.point.id === point.id;
+                return (
+                  <g
+                    key={point.id}
+                    tabIndex={0}
+                    role="button"
+                    aria-label={label}
+                    aria-describedby={isActive ? tooltipId : undefined}
+                    className={isActive ? 'is-active' : undefined}
+                    onMouseEnter={() => {
+                      setActiveAverage(undefined);
+                      setActive({ metric: item.metric, point, index, x: pointX, y: pointY });
+                    }}
+                    onMouseLeave={() => setActive(undefined)}
+                    onFocus={() => {
+                      setActiveAverage(undefined);
+                      setActive({ metric: item.metric, point, index, x: pointX, y: pointY });
+                    }}
+                    onBlur={() => setActive(undefined)}
+                    onClick={() => setActive({ metric: item.metric, point, index, x: pointX, y: pointY })}
                   >
+                    <circle className="health-chart-hit-area" cx={pointX} cy={pointY} r="10" />
+                    {outside ? (
+                      <circle
+                        className="health-chart-point is-outside"
+                        cx={pointX}
+                        cy={pointY}
+                        r="4.2"
+                      />
+                    ) : (
+                      <circle
+                        className="health-chart-point"
+                        cx={pointX}
+                        cy={pointY}
+                        r="3.5"
+                      />
+                    )}
                     <title>{label}</title>
-                  </circle>
+                  </g>
                 );
               })}
             </g>
           );
         })}
-        <text x="44" y="198" className="health-chart-axis">
-          {formatDate(new Date(firstTime).toISOString(), { month: 'short', day: 'numeric' })}
-        </text>
-        <text x="620" y="198" className="health-chart-axis">
-          {formatDate(new Date(lastTime).toISOString(), { month: 'short', day: 'numeric' })}
-        </text>
       </svg>
+      {activeAverage && (
+        <aside
+          role="tooltip"
+          className={`health-trend-tooltip is-average ${activeAverage.x > 510 ? 'align-right' : ''} ${activeAverage.y < 70 ? 'below-point' : ''}`}
+          style={{ left: `${(activeAverage.x / 700) * 100}%`, top: `${(activeAverage.y / 205) * 100}%` }}
+          data-metric={activeAverage.metric}
+        >
+          <div className="health-tooltip-heading">
+            <span>{t('{metric}当日平均', { metric: t(labels[activeAverage.metric]) })}</span>
+            <strong>
+              {formatValue(activeAverage.point.value)} <small>{activeAverage.unit}</small>
+            </strong>
+          </div>
+          <dl>
+            <div>
+              <dt>{t('日期')}</dt>
+              <dd>{formatDate(activeAverage.point.measuredAt, { dateStyle: 'medium' })}</dd>
+            </div>
+            <div>
+              <dt>{t('测量次数')}</dt>
+              <dd>{t('{count} 次测量', { count: activeAverage.point.sampleCount })}</dd>
+            </div>
+            <div>
+              <dt>{t('当日范围')}</dt>
+              <dd>
+                {formatValue(activeAverage.point.minimum)}–{formatValue(activeAverage.point.maximum)} {activeAverage.unit}
+              </dd>
+            </div>
+            <div>
+              <dt>{t('趋势口径')}</dt>
+              <dd>{t('当日全部记录的算术平均')}</dd>
+            </div>
+          </dl>
+          <p>{t('圆点为单次测量，折线仅表示每日平均趋势')}</p>
+        </aside>
+      )}
+      {active && activeSeries && (
+        <aside
+          id={tooltipId}
+          role="tooltip"
+          className={`health-trend-tooltip ${active.x > 510 ? 'align-right' : ''} ${active.y < 70 ? 'below-point' : ''}`}
+          style={{ left: `${(active.x / 700) * 100}%`, top: `${(active.y / 205) * 100}%` }}
+          data-metric={active.metric}
+        >
+          <div className="health-tooltip-heading">
+            <span>{t(labels[active.metric])}</span>
+            <strong>
+              {formatValue(active.point.value)} <small>{activeSeries.unit}</small>
+            </strong>
+          </div>
+          <dl>
+            {systolicValue !== undefined && diastolicValue !== undefined && (
+              <>
+                <div>
+                  <dt>{t('同次血压')}</dt>
+                  <dd>
+                    {formatValue(systolicValue)}/{formatValue(diastolicValue)} mmHg
+                  </dd>
+                </div>
+                <div>
+                  <dt>{t('脉压')}</dt>
+                  <dd>{formatValue(systolicValue - diastolicValue)} mmHg</dd>
+                </div>
+              </>
+            )}
+            <div>
+              <dt>{t('参考判断')}</dt>
+              <dd className={isOutside(active.point.value, activeRange) ? 'is-outside' : 'is-within'}>
+                {t(rangeStatus(active.point.value, activeRange))}
+              </dd>
+            </div>
+            <div>
+              <dt>{t('演示参考范围')}</dt>
+              <dd>
+                {activeRange
+                  ? `${formatValue(activeRange.lower)}–${formatValue(activeRange.upper)} ${activeSeries.unit}`
+                  : t('暂无适用参考范围')}
+              </dd>
+            </div>
+            {activeRange && (
+              <div>
+                <dt>{t('偏离程度')}</dt>
+                <dd>{rangeDistance(active.point.value, activeRange, activeSeries.unit, t)}</dd>
+              </div>
+            )}
+            <div>
+              <dt>{t('较前次')}</dt>
+              <dd>
+                {previousPoint
+                  ? `${signedValue(active.point.value - previousPoint.value)} ${activeSeries.unit}`
+                  : t('首条记录')}
+              </dd>
+            </div>
+            <div>
+              <dt>{t('测量时间')}</dt>
+              <dd>{formatDate(active.point.measuredAt, { dateStyle: 'medium', timeStyle: 'short' })}</dd>
+            </div>
+            <div>
+              <dt>{t('接收时间')}</dt>
+              <dd>{formatDate(active.point.receivedAt, { dateStyle: 'medium', timeStyle: 'short' })}</dd>
+            </div>
+            <div className="health-tooltip-source">
+              <dt>{t('数据来源')}</dt>
+              <dd>{active.point.sourceLabel}</dd>
+            </div>
+          </dl>
+          <p>{t('仅用于趋势查看，不构成诊断')}</p>
+        </aside>
+      )}
     </div>
   );
 }
@@ -262,14 +517,14 @@ function ReferenceNote({ metric, range }: { metric: HealthMetric; range?: Refere
   const { t, formatDate } = useI18n();
   return range ? (
     <p className="health-reference-note">
-      <strong>{t(labels[metric])}：</strong>
-      <span>{range.sourceName}</span>
+      <strong>{t('{metric}：', { metric: t(labels[metric]) })}</strong>
+      <span>{t(range.sourceName)}</span>
       <span>{t('版本 {version}', { version: range.version })}</span>
       <span>{t('更新于 {date}', { date: formatDate(range.updatedAt) })}</span>
     </p>
   ) : (
     <p className="health-reference-note is-missing">
-      <strong>{t(labels[metric])}：</strong>
+      <strong>{t('{metric}：', { metric: t(labels[metric]) })}</strong>
       {t('暂无适用参考范围')}
     </p>
   );
@@ -277,6 +532,70 @@ function ReferenceNote({ metric, range }: { metric: HealthMetric; range?: Refere
 
 function isOutside(value: number, range?: ReferenceRange) {
   return Boolean(range && (value < range.lower || value > range.upper));
+}
+
+function rangeStatus(value: number, range: ReferenceRange | undefined) {
+  if (!range) return '暂无参考判断';
+  if (value < range.lower) return '低于演示参考范围';
+  if (value > range.upper) return '高于演示参考范围';
+  return '参考范围内';
+}
+
+function signedValue(value: number) {
+  const formatted = formatValue(value);
+  return value > 0 ? `+${formatted}` : formatted;
+}
+
+function rangeDistance(
+  value: number,
+  range: ReferenceRange,
+  unit: string,
+  t: (source: string, values?: Record<string, string | number>) => string,
+) {
+  if (value < range.lower)
+    return t('低于下限 {distance} {unit}', {
+      distance: formatValue(range.lower - value),
+      unit,
+    });
+  if (value > range.upper)
+    return t('高于上限 {distance} {unit}', {
+      distance: formatValue(value - range.upper),
+      unit,
+    });
+  return t('距最近界限 {distance} {unit}', {
+    distance: formatValue(Math.min(value - range.lower, range.upper - value)),
+    unit,
+  });
+}
+
+function dailyTrendPoints(points: ObservationTrendPoint[]) {
+  const days = new Map<string, ObservationTrendPoint[]>();
+  for (const point of points) {
+    const day = point.measuredAt.slice(0, 10);
+    days.set(day, [...(days.get(day) ?? []), point]);
+  }
+  return [...days.values()]
+    .map((dayPoints) => ({
+      ...dayPoints[0],
+      day: dayPoints[0].measuredAt.slice(0, 10),
+      value: dayPoints.reduce((sum, point) => sum + point.value, 0) / dayPoints.length,
+      minimum: Math.min(...dayPoints.map((point) => point.value)),
+      maximum: Math.max(...dayPoints.map((point) => point.value)),
+      sampleCount: dayPoints.length,
+    }))
+    .sort((left, right) => Date.parse(left.measuredAt) - Date.parse(right.measuredAt));
+}
+
+function spreadPointX(
+  point: ObservationTrendPoint,
+  points: ObservationTrendPoint[],
+  position: (point: ObservationTrendPoint) => number,
+) {
+  const peers = points.filter((candidate) => candidate.measuredAt === point.measuredAt);
+  if (peers.length < 2) return position(point);
+  const peerIndex = peers.findIndex((candidate) => candidate.id === point.id);
+  const offset = (peerIndex - (peers.length - 1) / 2) * 5;
+  return Math.max(44, Math.min(660, position(point) + offset));
 }
 
 function formatValue(value: number) {

@@ -28,6 +28,14 @@ const trendResponse = {
   ],
 };
 
+trendResponse.series[0].points.push({
+  id: 'systolic-extra-same-time',
+  value: 145,
+  measuredAt: '2026-09-03T08:00:00+08:00',
+  receivedAt: '2026-09-03T08:02:00+08:00',
+  sourceLabel: '模拟家用设备',
+});
+
 function response(data: unknown) {
   return new Response(JSON.stringify({ data, meta: { requestId: 'req-test', mode: 'demo' } }), {
     status: 200,
@@ -39,6 +47,7 @@ describe('HealthPage', () => {
   const requested: string[] = [];
 
   beforeEach(() => {
+    localStorage.setItem('carelink-language', 'zh-CN');
     vi.useFakeTimers();
     vi.stubGlobal(
       'fetch',
@@ -161,6 +170,110 @@ describe('HealthPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '记录列表' }));
     expect(screen.getByRole('columnheader', { name: '测量时间' })).toBeInTheDocument();
+  });
+
+  it('shows a detailed clinical reading card when a trend point is hovered or focused', async () => {
+    renderWithEProviders(
+      <I18nProvider>
+        <MemoryRouter>
+          <HealthPage />
+        </MemoryRouter>
+      </I18nProvider>,
+    );
+    await act(() => vi.advanceTimersByTimeAsync(0));
+    fireEvent.focus(screen.getByRole('searchbox', { name: '搜索健康管理患者' }));
+    fireEvent.click(screen.getByRole('button', { name: /陈建国.*PAT-001/ }));
+    await act(() => vi.advanceTimersByTimeAsync(10));
+    fireEvent.click(screen.getByRole('button', { name: '趋势图' }));
+    await act(() => vi.advanceTimersByTimeAsync(0));
+
+    expect(screen.getByText('收缩压每日平均')).toBeInTheDocument();
+    expect(screen.getByText('舒张压每日平均')).toBeInTheDocument();
+    expect(screen.getAllByText('单次测量').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('超出参考范围').length).toBeGreaterThan(0);
+
+    const systolicTrend = document.querySelector(
+      '.health-chart-series.systolic polyline',
+    );
+    expect(systolicTrend?.getAttribute('points')?.trim().split(/\s+/)).toHaveLength(3);
+    expect(document.querySelectorAll('.health-chart-series.systolic .health-chart-point')).toHaveLength(4);
+
+    const dailyAverage = screen.getByRole('button', {
+      name: /收缩压.*9月3日.*每日平均 135.5 mmHg.*2 次测量/,
+    });
+    fireEvent.mouseEnter(dailyAverage);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('当日平均');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('135.5 mmHg');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('2 次测量');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('126–145 mmHg');
+    fireEvent.mouseLeave(dailyAverage);
+
+    const point = screen.getByRole('button', { name: /收缩压 126 mmHg/ });
+    fireEvent.mouseEnter(point);
+
+    const tooltip = screen.getByRole('tooltip');
+    expect(tooltip).toHaveTextContent('收缩压');
+    expect(tooltip).toHaveTextContent('126 mmHg');
+    expect(tooltip).toHaveTextContent('同次血压');
+    expect(tooltip).toHaveTextContent('126/76 mmHg');
+    expect(tooltip).toHaveTextContent('脉压');
+    expect(tooltip).toHaveTextContent('50 mmHg');
+    expect(tooltip).toHaveTextContent('参考范围内');
+    expect(tooltip).toHaveTextContent('90–139 mmHg');
+    expect(tooltip).toHaveTextContent('距最近界限 13 mmHg');
+    expect(tooltip).toHaveTextContent('较前次');
+    expect(tooltip).toHaveTextContent('-6 mmHg');
+    expect(tooltip).toHaveTextContent('2026年9月3日 08:00');
+    expect(tooltip).toHaveTextContent('2026年9月3日 08:01');
+    expect(tooltip).toHaveTextContent('模拟居家设备');
+    expect(tooltip).toHaveTextContent('仅用于趋势查看，不构成诊断');
+
+    fireEvent.mouseLeave(point);
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    fireEvent.focus(point);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('126 mmHg');
+  });
+
+  it('uses the shared platform language for trend legends and hover details', async () => {
+    localStorage.setItem('carelink-language', 'en');
+    renderWithEProviders(
+      <I18nProvider>
+        <MemoryRouter>
+          <HealthPage />
+        </MemoryRouter>
+      </I18nProvider>,
+    );
+    await act(() => vi.advanceTimersByTimeAsync(0));
+    fireEvent.focus(screen.getByRole('searchbox', { name: 'Search health management patients' }));
+    fireEvent.click(screen.getByRole('button', { name: /Chen Jianguo.*PAT-001/ }));
+    await act(() => vi.advanceTimersByTimeAsync(10));
+    fireEvent.click(screen.getByRole('button', { name: 'Trends' }));
+    await act(() => vi.advanceTimersByTimeAsync(0));
+
+    expect(screen.getByText('Systolic daily average')).toBeInTheDocument();
+    expect(screen.getByText('Diastolic daily average')).toBeInTheDocument();
+    expect(screen.getAllByText('Individual reading').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Outside reference range').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('CareLink demo reference configuration (not clinical guidance)').length)
+      .toBeGreaterThan(0);
+
+    const dailyAverage = screen.getByRole('button', {
+      name: /Systolic.*3 Sept 2026.*daily average 135.5 mmHg.*2 readings/,
+    });
+    fireEvent.mouseEnter(dailyAverage);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Systolic daily average');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('2 readings');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Arithmetic mean of all readings that day');
+    expect(screen.getByRole('tooltip')).toHaveTextContent(
+      'Dots are individual readings; the line shows the daily average only',
+    );
+    fireEvent.mouseLeave(dailyAverage);
+
+    const point = screen.getByRole('button', { name: /Systolic 126 mmHg.*Measured at/ });
+    fireEvent.mouseEnter(point);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Within reference range');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('13 mmHg from the nearest limit');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Simulated home device');
   });
 });
 
