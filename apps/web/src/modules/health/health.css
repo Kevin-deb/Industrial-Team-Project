@@ -313,8 +313,8 @@
   font-size: 11px;
 }
 .health-trend-card {
-  padding: 14px 15px 12px;
-  border: 1px solid #e1e5e9;
+  padding: 16px 18px 14px;
+  border: 1px solid #dfe5e7;
   border-radius: 8px;
   background: #fff;
 }
@@ -330,6 +330,7 @@
 }
 .health-trend-legend {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   color: #6d8287;
   font-size: 10px;
@@ -339,25 +340,40 @@
   align-items: center;
   gap: 4px;
 }
-.health-trend-legend i {
+.health-trend-legend i.is-line {
   width: 14px;
   height: 2px;
   background: #1a63bc;
 }
-.health-trend-legend [data-metric='diastolic'] i {
+.health-trend-legend [data-metric='diastolic'] i.is-line {
   background: #d98d59;
+}
+.health-trend-legend i.is-point {
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid #71888e;
+  border-radius: 50%;
+  background: #fff;
+}
+.health-trend-legend i.is-point.is-outside {
+  border-color: #b36c32;
+  background: #b36c32;
+}
+.health-trend-legend .health-legend-reading,
+.health-trend-legend .health-legend-outside {
+  color: #7b8d92;
 }
 .health-trend-summary-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 10px;
-  margin-top: 11px;
+  margin-top: 13px;
 }
 .health-series-summary {
-  padding: 10px 11px;
-  border: 1px solid #e7eaed;
-  border-radius: 6px;
-  background: #fafafb;
+  padding: 9px 0 10px;
+  border-top: 1px solid #e5e9eb;
+  border-bottom: 1px solid #e5e9eb;
+  background: #fff;
 }
 .health-series-summary > strong {
   display: block;
@@ -390,69 +406,201 @@
   white-space: nowrap;
 }
 .health-series-summary .health-stat-primary dd {
-  color: #0b55af;
+  color: #244f78;
   font-size: 15px;
 }
 .health-trend-chart-wrap {
-  margin-top: 11px;
-  padding: 7px 9px 0;
-  border: 1px solid #edeff1;
-  border-radius: 6px;
-  background: #fcfcfd;
+  position: relative;
+  width: 100%;
+  max-width: 820px;
+  margin: 14px auto 0;
+  padding: 9px 10px 2px;
+  border: 1px solid #e1e6e8;
+  border-radius: 4px;
+  background: #fff;
 }
 .health-trend-chart-wrap svg {
   display: block;
   width: 100%;
-  height: 190px;
+  height: 215px;
   overflow: visible;
 }
 .health-chart-grid {
-  stroke: #e5e8ec;
+  stroke: #e7ebed;
   stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+.health-chart-time-grid {
+  stroke: #edf0f1;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
 }
 .health-chart-axis {
-  fill: #84969a;
+  fill: #70858b;
   font-size: 9px;
 }
+.health-chart-cursor {
+  stroke: #93a4a9;
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
 .health-reference-band {
-  fill: rgba(40, 155, 139, 0.1);
+  fill: rgba(43, 113, 105, 0.055);
 }
 .health-reference-band.diastolic {
-  fill: rgba(217, 141, 89, 0.09);
+  fill: rgba(159, 106, 61, 0.045);
 }
 .health-chart-series polyline {
   fill: none;
-  stroke: #1a63bc;
-  stroke-width: 2.1;
+  stroke: #2b638d;
+  stroke-width: 1.7;
   stroke-linejoin: round;
   stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
 }
-.health-chart-series circle,
-.health-chart-series rect {
+.health-chart-series .health-chart-point {
   fill: #fff;
-  stroke: #1a63bc;
-  stroke-width: 2;
+  stroke: #2b638d;
+  stroke-width: 1.6;
   outline: none;
+  vector-effect: non-scaling-stroke;
 }
 .health-chart-series.diastolic polyline {
-  stroke: #d98d59;
+  stroke: #a8643f;
 }
-.health-chart-series.diastolic circle,
-.health-chart-series.diastolic rect {
-  stroke: #d98d59;
+.health-chart-series.diastolic .health-chart-point {
+  stroke: #a8643f;
 }
-.health-chart-series rect {
-  fill: #fff4e8;
-  stroke: #b96d32;
+.health-chart-series .health-chart-point.is-outside {
+  fill: #b36c32;
+  stroke: #fff;
+  stroke-width: 1.4;
 }
-.health-chart-series :focus {
-  stroke-width: 4;
+.health-chart-series .health-chart-hit-area {
+  fill: transparent;
+  stroke: transparent;
+  cursor: crosshair;
+}
+.health-chart-series .health-chart-average-target {
+  fill: transparent;
+  stroke: transparent;
+  cursor: help;
+  outline: none;
+}
+.health-chart-series .health-chart-average-target:focus {
+  fill: rgba(43, 99, 141, 0.08);
+  stroke: rgba(43, 99, 141, 0.42);
+  stroke-width: 1.2;
+}
+.health-chart-series g {
+  outline: none;
+}
+.health-chart-series g:focus .health-chart-point,
+.health-chart-series g.is-active .health-chart-point {
+  stroke-width: 2.6;
+  filter: drop-shadow(0 0 2px rgba(32, 63, 70, 0.2));
+}
+.health-chart-series g:focus .health-chart-hit-area {
+  stroke: rgba(43, 99, 141, 0.32);
+  stroke-width: 1.5;
+}
+.health-trend-tooltip {
+  position: absolute;
+  z-index: 4;
+  width: min(286px, calc(100% - 24px));
+  padding: 12px 13px 10px;
+  border: 1px solid #cfd9dc;
+  border-top: 3px solid #2b638d;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.98);
+  color: #29464c;
+  box-shadow: 0 8px 22px rgba(25, 51, 58, 0.14);
+  transform: translate(9px, calc(-100% - 9px));
+  pointer-events: none;
+}
+.health-trend-tooltip.align-right {
+  transform: translate(calc(-100% - 9px), calc(-100% - 9px));
+}
+.health-trend-tooltip.below-point {
+  transform: translate(9px, 9px);
+}
+.health-trend-tooltip.align-right.below-point {
+  transform: translate(calc(-100% - 9px), 9px);
+}
+.health-trend-tooltip[data-metric='diastolic'] {
+  border-top-color: #a8643f;
+}
+.health-trend-tooltip.is-average {
+  width: min(255px, calc(100% - 24px));
+}
+.health-tooltip-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e5eaec;
+}
+.health-tooltip-heading span {
+  color: #506970;
+  font-size: 10px;
+  font-weight: 650;
+}
+.health-tooltip-heading strong {
+  color: #243f45;
+  font-size: 17px;
+  letter-spacing: -0.015em;
+}
+.health-tooltip-heading small {
+  color: #687f85;
+  font-size: 10px;
+  font-weight: 550;
+}
+.health-trend-tooltip dl {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 14px;
+  margin: 10px 0 0;
+}
+.health-trend-tooltip dl > div {
+  min-width: 0;
+}
+.health-trend-tooltip dt {
+  color: #7b8e93;
+  font-size: 8px;
+}
+.health-trend-tooltip dd {
+  margin: 2px 0 0;
+  color: #344f55;
+  font-size: 9px;
+  font-weight: 620;
+  line-height: 1.35;
+}
+.health-trend-tooltip dd.is-within {
+  color: #28766b;
+}
+.health-trend-tooltip dd.is-outside {
+  color: #9b552b;
+}
+.health-trend-tooltip .health-tooltip-source {
+  grid-column: 1 / -1;
+}
+.health-trend-tooltip > p {
+  margin: 9px 0 0;
+  padding-top: 7px;
+  border-top: 1px solid #e8ecee;
+  color: #849499;
+  font-size: 8px;
 }
 .health-reference-note {
   display: flex;
   flex-wrap: wrap;
   gap: 5px 12px;
-  margin: 8px 0 0;
+  width: 100%;
+  max-width: 820px;
+  margin: 8px auto 0;
   color: #7b8d92;
   font-size: 9px;
 }
