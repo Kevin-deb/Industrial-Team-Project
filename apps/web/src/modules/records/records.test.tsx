@@ -74,6 +74,9 @@ describe('Records template catalogue', () => {
     expect(
       screen.getByText('当前本地演示支持提交、退回、批准、归档和修订留痕。'),
     ).toBeInTheDocument();
+    expect(screen.getAllByText('本地演示').length).toBeGreaterThan(0);
+    expect(screen.queryByText('尚未上线')).not.toBeInTheDocument();
+    expect(screen.getByText('结构化医嘱')).toBeInTheDocument();
   });
 });
 
