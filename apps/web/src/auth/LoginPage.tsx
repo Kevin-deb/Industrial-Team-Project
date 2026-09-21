@@ -22,7 +22,7 @@ export function LoginPage({
   const { t, language, setLanguage } = useI18n();
   const [step, setStep] = useState<'password' | 'email' | 'photo'>('password');
   const [account, setAccount] = useState('lin.zhiyuan');
-  const [password, setPassword] = useState('CareLink-Demo-2026');
+  const [password, setPassword] = useState('123456');
   const [challenge, setChallenge] = useState<BeginResult | null>(null);
   const [code, setCode] = useState('');
   const [ticket, setTicket] = useState('');

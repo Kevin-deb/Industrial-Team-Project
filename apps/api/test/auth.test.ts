@@ -13,9 +13,9 @@ import {
 const now = () => '2026-09-21T08:00:00.000Z';
 
 test('passwords, email codes and session tokens are stored only as salted hashes', () => {
-  const encoded = hashSecret('CareLink-Demo-2026');
-  assert.ok(!encoded.includes('CareLink-Demo-2026'));
-  assert.equal(verifySecret('CareLink-Demo-2026', encoded), true);
+  const encoded = hashSecret('123456');
+  assert.ok(!encoded.includes('123456'));
+  assert.equal(verifySecret('123456', encoded), true);
   assert.equal(verifySecret('wrong', encoded), false);
 });
 
@@ -42,7 +42,7 @@ test('email challenge is required, single use, and photo check gates the formal 
     );
     const challenge = await auth.beginLogin({
       account: 'lin.zhiyuan',
-      password: 'CareLink-Demo-2026',
+      password: '123456',
     });
     assert.equal(challenge.emailHint, 'l***@carelink.demo');
     assert.deepEqual(delivered, [{ email: 'lin.zhiyuan@carelink.demo', code: '123456' }]);
@@ -93,7 +93,7 @@ test('expired codes and revoked sessions cannot be replayed', async () => {
   try {
     const challenge = await auth.beginLogin({
       account: 'lin.zhiyuan@carelink.demo',
-      password: 'CareLink-Demo-2026',
+      password: '123456',
     });
     current = '2026-09-21T08:11:00.000Z';
     assert.throws(

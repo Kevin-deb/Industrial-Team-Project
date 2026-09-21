@@ -16,7 +16,7 @@ npm run dev
 
 登录需要依次完成密码、邮箱验证码和演示拍照三个步骤。邮箱验证码会显示在本地演示界面中；拍照步骤可以使用摄像头或上传 PNG/JPEG，但不会执行真实的人脸匹配或活体检测。
 
-所有演示医生的密码均为：`CareLink-Demo-2026`
+所有演示医生的初始密码均为：`123456`。这是课程演示账号的统一初始密码，不应在生产环境使用。
 
 | 账号 | 工作邮箱 | 身份 |
 | --- | --- | --- |
@@ -27,6 +27,22 @@ npm run dev
 | `shen.anning` | `shen.anning@carelink.demo` | 沈安宁 |
 
 五名医生绑定了不同的患者授权范围，不能通过修改请求头访问其他医生的患者。所有账号、证件、患者及临床数据均为虚构数据。
+
+### 启用真实 SMTP 邮件
+
+未配置 SMTP 时，验证码显示在本地演示登录页。配置以下环境变量后，验证码会通过 SMTP 发送，登录页不再显示验证码：
+
+```bash
+export CARELINK_SMTP_HOST="smtp.example.com"
+export CARELINK_SMTP_PORT="587"
+export CARELINK_SMTP_SECURE="false"
+export CARELINK_SMTP_USER="your-smtp-user"
+export CARELINK_SMTP_PASS="your-smtp-password"
+export CARELINK_SMTP_FROM="CareLink <no-reply@example.com>"
+npm run dev
+```
+
+端口 465 请设置 `CARELINK_SMTP_SECURE=true`；端口 587 保持 `false`，由 STARTTLS 升级。SMTP 密码只通过环境变量提供，不写入代码或数据库。
 
 如果刚刚已经构建完成，只想更快地再次打开：
 

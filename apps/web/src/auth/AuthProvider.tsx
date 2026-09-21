@@ -51,10 +51,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       method: 'POST',
       body: JSON.stringify(input),
     });
-    const demo = await requestApi<{ code: string }>(
-      '/auth/demo-email/' + encodeURIComponent(started.data.challengeId),
-    );
-    return { ...started.data, demoCode: demo.data.code };
+    try {
+      const demo = await requestApi<{ code: string }>(
+        '/auth/demo-email/' + encodeURIComponent(started.data.challengeId),
+      );
+      return { ...started.data, demoCode: demo.data.code };
+    } catch {
+      return started.data;
+    }
   }, []);
 
   const verifyEmail = useCallback(async (input: { challengeId: string; code: string }) => {

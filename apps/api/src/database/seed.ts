@@ -664,7 +664,7 @@ export function seedAuthFoundation(db: DatabaseSync): void {
         username,
         email,
         at,
-        hashSecret('CareLink-Demo-2026', 'carelink-' + identityId),
+        hashSecret('123456', 'carelink-' + identityId),
         at,
         at,
       );

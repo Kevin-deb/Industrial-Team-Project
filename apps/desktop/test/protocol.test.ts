@@ -15,7 +15,7 @@ import {
 async function login(app: Awaited<ReturnType<typeof createApp>>) {
   const start = await app.inject({
     method: 'POST', url: '/api/v1/auth/login',
-    payload: { account: 'lin.zhiyuan', password: 'CareLink-Demo-2026' },
+    payload: { account: 'lin.zhiyuan', password: '123456' },
   });
   const challengeId = start.json().data.challengeId;
   const code = (await app.inject('/api/v1/auth/demo-email/' + challengeId)).json().data.code;

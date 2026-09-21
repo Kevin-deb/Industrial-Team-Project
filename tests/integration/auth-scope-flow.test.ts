@@ -5,7 +5,7 @@ import { createApp } from '../../apps/api/src/app.js';
 async function login(app: Awaited<ReturnType<typeof createApp>>, account: string) {
   const start = await app.inject({
     method: 'POST', url: '/api/v1/auth/login',
-    payload: { account, password: 'CareLink-Demo-2026' },
+    payload: { account, password: '123456' },
   });
   assert.equal(start.statusCode, 202, start.body);
   const challengeId = start.json().data.challengeId;

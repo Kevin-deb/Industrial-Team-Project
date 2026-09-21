@@ -10,6 +10,7 @@ export {
 } from './auth.js';
 export type { EmailDeliveryPort, AuthErrorCode } from './auth.js';
 export { bearerToken, DemoEmailOutbox, registerAuthRoutes } from './auth-routes.js';
+export { SmtpEmailDelivery, smtpConfigured } from './smtp-email.js';
 export { platformCommands } from './commands.js';
 export { patientScopeSql, SqlitePatientAccess } from './access.js';
 export type { RequestContext, PatientAccessPort } from './access.js';

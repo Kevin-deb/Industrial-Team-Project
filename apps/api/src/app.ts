@@ -20,6 +20,8 @@ import {
   bearerToken,
   DemoEmailOutbox,
   registerAuthRoutes,
+  SmtpEmailDelivery,
+  smtpConfigured,
   SqliteAuthRepository,
   SqlitePatientAccess,
   SqlitePlatformRepository,
@@ -126,7 +128,8 @@ export async function createApp(options: AppOptions = {}) {
     throw new Error('Authenticated request context is unavailable.');
   };
   const demoEmail = new DemoEmailOutbox();
-  const auth = new AuthService(new SqliteAuthRepository(db), demoEmail, {
+  const emailDelivery = smtpConfigured(process.env) ? new SmtpEmailDelivery(process.env) : demoEmail;
+  const auth = new AuthService(new SqliteAuthRepository(db), emailDelivery, {
     now: options.now,
     audit(event) {
       platform.recordAccess({

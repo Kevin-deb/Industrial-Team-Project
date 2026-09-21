@@ -59,7 +59,7 @@ export function registerAuthRoutes(
           required: ['account', 'password'],
           properties: {
             account: { type: 'string', minLength: 3, maxLength: 160 },
-            password: { type: 'string', minLength: 8, maxLength: 256 },
+            password: { type: 'string', minLength: 6, maxLength: 256 },
           },
         },
       },

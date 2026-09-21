@@ -18,7 +18,8 @@ describe('verified clinician login', () => {
       </I18nProvider>,
     );
     await user.type(screen.getByLabelText('账号或邮箱'), 'lin.zhiyuan');
-    await user.type(screen.getByLabelText('密码'), 'CareLink-Demo-2026');
+    await user.clear(screen.getByLabelText('密码'));
+    await user.type(screen.getByLabelText('密码'), '123456');
     await user.click(screen.getByRole('button', { name: '继续' }));
     expect(await screen.findByText(/l\*\*\*@carelink.demo/)).toBeInTheDocument();
     await user.type(screen.getByLabelText('邮箱验证码'), '123456');
