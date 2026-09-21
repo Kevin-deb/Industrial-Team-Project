@@ -2,7 +2,26 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EApiError, requestEApi } from './api';
 
 describe('requestEApi', () => {
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    localStorage.clear();
+  });
+
+  it('carries the authenticated session into E module requests', async () => {
+    localStorage.setItem('carelink-session-token', 'session-token');
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ data: [], meta: { requestId: 'req-auth', mode: 'demo' } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await requestEApi('/health/patients');
+
+    const [, options] = fetchMock.mock.calls[0]!;
+    expect(new Headers(options?.headers).get('Authorization')).toBe('Bearer session-token');
+  });
 
   it('parses a successful CareLink API envelope', async () => {
     vi.stubGlobal(
