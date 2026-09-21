@@ -40,6 +40,23 @@ describe('verified clinician login', () => {
     expect(await screen.findByRole('button', { name: '返回登录方式' })).toBeInTheDocument();
   });
 
+  it('shows a localized recovery message when camera permission is denied', async () => {
+    const user = userEvent.setup();
+    const beginPhotoLogin = vi.fn().mockResolvedValue({ photoTicket: 'face-ticket', demoOnly: true });
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: { getUserMedia: vi.fn().mockRejectedValue(new DOMException('Permission denied', 'NotAllowedError')) },
+    });
+    render(<I18nProvider><LoginPage {...props} beginPhotoLogin={beginPhotoLogin} /></I18nProvider>);
+
+    await user.click(screen.getByRole('tab', { name: '人脸验证' }));
+    await user.click(screen.getByRole('button', { name: '开始人脸验证' }));
+    await user.click(await screen.findByRole('button', { name: '打开摄像头' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('无法使用摄像头，请在系统设置中允许摄像头权限，或直接上传照片。');
+    expect(screen.queryByText('Permission denied')).not.toBeInTheDocument();
+  });
+
   it('requires password, email code and an explicitly labelled demo photo check', async () => {
     const user = userEvent.setup();
     const begin = vi.fn().mockResolvedValue({ challengeId: 'challenge', emailHint: 'l***@carelink.demo' });

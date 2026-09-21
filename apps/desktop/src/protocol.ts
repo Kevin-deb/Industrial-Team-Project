@@ -47,7 +47,7 @@ export function isApplicationUrl(value: string): boolean {
   }
 }
 
-export function canGrantAudioCapture(
+export function canGrantMediaCapture(
   permission: string,
   requestingUrl: string,
   mediaTypes: readonly string[],
@@ -55,8 +55,8 @@ export function canGrantAudioCapture(
   return (
     permission === 'media' &&
     isApplicationUrl(requestingUrl) &&
-    mediaTypes.length === 1 &&
-    mediaTypes[0] === 'audio'
+    mediaTypes.length > 0 &&
+    mediaTypes.every((mediaType) => mediaType === 'audio' || mediaType === 'video')
   );
 }
 

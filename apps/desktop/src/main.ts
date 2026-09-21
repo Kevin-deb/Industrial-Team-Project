@@ -6,7 +6,7 @@ import { SocialRealtimeHub } from '../../api/src/social/index.js';
 import { subscribeCurrentDoctor } from './realtime.js';
 import {
   APPLICATION_URL,
-  canGrantAudioCapture,
+  canGrantMediaCapture,
   createProtocolHandler,
   isApplicationUrl,
 } from './protocol.js';
@@ -120,7 +120,7 @@ if (!app.requestSingleInstanceLock()) {
       session.defaultSession.setPermissionRequestHandler(
         (contents, permission, callback, details) =>
           callback(
-            canGrantAudioCapture(
+            canGrantMediaCapture(
               permission,
               ('securityOrigin' in details ? details.securityOrigin : undefined) ??
                 contents.getURL(),
@@ -130,10 +130,12 @@ if (!app.requestSingleInstanceLock()) {
       );
       session.defaultSession.setPermissionCheckHandler(
         (contents, permission, requestingOrigin, details) =>
-          canGrantAudioCapture(
+          canGrantMediaCapture(
             permission,
             details.requestingUrl ?? requestingOrigin ?? contents?.getURL() ?? '',
-            details.mediaType === 'audio' ? ['audio'] : [],
+            details.mediaType === 'audio' || details.mediaType === 'video'
+              ? [details.mediaType]
+              : [],
           ),
       );
       session.defaultSession.webRequest.onBeforeRequest((details, callback) => {

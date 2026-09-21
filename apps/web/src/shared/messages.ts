@@ -32,6 +32,8 @@ export const shellMessages: Record<string, string> = {
     'This demonstration captures a photo only. It does not perform face matching or liveness detection.',
   待提交的演示照片: 'Demo photo ready to submit',
   打开摄像头: 'Open camera',
+  '无法使用摄像头，请在系统设置中允许摄像头权限，或直接上传照片。':
+    'Camera access is unavailable. Allow camera access in system settings or upload a photo instead.',
   拍照: 'Take photo',
   上传照片: 'Upload photo',
   完成演示核验: 'Complete demo check',

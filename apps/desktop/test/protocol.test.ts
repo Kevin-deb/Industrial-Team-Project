@@ -7,7 +7,7 @@ import { resolve } from 'node:path';
 import { createApp } from '../../api/src/app.js';
 import {
   CONTENT_SECURITY_POLICY,
-  canGrantAudioCapture,
+  canGrantMediaCapture,
   createProtocolHandler,
   isApplicationUrl,
 } from '../src/protocol.js';
@@ -263,12 +263,12 @@ test('desktop protocol carries social media bytes but keeps the generic one MiB 
   }
 });
 
-test('desktop allows microphone audio only for the bundled application origin', () => {
-  assert.equal(canGrantAudioCapture('media', 'carelink://app/', ['audio']), true);
-  assert.equal(canGrantAudioCapture('media', 'carelink://app/', ['video']), false);
-  assert.equal(canGrantAudioCapture('media', 'carelink://app/', ['audio', 'video']), false);
-  assert.equal(canGrantAudioCapture('media', 'https://example.com/', ['audio']), false);
-  assert.equal(canGrantAudioCapture('notifications', 'carelink://app/', ['audio']), false);
+test('desktop allows microphone and camera capture only for the bundled application origin', () => {
+  assert.equal(canGrantMediaCapture('media', 'carelink://app/', ['audio']), true);
+  assert.equal(canGrantMediaCapture('media', 'carelink://app/', ['video']), true);
+  assert.equal(canGrantMediaCapture('media', 'carelink://app/', ['audio', 'video']), true);
+  assert.equal(canGrantMediaCapture('media', 'https://example.com/', ['audio']), false);
+  assert.equal(canGrantMediaCapture('notifications', 'carelink://app/', ['audio']), false);
   assert.match(CONTENT_SECURITY_POLICY, /img-src 'self' data: blob:/);
   assert.match(CONTENT_SECURITY_POLICY, /media-src 'self' blob:/);
 });

@@ -47,13 +47,13 @@ export function LoginPage({
 
   useEffect(() => () => streamRef.current?.getTracks().forEach((track) => track.stop()), []);
 
-  async function perform(work: () => Promise<void>) {
+  async function perform(work: () => Promise<void>, failureMessage?: string) {
     setBusy(true);
     setError('');
     try {
       await work();
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : t('验证失败，请重试。'));
+      setError(failureMessage ? t(failureMessage) : reason instanceof Error ? reason.message : t('验证失败，请重试。'));
     } finally {
       setBusy(false);
     }
@@ -64,7 +64,7 @@ export function LoginPage({
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
       streamRef.current = stream;
       if (videoRef.current) videoRef.current.srcObject = stream;
-    });
+    }, '无法使用摄像头，请在系统设置中允许摄像头权限，或直接上传照片。');
   }
 
   function capture() {
