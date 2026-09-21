@@ -33,7 +33,7 @@ export const remoteConsultationPersistenceMigration = {
     SELECT 'CON-IN-001','doctor-demo-001','invited'
     WHERE EXISTS(SELECT 1 FROM consultations WHERE id='CON-IN-001');
     INSERT OR IGNORE INTO consultation_participants(consultation_id,identity_id,participant_role)
-    SELECT 'CON-IN-001','doctor-demo-002','requester'
+    SELECT 'CON-IN-001','doctor-demo-002','reviewer'
     WHERE EXISTS(SELECT 1 FROM consultations WHERE id='CON-IN-001');
     INSERT OR IGNORE INTO consultation_participants(consultation_id,identity_id,participant_role)
     SELECT 'CON-IN-001','doctor-demo-003','expert'

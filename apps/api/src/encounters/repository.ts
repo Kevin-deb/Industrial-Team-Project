@@ -66,6 +66,7 @@ export interface EncounterRepository {
       specialty: string;
       scheduledAt: string;
       summary: string;
+      reviewerId: string;
       participantIds: string[];
       materials: { title: string; fileName: string; description?: string; objectUrl?: string }[];
     },
@@ -365,6 +366,7 @@ export class SqliteEncounterRepository implements EncounterRepository {
       specialty: string;
       scheduledAt: string;
       summary: string;
+      reviewerId: string;
       participantIds: string[];
       materials: { title: string; fileName: string; description?: string; objectUrl?: string }[];
     },
@@ -375,7 +377,7 @@ export class SqliteEncounterRepository implements EncounterRepository {
       .get({ patientId: input.patientId, ...context });
     if (!patient) return undefined;
     const id = `CON-${Date.now()}`;
-    const participants = Array.from(new Set([context.actorId, ...input.participantIds])).filter(Boolean);
+    const participants = Array.from(new Set([context.actorId, input.reviewerId, ...input.participantIds])).filter(Boolean);
     this.db.exec('BEGIN IMMEDIATE');
     try {
       this.db
@@ -386,7 +388,29 @@ export class SqliteEncounterRepository implements EncounterRepository {
       for (const participantId of participants)
         this.db
           .prepare('INSERT OR IGNORE INTO consultation_participants(consultation_id,identity_id,participant_role) VALUES(?,?,?)')
-          .run(id, participantId, participantId === context.actorId ? 'requester' : 'expert');
+          .run(
+            id,
+            participantId,
+            participantId === context.actorId ? 'requester' : participantId === input.reviewerId ? 'reviewer' : 'expert',
+          );
+      for (const participantId of participants)
+        if (participantId !== context.actorId)
+          this.db
+            .prepare(
+              `INSERT OR IGNORE INTO access_grants(
+                id,identity_id,patient_id,scope,task_id,expires_at,revoked_at,created_at
+              ) VALUES(?,?,?,?,?,?,?,?)`,
+            )
+            .run(
+              `grant-${id}-${participantId}`,
+              participantId,
+              input.patientId,
+              'patient:read',
+              id,
+              input.scheduledAt,
+              null,
+              context.now,
+            );
       input.materials.forEach((material, index) => {
         this.db
           .prepare(
@@ -429,6 +453,7 @@ export class SqliteEncounterRepository implements EncounterRepository {
   acceptConsultation(id: string, context: RequestContext): Consultation | undefined {
     const row = this.findConsultationRow(id, context);
     if (!row || String(row.status) === 'completed') return undefined;
+    if (!this.canReviewConsultation(id, context.actorId)) return undefined;
     this.db.prepare("UPDATE consultations SET status='scheduled' WHERE id=?").run(id);
     this.db
       .prepare('UPDATE consultation_participants SET joined_at=? WHERE consultation_id=? AND identity_id=?')
@@ -613,6 +638,7 @@ export class SqliteEncounterRepository implements EncounterRepository {
 
   private mapConsultation(row: Record<string, unknown>, context: RequestContext): Consultation {
     const id = String(row.id);
+    const reviewer = this.consultationReviewer(id);
     return {
       id,
       patientId: String(row.patient_id),
@@ -624,6 +650,9 @@ export class SqliteEncounterRepository implements EncounterRepository {
       summary: String(row.summary),
       participants: this.consultationParticipants(id).map((participant) => participant.name),
       direction: String(row.requested_by) === context.actorId ? 'sent' : 'received',
+      reviewerId: reviewer?.id,
+      reviewerName: reviewer?.name,
+      canReview: reviewer?.id === context.actorId,
     };
   }
 
@@ -642,6 +671,28 @@ export class SqliteEncounterRepository implements EncounterRepository {
         department: String(row.department),
         role: String(row.participant_role),
       }));
+  }
+
+  private consultationReviewer(id: string): { id: string; name: string } | undefined {
+    const row = this.db
+      .prepare(
+        `SELECT i.id,i.display_name FROM consultation_participants cp
+         JOIN identities i ON i.id=cp.identity_id
+         WHERE cp.consultation_id=? AND cp.participant_role='reviewer'
+         ORDER BY i.id LIMIT 1`,
+      )
+      .get(id);
+    return row ? { id: String(row.id), name: String(row.display_name) } : undefined;
+  }
+
+  private canReviewConsultation(id: string, actorId: string): boolean {
+    const row = this.db
+      .prepare(
+        `SELECT 1 FROM consultation_participants
+         WHERE consultation_id=? AND identity_id=? AND participant_role='reviewer'`,
+      )
+      .get(id, actorId);
+    return Boolean(row);
   }
 
   private consultationMaterials(id: string): ConsultationMaterial[] {
@@ -804,6 +855,7 @@ export class SqliteEncounterRepository implements EncounterRepository {
 
   private consultationRoleLabel(role: string): string {
     if (role === 'requester') return '发起医生';
+    if (role === 'reviewer') return '审核人';
     if (role === 'invited') return '受邀医生';
     if (role === 'expert') return '会诊专家';
     return role;

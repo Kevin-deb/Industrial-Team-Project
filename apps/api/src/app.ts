@@ -378,6 +378,7 @@ export async function createApp(options: AppOptions = {}) {
       specialty?: string;
       scheduledAt?: string;
       summary?: string;
+      reviewerId?: string;
       participantIds?: string[];
       materials?: Array<string | { title?: string; fileName?: string; description?: string; objectUrl?: string }>;
     };
@@ -394,6 +395,7 @@ export async function createApp(options: AppOptions = {}) {
     const title = String(request.body.title ?? '').trim();
     const specialty = String(request.body.specialty ?? '').trim();
     const scheduledAt = String(request.body.scheduledAt ?? '').trim();
+    const reviewerId = String(request.body.reviewerId ?? '').trim();
     const participantIds = Array.isArray(request.body.participantIds) ? request.body.participantIds : [];
     const rawMaterials = Array.isArray(request.body.materials) ? request.body.materials : [];
     const materials = rawMaterials
@@ -426,7 +428,7 @@ export async function createApp(options: AppOptions = {}) {
       )
     )
       return fail(request, reply, 400, 'INVALID_REQUEST', '材料地址无效。');
-    if (!patientId || !title || !specialty || !scheduledAt || !participantIds.length)
+    if (!patientId || !title || !specialty || !scheduledAt || !reviewerId || !participantIds.length)
       return fail(request, reply, 400, 'INVALID_REQUEST', '会诊申请信息不完整。');
     const item = encounters.createConsultation(
       {
@@ -435,6 +437,7 @@ export async function createApp(options: AppOptions = {}) {
         specialty,
         scheduledAt,
         summary: String(request.body.summary ?? '已发起远程会诊申请，等待专家确认参与。').trim(),
+        reviewerId,
         participantIds: participantIds.map(String),
         materials,
       },

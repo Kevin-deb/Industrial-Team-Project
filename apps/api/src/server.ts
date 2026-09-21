@@ -13,6 +13,7 @@ const app = await createApp({
   databasePath,
   webRoot: resolve(workspaceRoot, 'apps/web/dist'),
   logger: true,
+  runtime: 'local-demo',
 });
 try {
   await app.listen({ host: '127.0.0.1', port });
