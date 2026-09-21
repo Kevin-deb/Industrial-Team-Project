@@ -12,6 +12,22 @@ npm run dev
 
 `npm run dev` 会先重新构建前端、API 和桌面端，然后打开 CareLink 窗口。平时改完代码后，优先用这一条。
 
+## 本地演示登录
+
+登录需要依次完成密码、邮箱验证码和演示拍照三个步骤。邮箱验证码会显示在本地演示界面中；拍照步骤可以使用摄像头或上传 PNG/JPEG，但不会执行真实的人脸匹配或活体检测。
+
+所有演示医生的密码均为：`CareLink-Demo-2026`
+
+| 账号 | 工作邮箱 | 身份 |
+| --- | --- | --- |
+| `lin.zhiyuan` | `lin.zhiyuan@carelink.demo` | 林知远 |
+| `zhou.ming` | `zhou.ming@carelink.demo` | 周明 |
+| `xu.qing` | `xu.qing@carelink.demo` | 许清 |
+| `liang.ruochuan` | `liang.ruochuan@carelink.demo` | 梁若川 |
+| `shen.anning` | `shen.anning@carelink.demo` | 沈安宁 |
+
+五名医生绑定了不同的患者授权范围，不能通过修改请求头访问其他医生的患者。所有账号、证件、患者及临床数据均为虚构数据。
+
 如果刚刚已经构建完成，只想更快地再次打开：
 
 ```bash

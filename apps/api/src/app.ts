@@ -126,7 +126,16 @@ export async function createApp(options: AppOptions = {}) {
     throw new Error('Authenticated request context is unavailable.');
   };
   const demoEmail = new DemoEmailOutbox();
-  const auth = new AuthService(new SqliteAuthRepository(db), demoEmail, { now: options.now });
+  const auth = new AuthService(new SqliteAuthRepository(db), demoEmail, {
+    now: options.now,
+    audit(event) {
+      platform.recordAccess({
+        ...event,
+        targetType: 'session',
+        description: 'Authentication metadata event',
+      });
+    },
+  });
   const health = new HealthService(
     healthRepository,
     new SqlitePatientAccess(db),

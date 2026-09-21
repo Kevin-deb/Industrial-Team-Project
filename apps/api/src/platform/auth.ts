@@ -188,15 +188,22 @@ export class AuthService {
   private readonly now: () => string;
   private readonly randomToken: () => string;
   private readonly randomCode: () => string;
+  private readonly audit?: (event: { actorId: string; action: string; outcome: 'success' | 'denied'; targetId: string }) => void;
 
   constructor(
     private readonly repository: SqliteAuthRepository,
     private readonly email: EmailDeliveryPort,
-    options: { now?: () => string; randomToken?: () => string; randomCode?: () => string } = {},
+    options: {
+      now?: () => string;
+      randomToken?: () => string;
+      randomCode?: () => string;
+      audit?: (event: { actorId: string; action: string; outcome: 'success' | 'denied'; targetId: string }) => void;
+    } = {},
   ) {
     this.now = options.now ?? (() => new Date().toISOString());
     this.randomToken = options.randomToken ?? (() => randomBytes(32).toString('base64url'));
     this.randomCode = options.randomCode ?? (() => String(randomInt(0, 1_000_000)).padStart(6, '0'));
+    this.audit = options.audit;
   }
 
   async beginLogin(input: { account: string; password: string }) {
@@ -218,6 +225,7 @@ export class AuthService {
           count,
           count >= 5 ? addMinutes(at, 15) : undefined,
         );
+        this.audit?.({ actorId: String(user.identity_id), action: 'auth.login', outcome: 'denied', targetId: String(user.id) });
       }
       throw new AuthError('INVALID_CREDENTIALS');
     }
@@ -233,6 +241,7 @@ export class AuthService {
       createdAt: at,
     });
     await this.email.sendVerificationCode({ email: String(user.email), code, expiresAt });
+    this.audit?.({ actorId: String(user.identity_id), action: 'auth.email.challenge', outcome: 'success', targetId: String(user.id) });
     const [local, domain] = String(user.email).split('@');
     return { challengeId, emailHint: `${local[0]}***@${domain}`, expiresAt };
   }
@@ -276,6 +285,7 @@ export class AuthService {
       createdAt: at,
       expiresAt,
     });
+    this.audit?.({ actorId: String(ticket.identity_id), action: 'auth.login', outcome: 'success', targetId: sessionId });
     return { token, sessionId, expiresAt, identityId: String(ticket.identity_id) };
   }
 
@@ -294,6 +304,10 @@ export class AuthService {
   }
 
   logout(token: string) {
-    return this.repository.revoke(tokenHash(token), this.now());
+    const session = this.authenticate(token);
+    const revoked = this.repository.revoke(tokenHash(token), this.now());
+    if (revoked && session)
+      this.audit?.({ actorId: session.identityId, action: 'auth.logout', outcome: 'success', targetId: session.sessionId });
+    return revoked;
   }
 }
