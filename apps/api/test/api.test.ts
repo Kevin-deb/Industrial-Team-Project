@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { createApp } from '../src/app.js';
-import { openDatabase } from '../src/database/connection.js';
+import { migrations, openDatabase } from '../src/database/connection.js';
 import { resolveDatabasePath } from '../src/database/config.js';
 import { DEMO_DOCTOR_ID } from '../src/database/seed.js';
 import { SqlitePatientAccess } from '../src/platform/access.js';
@@ -335,6 +336,43 @@ test('startup refuses mismatched, incomplete and future database migration histo
       db.close();
       assert.throws(() => openDatabase(path), /migration history is incompatible/);
     }
+  } finally {
+    rmSync(folder, { recursive: true, force: true });
+  }
+});
+
+test('startup upgrades the legacy auth migration ordering without losing the database', () => {
+  const folder = mkdtempSync(join(tmpdir(), 'doctor-legacy-auth-migrations-'));
+  const path = join(folder, 'legacy.sqlite');
+  try {
+    const legacy = new DatabaseSync(path);
+    legacy.exec(
+      'PRAGMA foreign_keys=ON; CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL)',
+    );
+    const apply = (migration: { version: number; name: string; sql: string }, version = migration.version) => {
+      legacy.exec(migration.sql);
+      legacy
+        .prepare('INSERT INTO schema_migrations(version,name,applied_at) VALUES(?,?,?)')
+        .run(version, migration.name, '2026-09-21T00:00:00.000Z');
+    };
+    for (const migration of migrations.filter((item) => item.version <= 16)) apply(migration);
+    for (const migration of migrations.filter((item) => item.version >= 21))
+      apply(migration, migration.version - 4);
+    legacy.close();
+
+    const upgraded = openDatabase(path);
+    assert.equal(
+      upgraded.prepare('SELECT COUNT(*) count FROM schema_migrations').get()!.count,
+      24,
+    );
+    assert.deepEqual(
+      upgraded
+        .prepare('SELECT version,name FROM schema_migrations WHERE version>=17 ORDER BY version')
+        .all()
+        .map((row) => ({ ...row })),
+      migrations.slice(16).map(({ version, name }) => ({ version, name })),
+    );
+    upgraded.close();
   } finally {
     rmSync(folder, { recursive: true, force: true });
   }
