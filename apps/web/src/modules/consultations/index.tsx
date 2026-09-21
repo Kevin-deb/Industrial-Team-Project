@@ -647,7 +647,7 @@ function ConsultationRoom({
               <FileCheck2 size={16} />
               {t('联合会诊报告')}
             </h3>
-            <p className="consultation-report-text">{reportText || t('会诊结束后生成联合报告')}</p>
+            <p>{reportText ? t('报告已生成，可下载查看完整内容') : t('会诊结束后生成联合报告')}</p>
             <div className="consultation-panel-actions">
               <Button variant="secondary" disabled={!reportText} onClick={downloadReport}>
                 <Download size={15} />
