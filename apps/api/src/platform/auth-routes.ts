@@ -37,6 +37,8 @@ function replyAuthError(
     EMAIL_CODE_EXPIRED: [401, '邮箱验证码已过期。'],
     EMAIL_CODE_USED: [409, '邮箱验证码已使用。'],
     PHOTO_CHECK_REQUIRED: [401, '请先完成邮箱验证和演示拍照核验。'],
+    CURRENT_PASSWORD_INVALID: [401, '旧密码不正确。'],
+    WEAK_PASSWORD: [422, '新密码至少 10 位，并包含大小写字母、数字和特殊字符，且不能使用常见弱密码。'],
   };
   const [status, message] = details[error.code] ?? [401, '身份验证失败。'];
   return fail(request, reply, status, error.code, message);
@@ -151,6 +153,31 @@ export function registerAuthRoutes(
     if (token) auth.logout(token);
     return reply.code(204).send();
   });
+
+  for (const purpose of ['change-password', 'recover-password'] as const) {
+    app.post(`/api/v1/auth/password/${purpose}/start`, async (request, reply) => {
+      try {
+        const body = request.body as { account?: string; currentPassword?: string; method: 'email' | 'photo' };
+        const data = await auth.beginPasswordOperation({
+          ...body,
+          purpose,
+          sessionToken: bearerToken(request.headers.authorization),
+        });
+        return reply.code(202).send(envelope(request, data));
+      } catch (error) {
+        return replyAuthError(error, request, reply, fail);
+      }
+    });
+    app.post(`/api/v1/auth/password/${purpose}/complete`, async (request, reply) => {
+      try {
+        const body = request.body as { challengeId: string; code?: string; photoDataUrl?: string; newPassword: string };
+        const photoAccepted = body.photoDataUrl ? validPhoto(body.photoDataUrl) : false;
+        return envelope(request, auth.completePasswordOperation({ ...body, purpose, photoAccepted }));
+      } catch (error) {
+        return replyAuthError(error, request, reply, fail);
+      }
+    });
+  }
 }
 
 export function bearerToken(value: string | undefined): string | undefined {
@@ -161,4 +188,8 @@ export function bearerToken(value: string | undefined): string | undefined {
 function maskEmail(email: string) {
   const [local, domain] = email.split('@');
   return `${local[0]}***@${domain}`;
+}
+
+function validPhoto(value: string) {
+  return /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(value) && value.length <= 2_800_000;
 }

@@ -14,7 +14,7 @@ describe('verified clinician login', () => {
     const complete = vi.fn().mockResolvedValue(undefined);
     render(
       <I18nProvider>
-        <LoginPage beginLogin={begin} verifyEmail={verify} completePhotoCheck={complete} />
+        <LoginPage beginLogin={begin} verifyEmail={verify} completePhotoCheck={complete} beginRecovery={vi.fn()} completeRecovery={vi.fn()} />
       </I18nProvider>,
     );
     await user.type(screen.getByLabelText('账号或邮箱'), 'lin.zhiyuan');
@@ -33,7 +33,7 @@ describe('verified clinician login', () => {
     localStorage.setItem('carelink-language', 'en');
     render(
       <I18nProvider>
-        <LoginPage beginLogin={vi.fn()} verifyEmail={vi.fn()} completePhotoCheck={vi.fn()} />
+        <LoginPage beginLogin={vi.fn()} verifyEmail={vi.fn()} completePhotoCheck={vi.fn()} beginRecovery={vi.fn()} completeRecovery={vi.fn()} />
       </I18nProvider>,
     );
     expect(screen.getByRole('heading', { name: 'Sign in to CareLink' })).toBeInTheDocument();

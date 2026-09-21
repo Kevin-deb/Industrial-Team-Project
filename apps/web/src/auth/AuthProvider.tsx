@@ -5,6 +5,7 @@ import { LoginPage } from './LoginPage';
 
 type BeginResult = { challengeId: string; emailHint: string; expiresAt: string; demoCode?: string };
 type VerifyResult = { photoTicket: string; expiresAt: string; demoOnly: true };
+type PasswordChallenge = { challengeId: string; method: 'email' | 'photo'; emailHint: string; demoCode?: string };
 
 interface AuthContextValue {
   session: DoctorSession;
@@ -70,6 +71,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     ).data;
   }, []);
 
+  const beginRecovery = useCallback(async (input: { account: string; method: 'email' | 'photo' }) => {
+    const started = await requestApi<PasswordChallenge>('/auth/password/recover-password/start', {
+      method: 'POST', body: JSON.stringify(input),
+    });
+    if (input.method === 'email') {
+      try {
+        const demo = await requestApi<{ code: string }>('/auth/demo-email/' + encodeURIComponent(started.data.challengeId));
+        return { ...started.data, demoCode: demo.data.code };
+      } catch { /* SMTP delivery has no local code. */ }
+    }
+    return started.data;
+  }, []);
+
+  const completeRecovery = useCallback(async (input: { challengeId: string; code?: string; photoDataUrl?: string; newPassword: string }) => {
+    await requestApi('/auth/password/recover-password/complete', { method: 'POST', body: JSON.stringify(input) });
+  }, []);
+
   const completePhotoCheck = useCallback(
     async (input: { ticket: string; captureMethod: 'camera' | 'upload'; photoDataUrl: string }) => {
       const completed = await requestApi<{ token: string }>('/auth/photo-check', {
@@ -100,6 +118,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         beginLogin={beginLogin}
         verifyEmail={verifyEmail}
         completePhotoCheck={completePhotoCheck}
+        beginRecovery={beginRecovery}
+        completeRecovery={completeRecovery}
       />
     );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

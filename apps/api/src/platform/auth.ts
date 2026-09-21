@@ -7,7 +7,9 @@ export type AuthErrorCode =
   | 'INVALID_EMAIL_CODE'
   | 'EMAIL_CODE_EXPIRED'
   | 'EMAIL_CODE_USED'
-  | 'PHOTO_CHECK_REQUIRED';
+  | 'PHOTO_CHECK_REQUIRED'
+  | 'CURRENT_PASSWORD_INVALID'
+  | 'WEAK_PASSWORD';
 
 export class AuthError extends Error {
   constructor(readonly code: AuthErrorCode) {
@@ -77,12 +79,17 @@ export class SqliteAuthRepository {
     codeHash: string;
     expiresAt: string;
     createdAt: string;
+    purpose?: string;
   }) {
     this.db
       .prepare(
-        'INSERT INTO email_challenges(id,user_id,code_hash,expires_at,created_at) VALUES(?,?,?,?,?)',
+        'INSERT INTO email_challenges(id,user_id,code_hash,expires_at,created_at,purpose) VALUES(?,?,?,?,?,?)',
       )
-      .run(input.id, input.userId, input.codeHash, input.expiresAt, input.createdAt);
+      .run(input.id, input.userId, input.codeHash, input.expiresAt, input.createdAt, input.purpose ?? 'login');
+  }
+
+  findUserById(id: string): Row | undefined {
+    return this.db.prepare('SELECT * FROM users WHERE id=?').get(id) as Row | undefined;
   }
 
   findChallenge(id: string): Row | undefined {
@@ -107,6 +114,22 @@ export class SqliteAuthRepository {
          WHERE id=? AND consumed_at IS NULL`,
       )
       .run(consumedAt, ticketHash, ticketExpiresAt, id);
+  }
+
+  markChallengeConsumed(id: string, consumedAt: string) {
+    this.db.prepare('UPDATE email_challenges SET consumed_at=? WHERE id=? AND consumed_at IS NULL').run(consumedAt, id);
+  }
+
+  updatePassword(userId: string, passwordHash: string, at: string) {
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      this.db.prepare('UPDATE users SET password_hash=?,failed_login_count=0,locked_until=NULL,updated_at=? WHERE id=?').run(passwordHash, at, userId);
+      this.db.prepare('UPDATE user_sessions SET revoked_at=? WHERE user_id=? AND revoked_at IS NULL').run(at, userId);
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
   }
 
   findPhotoTicket(hash: string, now: string): Row | undefined {
@@ -246,6 +269,70 @@ export class AuthService {
     return { challengeId, emailHint: `${local[0]}***@${domain}`, expiresAt };
   }
 
+  async beginPasswordOperation(input: {
+    account?: string;
+    sessionToken?: string;
+    currentPassword?: string;
+    method: 'email' | 'photo';
+    purpose: 'change-password' | 'recover-password';
+  }) {
+    const at = this.now();
+    let user: Row | undefined;
+    if (input.purpose === 'change-password') {
+      const session = this.authenticate(input.sessionToken ?? '');
+      user = session ? this.repository.findUserById(session.userId) : undefined;
+      if (!user || !verifySecret(input.currentPassword ?? '', String(user.password_hash)))
+        throw new AuthError('CURRENT_PASSWORD_INVALID');
+    } else {
+      user = input.account ? this.repository.findUser(input.account) : undefined;
+      if (!user || user.status !== 'active') throw new AuthError('INVALID_CREDENTIALS');
+    }
+    const challengeId = this.randomToken();
+    const code = this.randomCode();
+    const expiresAt = addMinutes(at, 10);
+    this.repository.createChallenge({
+      id: challengeId,
+      userId: String(user.id),
+      codeHash: hashSecret(code),
+      expiresAt,
+      createdAt: at,
+      purpose: `${input.purpose}:${input.method}`,
+    });
+    if (input.method === 'email')
+      await this.email.sendVerificationCode({ email: String(user.email), code, expiresAt });
+    const [local, domain] = String(user.email).split('@');
+    return { challengeId, method: input.method, emailHint: `${local[0]}***@${domain}`, expiresAt };
+  }
+
+  completePasswordOperation(input: {
+    challengeId: string;
+    purpose: 'change-password' | 'recover-password';
+    code?: string;
+    photoAccepted?: boolean;
+    newPassword: string;
+  }) {
+    const at = this.now();
+    const challenge = this.repository.findChallenge(input.challengeId);
+    if (!challenge || !String(challenge.purpose).startsWith(`${input.purpose}:`))
+      throw new AuthError('INVALID_EMAIL_CODE');
+    if (challenge.consumed_at) throw new AuthError('EMAIL_CODE_USED');
+    if (String(challenge.expires_at) <= at) throw new AuthError('EMAIL_CODE_EXPIRED');
+    const method = String(challenge.purpose).split(':')[1];
+    if (method === 'email') {
+      if (Number(challenge.attempts) >= 5 || !verifySecret(input.code ?? '', String(challenge.code_hash))) {
+        this.repository.incrementChallengeAttempt(input.challengeId);
+        throw new AuthError('INVALID_EMAIL_CODE');
+      }
+    } else if (!input.photoAccepted) throw new AuthError('PHOTO_CHECK_REQUIRED');
+    validateNewPassword(input.newPassword);
+    const user = this.repository.findUserById(String(challenge.user_id));
+    if (!user || verifySecret(input.newPassword, String(user.password_hash))) throw new AuthError('WEAK_PASSWORD');
+    this.repository.markChallengeConsumed(input.challengeId, at);
+    this.repository.updatePassword(String(challenge.user_id), hashSecret(input.newPassword), at);
+    this.audit?.({ actorId: String(user.identity_id), action: `auth.${input.purpose}`, outcome: 'success', targetId: String(user.id) });
+    return { changed: true as const, sessionsRevoked: true as const };
+  }
+
   verifyEmail(input: { challengeId: string; code: string }) {
     const at = this.now();
     const challenge = this.repository.findChallenge(input.challengeId);
@@ -310,4 +397,17 @@ export class AuthService {
       this.audit?.({ actorId: session.identityId, action: 'auth.logout', outcome: 'success', targetId: session.sessionId });
     return revoked;
   }
+}
+
+export function validateNewPassword(password: string) {
+  if (
+    password.length < 10 ||
+    password.length > 72 ||
+    !/[a-z]/.test(password) ||
+    !/[A-Z]/.test(password) ||
+    !/[0-9]/.test(password) ||
+    !/[^A-Za-z0-9]/.test(password) ||
+    /123456|password|qwerty/i.test(password)
+  )
+    throw new AuthError('WEAK_PASSWORD');
 }

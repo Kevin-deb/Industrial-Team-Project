@@ -204,6 +204,7 @@ export async function createApp(options: AppOptions = {}) {
       pathname === '/api/v1/auth/login' ||
       pathname === '/api/v1/auth/email/verify' ||
       pathname === '/api/v1/auth/photo-check' ||
+      pathname.startsWith('/api/v1/auth/password/recover-password/') ||
       pathname.startsWith('/api/v1/auth/demo-email/');
     if (trustedTestActor) {
       return requestContext.run(

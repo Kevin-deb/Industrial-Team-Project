@@ -1,5 +1,5 @@
 import { useI18n } from '../../shared/i18n';
-import { useCallback, useState } from 'react';
+import { useCallback, useState, type FormEvent } from 'react';
 import {
   Bell,
   Fingerprint,
@@ -10,9 +10,10 @@ import {
   UserRound,
 } from 'lucide-react';
 import type { Session } from '@doctor/contracts';
-import { useApi } from '../../shared/api';
+import { requestApi, useApi } from '../../shared/api';
+import { useAuth } from '../../auth/AuthProvider';
 import { Badge, Card, LoadingState, PageHeader } from '../../shared/ui';
-import { LinkAction, PersonAvatar, PlannedDialog, ReadOnlyNote, SectionTitle } from '../ui';
+import { FeatureDialog, LinkAction, PersonAvatar, PlannedDialog, ReadOnlyNote, SectionTitle } from '../ui';
 import { useCommunityPreference } from '../preferences';
 
 const securityFeatures = [
@@ -41,6 +42,7 @@ export function SettingsPage() {
   const { data, loading, error, reload } = useApi<Session>('/session');
   const { enabled, toggle, saveError } = useCommunityPreference();
   const [planned, setPlanned] = useState<{ title: string; description: string } | null>(null);
+  const [changePassword, setChangePassword] = useState(false);
   const close = useCallback(() => setPlanned(null), []);
   return (
     <div className="feature-page">
@@ -201,6 +203,7 @@ export function SettingsPage() {
                   )}
                 </span>
               </div>
+              <LinkAction onClick={() => setChangePassword(true)}>{t('修改密码')}</LinkAction>
             </Card>
           </div>
           <ReadOnlyNote>
@@ -217,6 +220,39 @@ export function SettingsPage() {
           <p>{t(planned.description)}</p>
         </PlannedDialog>
       )}
+      {changePassword && <ChangePasswordDialog onClose={() => setChangePassword(false)} />}
     </div>
   );
+}
+
+function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
+  const { t } = useI18n();
+  const { logout } = useAuth();
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [method, setMethod] = useState<'email'|'photo'>('email');
+  const [challengeId, setChallengeId] = useState('');
+  const [code, setCode] = useState('');
+  const [photoDataUrl, setPhotoDataUrl] = useState('');
+  const [demoCode, setDemoCode] = useState('');
+  const [error, setError] = useState('');
+  async function submit(event: FormEvent) {
+    event.preventDefault(); setError('');
+    try {
+      if (!challengeId) {
+        const result = await requestApi<{challengeId:string}>('/auth/password/change-password/start', { method:'POST', body:JSON.stringify({currentPassword,method}) });
+        setChallengeId(result.data.challengeId);
+        if(method==='email') try { const mail=await requestApi<{code:string}>('/auth/demo-email/'+encodeURIComponent(result.data.challengeId));setDemoCode(mail.data.code); } catch { /* SMTP */ }
+      } else {
+        await requestApi('/auth/password/change-password/complete',{method:'POST',body:JSON.stringify({challengeId,code,photoDataUrl:photoDataUrl||undefined,newPassword})});
+        await logout();
+      }
+    } catch(reason) { setError(reason instanceof Error ? reason.message : t('验证失败，请重试。')); }
+  }
+  return <FeatureDialog title="修改密码" subtitle="旧密码 + 二次验证" onClose={onClose}>
+    <form className="auth-settings-form" onSubmit={(e)=>void submit(e)}>
+      {!challengeId ? <><label>{t('旧密码')}<input type="password" value={currentPassword} onChange={e=>setCurrentPassword(e.target.value)}/></label><label>{t('验证方式')}<select value={method} onChange={e=>setMethod(e.target.value as 'email'|'photo')}><option value="email">{t('工作邮箱验证码')}</option><option value="photo">{t('演示拍照核验')}</option></select></label></> : <>{demoCode&&<div className="demo-code">{t('本地演示邮件验证码')}：<b>{demoCode}</b></div>}{method==='email'?<label>{t('邮箱验证码')}<input value={code} onChange={e=>setCode(e.target.value.replace(/\D/g,''))}/></label>:<label className="photo-upload auth-recovery-upload">{photoDataUrl?t('照片已选择'):t('拍照或上传照片')}<input type="file" accept="image/png,image/jpeg" capture="user" onChange={e=>{const file=e.target.files?.[0];if(file){const reader=new FileReader();reader.onload=()=>setPhotoDataUrl(String(reader.result));reader.readAsDataURL(file);}}}/></label>}<label>{t('新密码')}<input type="password" value={newPassword} onChange={e=>setNewPassword(e.target.value)}/></label><small>{t('至少10位，包含大小写字母、数字和特殊字符')}</small></>}
+      {error&&<p role="alert" className="auth-error">{error}</p>}<button className="auth-primary">{challengeId?t('修改密码'):t('继续')}</button>
+    </form>
+  </FeatureDialog>;
 }

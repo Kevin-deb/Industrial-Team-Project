@@ -37,9 +37,9 @@ export class SmtpEmailDelivery implements EmailDeliveryPort {
     await this.transport.sendMail({
       from: this.from,
       to: input.email,
-      subject: 'CareLink 登录验证码',
-      text: `您的 CareLink 登录验证码是 ${input.code}。验证码将在 ${input.expiresAt} 失效。请勿将验证码告诉他人。`,
-      html: `<p>您的 CareLink 登录验证码是：</p><p style="font-size:24px;font-weight:700;letter-spacing:4px">${input.code}</p><p>验证码将在 ${input.expiresAt} 失效。请勿将验证码告诉他人。</p>`,
+      subject: 'CareLink 安全验证码',
+      text: `您的 CareLink 安全验证码是 ${input.code}。验证码将在 ${input.expiresAt} 失效。请勿将验证码告诉他人。`,
+      html: `<p>您的 CareLink 安全验证码是：</p><p style="font-size:24px;font-weight:700;letter-spacing:4px">${input.code}</p><p>验证码将在 ${input.expiresAt} 失效。请勿将验证码告诉他人。</p>`,
     });
   }
 }

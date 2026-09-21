@@ -10,6 +10,8 @@ export function LoginPage({
   beginLogin,
   verifyEmail,
   completePhotoCheck,
+  beginRecovery,
+  completeRecovery,
 }: {
   beginLogin: (input: { account: string; password: string }) => Promise<BeginResult>;
   verifyEmail: (input: { challengeId: string; code: string }) => Promise<VerifyResult>;
@@ -18,6 +20,8 @@ export function LoginPage({
     captureMethod: 'camera' | 'upload';
     photoDataUrl: string;
   }) => Promise<void>;
+  beginRecovery: (input: { account: string; method: 'email' | 'photo' }) => Promise<BeginResult & { method: 'email' | 'photo' }>;
+  completeRecovery: (input: { challengeId: string; code?: string; photoDataUrl?: string; newPassword: string }) => Promise<void>;
 }) {
   const { t, language, setLanguage } = useI18n();
   const [step, setStep] = useState<'password' | 'email' | 'photo'>('password');
@@ -30,6 +34,11 @@ export function LoginPage({
   const [method, setMethod] = useState<'camera' | 'upload'>('camera');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [recovering, setRecovering] = useState(false);
+  const [recoveryMethod, setRecoveryMethod] = useState<'email' | 'photo'>('email');
+  const [recoveryChallenge, setRecoveryChallenge] = useState<BeginResult | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [recoveryPhoto, setRecoveryPhoto] = useState('');
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
@@ -92,7 +101,31 @@ export function LoginPage({
           <h1>{t('登录 CareLink')}</h1>
           <span>{t('仅限已审核的医生与授权人员使用')}</span>
         </div>
-        <div className="auth-steps" aria-label={t('登录进度')}>
+        {recovering ? (
+          <form onSubmit={(event) => { event.preventDefault(); void perform(async () => {
+            if (!recoveryChallenge) {
+              const next = await beginRecovery({ account, method: recoveryMethod });
+              setRecoveryChallenge(next);
+              return;
+            }
+            await completeRecovery({ challengeId: recoveryChallenge.challengeId, code, photoDataUrl: recoveryPhoto || undefined, newPassword });
+            setRecovering(false); setRecoveryChallenge(null); setCode(''); setNewPassword(''); setRecoveryPhoto('');
+          }); }}>
+            <div className="auth-message"><LockKeyhole size={20}/><div><strong>{t('找回密码')}</strong><p>{t('通过工作邮箱验证码或演示拍照重置密码')}</p></div></div>
+            {!recoveryChallenge ? <>
+              <label>{t('账号或邮箱')}<input value={account} onChange={(e) => setAccount(e.target.value)} /></label>
+              <label>{t('验证方式')}<select value={recoveryMethod} onChange={(e) => setRecoveryMethod(e.target.value as 'email'|'photo')}><option value="email">{t('工作邮箱验证码')}</option><option value="photo">{t('演示拍照核验')}</option></select></label>
+            </> : <>
+              {recoveryChallenge.demoCode && <div className="demo-code">{t('本地演示邮件验证码')}：<b>{recoveryChallenge.demoCode}</b></div>}
+              {recoveryMethod === 'email' ? <label>{t('邮箱验证码')}<input inputMode="numeric" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g,''))}/></label> :
+                <label className="photo-upload auth-recovery-upload"><Upload size={17}/>{recoveryPhoto ? t('照片已选择') : t('拍照或上传照片')}<input type="file" accept="image/png,image/jpeg" capture="user" onChange={(e) => { const file=e.target.files?.[0]; if(file){const reader=new FileReader();reader.onload=()=>setRecoveryPhoto(String(reader.result));reader.readAsDataURL(file);}}}/></label>}
+              <label>{t('新密码')}<input type="password" value={newPassword} onChange={(e)=>setNewPassword(e.target.value)} autoComplete="new-password"/></label>
+              <small>{t('至少10位，包含大小写字母、数字和特殊字符')}</small>
+            </>}
+            <button className="auth-primary" disabled={busy}>{recoveryChallenge ? t('重置密码') : t('继续')}</button>
+            <button type="button" className="auth-text-button" onClick={()=>{setRecovering(false);setRecoveryChallenge(null);}}>{t('返回登录')}</button>
+          </form>
+        ) : <><div className="auth-steps" aria-label={t('登录进度')}>
           {['password', 'email', 'photo'].map((item, index) => (
             <span key={item} className={step === item ? 'active' : ''}>{index + 1}</span>
           ))}
@@ -104,6 +137,7 @@ export function LoginPage({
             <label>{t('账号或邮箱')}<input aria-label={t('账号或邮箱')} value={account} onChange={(e) => setAccount(e.target.value)} autoComplete="username" /></label>
             <label>{t('密码')}<div className="auth-input-icon"><LockKeyhole size={17} /><input aria-label={t('密码')} value={password} onChange={(e) => setPassword(e.target.value)} type="password" autoComplete="current-password" /></div></label>
             <button className="auth-primary" disabled={busy}>{t('继续')}</button>
+            <button type="button" className="auth-text-button" onClick={() => setRecovering(true)}>{t('忘记密码？')}</button>
           </form>
         )}
         {step === 'email' && challenge && (
@@ -132,6 +166,7 @@ export function LoginPage({
             </button>
           </div>
         )}
+        </>}
         {error && <p className="auth-error" role="alert">{error}</p>}
         <footer>{t('所有账号与患者资料均为合成演示数据')}</footer>
       </section>

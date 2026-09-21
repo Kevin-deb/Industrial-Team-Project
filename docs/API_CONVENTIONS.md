@@ -16,6 +16,8 @@ The current desktop header allowlist forwards `Accept`, `Content-Type`, `Accept-
 | `POST /api/v1/auth/email/verify` | A                          | photo ticket             | Consumes the single-use, expiring email code and issues a short-lived photo-step ticket                     |
 | `POST /api/v1/auth/photo-check` | A                           | authenticated session    | Accepts camera/upload demo photo data, records a digest/check event and creates a 12-hour revocable session |
 | `POST /api/v1/auth/logout`    | A                             | revocation result        | Revokes the current Bearer session                                                                           |
+| `/api/v1/auth/password/change-password/...` | A              | password challenge/result | Requires the old password plus email code or demo photo; changing it revokes every existing session          |
+| `/api/v1/auth/password/recover-password/...` | A             | password challenge/result | Recovers without the old password using email code or demo photo; resetting it revokes every existing session |
 | `GET /api/v1/session`         | A                             | `Session`                | Returns the authenticated clinician, verified profile fields, roles, mode, date and disclaimer              |
 | `GET /api/v1/dashboard`       | A, composing domain summaries | `Dashboard`              | Synthetic workload counts, schedule, patient previews, health alerts and activity                           |
 | `GET /api/v1/patients`        | B                             | `Patient[]`              | Scoped search/filter/pagination; page metadata is outside `data`                                            |
