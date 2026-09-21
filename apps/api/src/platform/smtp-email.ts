@@ -8,6 +8,7 @@ export interface SmtpEnvironment {
   CARELINK_SMTP_USER?: string;
   CARELINK_SMTP_PASS?: string;
   CARELINK_SMTP_FROM?: string;
+  CARELINK_SMTP_OVERRIDE_TO?: string;
 }
 
 export function smtpConfigured(environment: SmtpEnvironment): boolean {
@@ -17,12 +18,14 @@ export function smtpConfigured(environment: SmtpEnvironment): boolean {
 export class SmtpEmailDelivery implements EmailDeliveryPort {
   private readonly transport;
   private readonly from: string;
+  private readonly overrideTo?: string;
 
   constructor(environment: SmtpEnvironment) {
     if (!smtpConfigured(environment)) throw new Error('SMTP host and sender are required.');
     const port = Number(environment.CARELINK_SMTP_PORT ?? '587');
     if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Invalid SMTP port.');
     this.from = environment.CARELINK_SMTP_FROM!;
+    this.overrideTo = environment.CARELINK_SMTP_OVERRIDE_TO;
     this.transport = nodemailer.createTransport({
       host: environment.CARELINK_SMTP_HOST,
       port,
@@ -36,7 +39,7 @@ export class SmtpEmailDelivery implements EmailDeliveryPort {
   async sendVerificationCode(input: { email: string; code: string; expiresAt: string }) {
     await this.transport.sendMail({
       from: this.from,
-      to: input.email,
+      to: this.overrideTo || input.email,
       subject: 'CareLink 安全验证码',
       text: `您的 CareLink 安全验证码是 ${input.code}。验证码将在 ${input.expiresAt} 失效。请勿将验证码告诉他人。`,
       html: `<p>您的 CareLink 安全验证码是：</p><p style="font-size:24px;font-weight:700;letter-spacing:4px">${input.code}</p><p>验证码将在 ${input.expiresAt} 失效。请勿将验证码告诉他人。</p>`,

@@ -39,10 +39,11 @@ export CARELINK_SMTP_SECURE="true"
 export CARELINK_SMTP_USER="你的QQ邮箱@qq.com"
 export CARELINK_SMTP_PASS="QQ邮箱生成的SMTP授权码"
 export CARELINK_SMTP_FROM="CareLink <你的QQ邮箱@qq.com>"
+export CARELINK_SMTP_OVERRIDE_TO="你的QQ邮箱@qq.com"
 npm run dev
 ```
 
-QQ 邮箱使用 `smtp.qq.com:465` 和 TLS。`CARELINK_SMTP_PASS` 必须填写 QQ 邮箱生成的 SMTP 授权码，而不是 QQ 登录密码。授权码只通过环境变量提供，不写入代码或数据库。
+QQ 邮箱使用 `smtp.qq.com:465` 和 TLS。`CARELINK_SMTP_PASS` 必须填写 QQ 邮箱生成的 SMTP 授权码，而不是 QQ 登录密码。授权码只通过环境变量提供，不写入代码或数据库。课程演示账号使用虚构工作邮箱，因此可用 `CARELINK_SMTP_OVERRIDE_TO` 把所有演示验证码统一投递到指定测试邮箱；生产环境必须删除该覆盖配置。
 
 修改密码和找回密码均支持“邮箱验证码”或“演示拍照”作为第二步。修改密码还必须先验证旧密码；找回密码不要求旧密码。成功设置新密码后，该账号此前的全部登录会话都会失效。新密码要求 10–72 位，同时包含大写字母、小写字母、数字和特殊字符，并拒绝 `123456`、`password`、`qwerty` 等常见弱密码。
 
