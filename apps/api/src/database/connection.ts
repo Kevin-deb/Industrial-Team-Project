@@ -2,6 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { platformMigration } from '../platform/index.js';
+import { authMigration } from '../platform/index.js';
 import { patientsMigration, patientsArchiveMigration, patientsRegistrationMigration } from '../patients/index.js';
 import { encountersMigration } from '../encounters/index.js';
 import { clinicalMigration } from '../clinical/index.js';
@@ -48,6 +49,7 @@ export const migrations = [
   },
   patientsArchiveMigration,
   patientsRegistrationMigration,
+  authMigration,
 ];
 
 /** Refuse a newer or inconsistent migration history instead of silently running incompatible code. */

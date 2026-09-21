@@ -1,5 +1,14 @@
 /** Public platform boundary. Other domains must import this entry point. */
 export { platformMigration } from './migration.js';
+export { authMigration } from './auth-migration.js';
+export {
+  AuthError,
+  AuthService,
+  SqliteAuthRepository,
+  hashSecret,
+  verifySecret,
+} from './auth.js';
+export type { EmailDeliveryPort, AuthErrorCode } from './auth.js';
 export { platformCommands } from './commands.js';
 export { patientScopeSql, SqlitePatientAccess } from './access.js';
 export type { RequestContext, PatientAccessPort } from './access.js';

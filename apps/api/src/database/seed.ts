@@ -1,4 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
+import { hashSecret } from '../platform/auth.js';
 
 export const DEMO_DOCTOR_ID = 'doctor-demo-001';
 export const DEMO_DATE = '2026-09-10';
@@ -14,6 +15,34 @@ export function seedDemo(db: DatabaseSync): void {
     identity.run(DEMO_DOCTOR_ID, '林知远', '主任医师', '全科医学科', '云栖医养示范中心', '林');
     identity.run('doctor-demo-002', '周明', '副主任医师', '心血管内科', '云栖医养示范中心', '周');
     identity.run('doctor-demo-003', '许清', '主治医师', '内分泌科', '云栖医养示范中心', '许');
+    db.prepare(
+      `INSERT INTO doctors(identity_id,license_number,specialty,phone,government_id_type,government_id_masked,credential_status,personnel_status,created_at,updated_at)
+       VALUES(?,?,?,?,?,?,?,?,?,?)`,
+    ).run(
+      DEMO_DOCTOR_ID,
+      'DEMO-LIC-001',
+      '全科医学',
+      '13800000001',
+      '居民身份证',
+      '**************1001',
+      'verified',
+      'verified',
+      '2026-09-01T00:00:00.000Z',
+      '2026-09-01T00:00:00.000Z',
+    );
+    db.prepare(
+      `INSERT INTO users(id,identity_id,username,email,email_verified_at,password_hash,created_at,updated_at)
+       VALUES(?,?,?,?,?,?,?,?)`,
+    ).run(
+      'user-doctor-demo-001',
+      DEMO_DOCTOR_ID,
+      'lin.zhiyuan',
+      'lin.zhiyuan@carelink.demo',
+      '2026-09-01T00:00:00.000Z',
+      hashSecret('CareLink-Demo-2026', 'carelink-demo-doctor-001'),
+      '2026-09-01T00:00:00.000Z',
+      '2026-09-01T00:00:00.000Z',
+    );
     db.prepare('INSERT INTO roles VALUES(?,?)').run('attending', 'demo-attending');
     db.prepare('INSERT INTO identity_roles VALUES(?,?)').run(DEMO_DOCTOR_ID, 'attending');
     for (const permission of [
