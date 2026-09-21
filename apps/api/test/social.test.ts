@@ -495,6 +495,19 @@ test('social HTTP routes expose distinct forum, personal, notification and messa
     });
     assert.equal(read.statusCode, 200, read.body);
     assert.ok(read.json().data.readAt);
+    const readAll = await app.inject({
+      method: 'POST',
+      url: '/api/v1/social/notifications/read',
+      payload: { commandId: 'cmd-route-notifications-read-all' },
+    });
+    assert.equal(readAll.statusCode, 200, readAll.body);
+    assert.ok(readAll.json().data.readAt);
+    assert.ok(readAll.json().data.updatedCount >= 1);
+    assert.ok(
+      (await app.inject('/api/v1/social/notifications'))
+        .json()
+        .data.every((item: { readAt?: string }) => Boolean(item.readAt)),
+    );
     const conversations = await app.inject('/api/v1/social/conversations');
     assert.equal(conversations.statusCode, 200);
     const peers = await app.inject('/api/v1/social/peers?q=%E5%BF%83%E8%A1%80%E7%AE%A1');

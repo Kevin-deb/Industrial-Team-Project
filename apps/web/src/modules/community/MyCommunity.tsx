@@ -3,7 +3,8 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useI18n } from '../../shared/i18n';
 import { CommunityNotifications } from './CommunityNotifications';
-import { useNotifications, usePersonalPosts } from './queries';
+import { usePersonalPosts } from './queries';
+import { UnreadBadge, useSocialUnread } from './unread';
 
 export function MyCommunity() {
   const { t } = useI18n();
@@ -12,7 +13,7 @@ export function MyCommunity() {
   const likes = usePersonalPosts('likes');
   const bookmarks = usePersonalPosts('bookmarks');
   const posts = usePersonalPosts('posts');
-  const notifications = useNotifications();
+  const unread = useSocialUnread();
   const entries = [
     { label: '我的点赞', icon: Heart, path: '/community/me/likes', count: likes.data?.data.total },
     {
@@ -31,7 +32,8 @@ export function MyCommunity() {
       label: '我的消息',
       icon: Bell,
       path: '',
-      count: notifications.data?.data.filter((item) => !item.readAt).length,
+      count: unread.interactionTotal,
+      unread: unread.interactionUnread,
     },
   ] as const;
   return (
@@ -59,7 +61,10 @@ export function MyCommunity() {
                 )}
               </small>
             </span>
-            <b>{item.count ?? '…'}</b>
+            <b className="community-entry-count">
+              <span>{item.count ?? '…'}</span>
+              {'unread' in item && <UnreadBadge count={item.unread} />}
+            </b>
           </button>
         ))}
       </div>

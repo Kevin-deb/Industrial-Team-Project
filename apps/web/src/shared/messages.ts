@@ -47,6 +47,13 @@ export const shellMessages: Record<string, string> = {
   所有账号与患者资料均为合成演示数据:
     'All accounts and patient records are synthetic demonstration data',
   退出登录: 'Sign out',
+  条未读: 'unread',
+  条消息: 'messages',
+  条会话: 'conversations',
+  社区互动: 'Community activity',
+  查看同行私信: 'View direct messages',
+  目前没有未读社区消息: 'There are no unread community messages',
+  目前没有社区消息: 'There are no community messages',
   '忘记密码？': 'Forgot password?',
   找回密码: 'Recover password',
   通过工作邮箱验证码或演示拍照重置密码: 'Reset with a work-email code or demonstration photo',

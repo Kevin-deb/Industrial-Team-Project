@@ -6,6 +6,7 @@ import { I18nProvider } from '../../shared/i18n';
 import { renderWithEProviders } from '../e-shared/test-utils';
 import { CommunityPage } from './CommunityPage';
 import { PostPage } from './PostPage';
+import { GlobalSocialLiveUpdates } from './unread';
 
 const post = {
   id: 'POST-001',
@@ -38,17 +39,31 @@ describe('CommunityPage', () => {
     let listener: ((event: SocialRealtimeEvent) => void) | undefined;
     window.carelinkRealtime = { subscribe(callback) { listener = callback; return () => { listener = undefined; }; } };
     let count = 1;
-    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
-      if (String(input).includes('/preferences')) return envelope({ enabled: true, notificationsEnabled: true });
-      if (String(input).includes('/notifications')) return envelope(Array.from({ length: count }, (_, index) => ({ id: `LIVE-${index}`, kind: 'like', postId: post.id, actorDisplayName: '周明', createdAt: post.createdAt })));
+    const readIds = new Set<string>();
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes('/preferences')) return envelope({ enabled: true, notificationsEnabled: true });
+      if (url.endsWith('/notifications/read') && init?.method === 'POST') {
+        Array.from({ length: count }, (_, index) => readIds.add(`LIVE-${index}`));
+        return envelope({ readAt: '2026-09-16T12:01:00+08:00', updatedCount: count });
+      }
+      if (url.includes('/notifications/') && url.endsWith('/read') && init?.method === 'POST') {
+        readIds.add(url.split('/').at(-2) ?? '');
+        return envelope({ readAt: '2026-09-16T12:01:00+08:00' });
+      }
+      if (url.includes('/notifications')) return envelope(Array.from({ length: count }, (_, index) => ({ id: `LIVE-${index}`, kind: 'like', postId: '', actorDisplayName: '周明', createdAt: post.createdAt, readAt: readIds.has(`LIVE-${index}`) ? '2026-09-16T12:01:00+08:00' : undefined })));
       return envelope({ items: [], total: 0, page: 1, pageSize: 20 });
     }));
-    renderWithEProviders(<I18nProvider><MemoryRouter initialEntries={['/community']}><Routes><Route path="/community/*" element={<CommunityPage />} /></Routes></MemoryRouter></I18nProvider>);
+    renderWithEProviders(<I18nProvider><MemoryRouter initialEntries={['/community']}><Routes><Route path="/community/*" element={<><GlobalSocialLiveUpdates /><CommunityPage /></>} /></Routes></MemoryRouter></I18nProvider>);
     const entry = await screen.findByRole('button', { name: /我的消息/ });
     await waitFor(() => expect(entry).toHaveTextContent('1'));
     count = 2;
     listener?.({ type: 'social.notifications.changed', occurredAt: '2026-09-16T12:00:00+08:00' } as SocialRealtimeEvent);
     await waitFor(() => expect(entry).toHaveTextContent('2'));
+    fireEvent.click(entry);
+    expect(await screen.findByRole('dialog', { name: '我的消息' })).toBeInTheDocument();
+    await waitFor(() => expect(entry.querySelector('.unread-count-badge')).not.toBeInTheDocument());
+    expect(entry).toHaveTextContent('2');
     delete window.carelinkRealtime;
   });
   it('shows unavailable content rather than loading forever after moderation', async () => {
@@ -74,6 +89,44 @@ describe('CommunityPage', () => {
     fireEvent.click(within(article).getByRole('button', { name: '点赞回复' }));
     await waitFor(() => expect(within(article).getByRole('button', { name: '取消点赞回复' })).toBeInTheDocument());
     expect(within(article).getByRole('button', { name: '收藏回复' })).toBeInTheDocument();
+  });
+  it('renders a reply immediately below the comment it targets', async () => {
+    const comments = [
+      {
+        id: 'COMMENT-A', postId: post.id, body: 'A 的评论', author: post.author,
+        displayMode: 'named', contentBlocks: [], createdAt: '2026-09-01T10:00:00+08:00',
+      },
+      {
+        id: 'COMMENT-B', postId: post.id, body: 'B 的评论', author: post.author,
+        displayMode: 'named', contentBlocks: [], createdAt: '2026-09-01T11:00:00+08:00',
+      },
+      {
+        id: 'COMMENT-C', postId: post.id, body: '另一条最新评论', author: post.author,
+        displayMode: 'named', contentBlocks: [], createdAt: '2026-09-01T12:00:00+08:00',
+      },
+      {
+        id: 'COMMENT-B-REPLY', postId: post.id, parentCommentId: 'COMMENT-B',
+        body: 'A 回复 B', author: post.author, displayMode: 'named', contentBlocks: [],
+        createdAt: '2026-09-01T13:00:00+08:00',
+      },
+    ];
+    vi.stubGlobal('fetch', vi.fn(async () => envelope({
+      ...post,
+      body: '主题正文',
+      contentBlocks: [],
+      comments,
+    })));
+    renderWithEProviders(<I18nProvider><MemoryRouter initialEntries={['/posts/POST-001']}>
+      <Routes><Route path="/posts/:postId" element={<PostPage />} /></Routes>
+    </MemoryRouter></I18nProvider>);
+
+    const bodies = await screen.findAllByText(/A 的评论|B 的评论|另一条最新评论|A 回复 B/);
+    expect(bodies.map((node) => node.textContent)).toEqual([
+      'A 的评论',
+      'B 的评论',
+      'A 回复 B',
+      '另一条最新评论',
+    ]);
   });
   beforeEach(() => {
     availableTags = ['老年医学', '随访管理', '同行经验', '健康教育'];
@@ -177,7 +230,11 @@ describe('CommunityPage', () => {
     expect(await screen.findByRole('heading', { name: '社区首页' })).toBeInTheDocument();
     for (const name of ['我的点赞', '我的收藏', '我的帖子', '我的消息'])
       expect(await screen.findByRole('button', { name: new RegExp(name) })).toBeInTheDocument();
+    const messageEntry = screen.getByRole('button', { name: /我的消息/ });
+    expect(messageEntry).toHaveTextContent('1');
+    expect(messageEntry.querySelector('.unread-count-badge')).toHaveTextContent('1');
     expect(screen.queryByRole('link', { name: '我的社区' })).not.toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: /同行私信.*1/ })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /我的点赞/ }));
     expect(await screen.findByRole('heading', { name: '我的点赞' })).toBeInTheDocument();
@@ -189,7 +246,7 @@ describe('CommunityPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /我的消息/ }));
     expect(await screen.findByRole('dialog', { name: '我的消息' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '关闭' }));
-    fireEvent.click(screen.getByRole('link', { name: '同行私信' }));
+    fireEvent.click(screen.getByRole('link', { name: /同行私信/ }));
     expect(await screen.findByRole('heading', { name: '同行私信' })).toBeInTheDocument();
     expect(document.querySelector('.community-message-scroll')).toBeInTheDocument();
   });
@@ -253,6 +310,28 @@ describe('CommunityPage', () => {
     );
   });
 
+  it('keeps tag filter values stable when the English label is displayed', async () => {
+    localStorage.setItem('carelink-language', 'en');
+    renderWithEProviders(
+      <I18nProvider>
+        <MemoryRouter initialEntries={['/community/groups/GROUP-GERIATRICS']}>
+          <Routes>
+            <Route path="/community/*" element={<CommunityPage />} />
+          </Routes>
+        </MemoryRouter>
+      </I18nProvider>,
+    );
+
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Peer experience' }));
+    await waitFor(() =>
+      expect(vi.mocked(fetch)).toHaveBeenCalledWith(
+        expect.stringContaining(`tags=${encodeURIComponent('同行经验')}`),
+        expect.anything(),
+      ),
+    );
+    expect(await screen.findByText('Clearer outpatient follow-up records: Geriatrics')).toBeVisible();
+  });
+
   it('keeps a dedicated fixed-height post composer when case material is toggled', async () => {
     renderWithEProviders(
       <I18nProvider>
@@ -295,7 +374,15 @@ describe('CommunityPage', () => {
       <I18nProvider>
         <MemoryRouter initialEntries={['/community/messages']}>
           <Routes>
-            <Route path="/community/*" element={<CommunityPage />} />
+            <Route
+              path="/community/*"
+              element={
+                <>
+                  <GlobalSocialLiveUpdates />
+                  <CommunityPage />
+                </>
+              }
+            />
           </Routes>
         </MemoryRouter>
       </I18nProvider>,
@@ -310,7 +397,7 @@ describe('CommunityPage', () => {
     expect(screen.getByLabelText('私信内容')).toBeEnabled();
   });
 
-  it('clears unread count when a conversation is opened and keeps new sends at the bottom', async () => {
+  it('keeps an automatically displayed conversation unread until the recipient opens it', async () => {
     let unreadCount = 8;
     let readRequests = 0;
     const realtime = {
@@ -384,13 +471,24 @@ describe('CommunityPage', () => {
       <I18nProvider>
         <MemoryRouter initialEntries={['/community/messages']}>
           <Routes>
-            <Route path="/community/*" element={<CommunityPage />} />
+            <Route
+              path="/community/*"
+              element={
+                <>
+                  <GlobalSocialLiveUpdates />
+                  <CommunityPage />
+                </>
+              }
+            />
           </Routes>
         </MemoryRouter>
       </I18nProvider>,
     );
 
     expect(await screen.findByRole('heading', { name: '周明' })).toBeInTheDocument();
+    expect(readRequests).toBe(0);
+    expect(screen.getAllByText('8')).toHaveLength(2);
+    fireEvent.click(screen.getByRole('button', { name: /周明.*原消息/ }));
     await waitFor(() =>
       expect(fetch).toHaveBeenCalledWith(
         '/api/v1/social/conversations/CONVERSATION-1/read',

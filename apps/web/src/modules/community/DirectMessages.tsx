@@ -25,6 +25,7 @@ export function DirectMessages() {
   const conversations = useConversations();
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<string | null>(null);
+  const [openedConversation, setOpenedConversation] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [draftPeer, setDraftPeer] = useState<SocialPeer | null>(null);
   const peerSearch = usePeerSearch(search.trim());
@@ -52,10 +53,16 @@ export function DirectMessages() {
     if (!loadingEarlier.current) container.scrollTop = container.scrollHeight;
   }, [active, messageItems.length]);
   useEffect(() => {
-    if (!active || !conversation?.unreadCount || readRequests.current.has(active)) return;
+    if (
+      !active ||
+      openedConversation !== active ||
+      !conversation?.unreadCount ||
+      readRequests.current.has(active)
+    )
+      return;
     readRequests.current.add(active);
     void markRead.mutateAsync(active).finally(() => readRequests.current.delete(active));
-  }, [active, conversation?.unreadCount, markRead]);
+  }, [active, conversation?.unreadCount, markRead, openedConversation]);
   async function loadEarlier() {
     const container = messageScroll.current;
     const previousHeight = container?.scrollHeight ?? 0;
@@ -79,6 +86,7 @@ export function DirectMessages() {
         setContent({ body: '', items: [] });
         setDraftCommandId(crypto.randomUUID());
         setSelected(result.data.conversationId);
+        setOpenedConversation(result.data.conversationId);
         setDraftPeer(null);
         requestAnimationFrame(() => {
           const container = messageScroll.current;
@@ -128,6 +136,7 @@ export function DirectMessages() {
                     onClick={() => {
                       setDraftPeer(item);
                       setSelected(null);
+                      setOpenedConversation(null);
                       setSearch('');
                       setContent({ body: '', items: [] });
                       setDraftCommandId(crypto.randomUUID());
@@ -154,6 +163,7 @@ export function DirectMessages() {
                 onClick={() => {
                   setDraftPeer(null);
                   setSelected(item.id);
+                  setOpenedConversation(item.id);
                 }}
               >
                 <span>{item.peer.avatarInitials}</span>

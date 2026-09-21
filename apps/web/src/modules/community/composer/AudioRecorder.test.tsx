@@ -1,13 +1,22 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AudioRecorder } from './AudioRecorder';
+import { I18nProvider } from '../../../shared/i18n';
+
+function renderRecorder(onSelect: (file: File) => void) {
+  return render(
+    <I18nProvider>
+      <AudioRecorder onSelect={onSelect} onClose={() => undefined} />
+    </I18nProvider>,
+  );
+}
 
 describe('AudioRecorder', () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it('rejects an uploaded audio file over 10 MiB before sending it', () => {
     const onSelect = vi.fn();
-    render(<AudioRecorder onSelect={onSelect} onClose={() => undefined} />);
+    renderRecorder(onSelect);
     const file = new File([new Uint8Array(10 * 1024 * 1024 + 1)], 'too-large.wav', {
       type: 'audio/wav',
     });
@@ -40,7 +49,7 @@ describe('AudioRecorder', () => {
     }
     vi.stubGlobal('MediaRecorder', Recorder);
     const onSelect = vi.fn();
-    render(<AudioRecorder onSelect={onSelect} onClose={() => undefined} />);
+    renderRecorder(onSelect);
 
     fireEvent.click(screen.getByRole('button', { name: '开始录音' }));
     expect(await screen.findByText(/录音中/)).toBeInTheDocument();

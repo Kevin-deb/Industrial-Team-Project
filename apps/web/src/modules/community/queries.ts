@@ -18,6 +18,7 @@ import type {
   SocialGroupTags,
   SocialMessagePage,
   SocialNotification,
+  NotificationReadResult,
   SocialPage,
   SocialPeer,
   SocialPostDetail,
@@ -148,13 +149,11 @@ export const useGroupPosts = (
     }),
   );
 export const useGroupTags = (id: string) =>
-  useLocalizedEQuery(
-    useQuery({
-      queryKey: socialKeys.groupTags(id),
-      queryFn: () => requestEApi<SocialGroupTags>(`/social/groups/${encodeURIComponent(id)}/tags`),
-      enabled: Boolean(id),
-    }),
-  );
+  useQuery({
+    queryKey: socialKeys.groupTags(id),
+    queryFn: () => requestEApi<SocialGroupTags>(`/social/groups/${encodeURIComponent(id)}/tags`),
+    enabled: Boolean(id),
+  });
 export const usePost = (id: string) =>
   useLocalizedEQuery(
     useQuery({
@@ -316,11 +315,12 @@ export const usePersonalPosts = (kind: 'posts' | 'likes' | 'bookmarks') =>
       queryFn: () => requestEApi<SocialPage<SocialPostSummary>>(`/social/me/${kind}`),
     }),
   );
-export const useNotifications = () =>
+export const useNotifications = (enabled = true) =>
   useLocalizedEQuery(
     useQuery({
       queryKey: socialKeys.notifications,
       queryFn: () => requestEApi<SocialNotification[]>('/social/me/notifications'),
+      enabled,
     }),
   );
 export function useReadNotification() {
@@ -334,11 +334,23 @@ export function useReadNotification() {
     onSuccess: async () => client.invalidateQueries({ queryKey: socialKeys.notifications }),
   });
 }
-export const useConversations = () =>
+export function useReadAllNotifications() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      requestEApi<NotificationReadResult>('/social/notifications/read', {
+        method: 'POST',
+        body: { commandId: commandId() },
+      }),
+    onSuccess: async () => client.invalidateQueries({ queryKey: socialKeys.notifications }),
+  });
+}
+export const useConversations = (enabled = true) =>
   useLocalizedEQuery(
     useQuery({
       queryKey: socialKeys.conversations,
       queryFn: () => requestEApi<SocialConversation[]>('/social/conversations'),
+      enabled,
     }),
   );
 export const usePeerSearch = (q: string) =>

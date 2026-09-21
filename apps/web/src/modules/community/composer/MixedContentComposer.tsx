@@ -8,6 +8,7 @@ import type {
 import { useDeleteTemporaryAttachment, useUploadSocialAttachment } from '../queries';
 import { AudioRecorder } from './AudioRecorder';
 import { MedicalMetricCardDialog } from './MedicalMetricCardDialog';
+import { useI18n } from '../../../shared/i18n';
 
 export type ComposerMediaItem = {
   clientId: string;
@@ -57,6 +58,7 @@ export function MixedContentComposer({
   rows?: number;
   disabled?: boolean;
 }) {
+  const { t } = useI18n();
   const upload = useUploadSocialAttachment();
   const removeUpload = useDeleteTemporaryAttachment();
   const imageInput = useRef<HTMLInputElement>(null);
@@ -92,11 +94,11 @@ export function MixedContentComposer({
   async function addMedia(file: File, expectedKind: 'image' | 'audio') {
     setNotice('');
     if (expectedKind === 'image' && file.size > 5 * 1024 * 1024) {
-      setNotice('图片不能超过 5 MB。');
+      setNotice(t('图片不能超过 5 MB。'));
       return;
     }
     if (expectedKind === 'audio' && file.size > 10 * 1024 * 1024) {
-      setNotice('音频不能超过 10 MB。');
+      setNotice(t('音频不能超过 10 MB。'));
       return;
     }
     const current = valueRef.current.items;
@@ -106,7 +108,7 @@ export function MixedContentComposer({
       (expectedKind === 'audio' && sameKind >= 1)
     ) {
       setNotice(
-        expectedKind === 'image' ? '每条内容最多添加 4 张图片。' : '每条内容只能添加 1 条音频。',
+        t(expectedKind === 'image' ? '每条内容最多添加 4 张图片。' : '每条内容只能添加 1 条音频。'),
       );
       return;
     }
@@ -127,7 +129,7 @@ export function MixedContentComposer({
       replaceItem(clientId, (item) => ({
         ...item,
         status: 'error',
-        error: error instanceof Error ? error.message : '上传失败',
+        error: error instanceof Error ? error.message : t('上传失败'),
       }));
     }
   }
@@ -148,7 +150,7 @@ export function MixedContentComposer({
       replaceItem(item.clientId, (current) => ({
         ...current,
         status: 'error',
-        error: error instanceof Error ? error.message : '上传失败',
+        error: error instanceof Error ? error.message : t('上传失败'),
       }));
     }
   }
@@ -172,16 +174,16 @@ export function MixedContentComposer({
         disabled={disabled}
         value={value.body}
         onChange={(event) => emit({ ...valueRef.current, body: event.target.value })}
-        placeholder="输入文字，或添加图片、语音和去标识化医学数据…"
+        placeholder={t('输入文字，或添加图片、语音和去标识化医学数据…')}
       />
-      <div className="community-composer-toolbar" aria-label="内容工具">
+      <div className="community-composer-toolbar" aria-label={t('内容工具')}>
         <button
           type="button"
-          aria-label="添加图片"
+          aria-label={t('添加图片')}
           disabled={disabled}
           onClick={() => imageInput.current?.click()}
         >
-          <ImagePlus size={15} /> 图片
+          <ImagePlus size={15} /> {t('图片')}
         </button>
         <input
           ref={imageInput}
@@ -197,34 +199,34 @@ export function MixedContentComposer({
         />
         <button
           type="button"
-          aria-label="录音或上传音频"
+          aria-label={t('录音或上传音频')}
           disabled={disabled}
           onClick={() => setShowAudio((open) => !open)}
         >
-          <Mic size={15} /> 语音
+          <Mic size={15} /> {t('语音')}
         </button>
         <button
           type="button"
-          aria-label="添加表情"
+          aria-label={t('添加表情')}
           disabled={disabled}
           onClick={() => setShowEmoji((open) => !open)}
         >
-          <SmilePlus size={15} /> 表情
+          <SmilePlus size={15} /> {t('表情')}
         </button>
         <button
           type="button"
-          aria-label="添加医学数据"
+          aria-label={t('添加医学数据')}
           disabled={
             disabled ||
             value.items.filter((item) => item.kind === 'medical-metric-card').length >= 2
           }
           onClick={() => setShowMedical(true)}
         >
-          <Stethoscope size={15} /> 医学数据
+          <Stethoscope size={15} /> {t('医学数据')}
         </button>
         <span>
-          <Paperclip size={13} /> 图片 {value.items.filter((item) => item.kind === 'image').length}
-          /4 · 音频 {value.items.filter((item) => item.kind === 'audio').length}/1 · 数据卡{' '}
+          <Paperclip size={13} /> {t('图片数')} {value.items.filter((item) => item.kind === 'image').length}
+          /4 · {t('音频')} {value.items.filter((item) => item.kind === 'audio').length}/1 · {t('数据卡')}{' '}
           {value.items.filter((item) => item.kind === 'medical-metric-card').length}/2
         </span>
       </div>
@@ -264,35 +266,35 @@ export function MixedContentComposer({
         <div className="community-attachment-tray">
           {value.items.map((item) => (
             <article key={item.clientId}>
-              {item.kind === 'image' && <img src={item.previewUrl} alt="待发送图片" />}
+              {item.kind === 'image' && <img src={item.previewUrl} alt={t('待发送图片')} />}
               {item.kind === 'audio' && <audio controls preload="metadata" src={item.previewUrl} />}
               {item.kind === 'medical-metric-card' && (
                 <div className="community-draft-card">
                   <Stethoscope size={16} />
                   <span>
-                    <strong>医学数据 · {item.card.metrics.length} 项</strong>
+                    <strong>{t('医学数据 · {count} 项', { count: item.card.metrics.length })}</strong>
                     <small>
                       {item.card.metrics
-                        .map((metric) => `${metric.displayName} ${metric.value} ${metric.unit}`)
+                        .map((metric) => `${t(metric.displayName)} ${metric.value} ${metric.unit}`)
                         .join(' · ')}
                     </small>
                   </span>
                 </div>
               )}
               {item.kind !== 'medical-metric-card' && item.status === 'uploading' && (
-                <small>正在上传…</small>
+                <small>{t('正在上传…')}</small>
               )}
               {item.kind !== 'medical-metric-card' && item.status === 'error' && (
-                <small className="error">{item.error ?? '上传失败'}</small>
+                <small className="error">{item.error ?? t('上传失败')}</small>
               )}
               <div>
                 {item.kind !== 'medical-metric-card' && item.status === 'error' && (
-                  <button type="button" aria-label="重试上传" onClick={() => void retry(item)}>
-                    <RefreshCw size={14} /> 重试
+                  <button type="button" aria-label={t('重试上传')} onClick={() => void retry(item)}>
+                    <RefreshCw size={14} /> {t('重试')}
                   </button>
                 )}
-                <button type="button" aria-label="删除附件" onClick={() => remove(item)}>
-                  <Trash2 size={14} /> 删除
+                <button type="button" aria-label={t('删除附件')} onClick={() => remove(item)}>
+                  <Trash2 size={14} /> {t('删除')}
                 </button>
               </div>
             </article>

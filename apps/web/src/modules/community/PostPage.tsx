@@ -1,4 +1,5 @@
 import { ArrowLeft, Bookmark, Eye, Flag, Heart, Reply, X } from 'lucide-react';
+import type { SocialComment } from '@doctor/contracts';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useI18n } from '../../shared/i18n';
@@ -21,6 +22,32 @@ import {
 } from './queries';
 
 const viewedPostIds = new Set<string>();
+
+function commentsInThreadOrder(comments: SocialComment[]) {
+  const byId = new Map(comments.map((item) => [item.id, item]));
+  const children = new Map<string, SocialComment[]>();
+  const roots: SocialComment[] = [];
+  for (const item of comments) {
+    if (item.parentCommentId && byId.has(item.parentCommentId)) {
+      const siblings = children.get(item.parentCommentId) ?? [];
+      siblings.push(item);
+      children.set(item.parentCommentId, siblings);
+    } else {
+      roots.push(item);
+    }
+  }
+  const ordered: Array<{ comment: SocialComment; depth: number }> = [];
+  const visited = new Set<string>();
+  const appendThread = (item: SocialComment, depth: number) => {
+    if (visited.has(item.id)) return;
+    visited.add(item.id);
+    ordered.push({ comment: item, depth });
+    for (const child of children.get(item.id) ?? []) appendThread(child, depth + 1);
+  };
+  for (const root of roots) appendThread(root, 0);
+  for (const item of comments) appendThread(item, 0);
+  return ordered;
+}
 
 export function PostPage() {
   const { t, formatDate } = useI18n();
@@ -59,6 +86,7 @@ export function PostPage() {
       </section>
     );
   if (!data) return <div className="community-loading">{t('正在加载主题…')}</div>;
+  const threadedComments = commentsInThreadOrder(data.comments);
   async function submit(event: FormEvent) {
     event.preventDefault();
     await comment
@@ -169,8 +197,12 @@ export function PostPage() {
           <h3>
             {t('全部回复')} · {data.commentCount}
           </h3>
-          {data.comments.map((item) => (
-            <article key={item.id} className={item.parentCommentId ? 'is-reply' : ''}>
+          {threadedComments.map(({ comment: item, depth }) => (
+            <article
+              key={item.id}
+              className={depth ? 'is-reply' : ''}
+              style={depth ? { marginLeft: `${Math.min(depth, 3) * 42}px` } : undefined}
+            >
               <div>
                 <strong>{item.author.displayName}</strong>
                 <time>

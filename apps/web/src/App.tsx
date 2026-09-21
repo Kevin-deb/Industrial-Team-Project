@@ -6,7 +6,6 @@ import {
   ArrowUpRight,
   Bell,
   BookOpen,
-  CalendarDays,
   ChevronDown,
   ChevronRight,
   CircleHelp,
@@ -25,7 +24,7 @@ import {
   Video,
 } from 'lucide-react';
 import { useAuth } from './auth/AuthProvider';
-import { Badge, Button, Modal } from './shared/ui';
+import { Button, Modal } from './shared/ui';
 import { DashboardPage } from './dashboard/DashboardPage';
 import { useCommunityPreference } from './modules/preferences';
 import {
@@ -38,6 +37,13 @@ import {
   RecordsPage,
   SettingsPage,
 } from './modules';
+import {
+  GlobalSocialLiveUpdates,
+  UnreadBadge,
+  useSocialUnread,
+} from './modules/community/unread';
+import { useReadAllNotifications } from './modules/community/queries';
+import { noticeText } from './modules/community/CommunityNotifications';
 
 const navigation = [
   { path: '/', label: '工作台', en: 'Overview', icon: LayoutDashboard },
@@ -77,6 +83,8 @@ export function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [dialog, setDialog] = useState<'notifications' | 'help' | null>(null);
   const { enabled: communityEnabled } = useCommunityPreference();
+  const unread = useSocialUnread(communityEnabled);
+  const readAllNotifications = useReadAllNotifications();
   useEffect(() => {
     setSidebarOpen(false);
     window.scrollTo(0, 0);
@@ -90,6 +98,7 @@ export function App() {
       '页面');
   return (
     <div className="app-shell">
+      {communityEnabled && <GlobalSocialLiveUpdates />}
       <a className="skip-link" href="#main-content">
         {t('跳到主要内容')}
       </a>
@@ -140,6 +149,7 @@ export function App() {
             <NavLink to="/community" className="nav-item">
               <BookOpen size={19} />
               <span>{t('同行协作')}</span>
+              <UnreadBadge count={unread.totalUnread} />
             </NavLink>
           )}
           <NavLink to="/audit" className="nav-item">
@@ -229,11 +239,19 @@ export function App() {
             </button>
             <button
               className="icon-button notification-button"
-              aria-label={t('通知中心')}
-              onClick={() => setDialog('notifications')}
+              aria-label={
+                unread.totalUnread
+                  ? `${t('通知中心')}，${unread.totalUnread} ${t('条未读')}`
+                  : t('通知中心')
+              }
+              onClick={() => {
+                setDialog('notifications');
+                if (unread.interactionUnread > 0 && !readAllNotifications.isPending)
+                  readAllNotifications.mutate();
+              }}
             >
               <Bell size={20} />
-              <span />
+              <UnreadBadge count={unread.totalUnread} />
             </button>
             <div className="topbar-divider" />
             <button
@@ -293,28 +311,66 @@ export function App() {
           onClose={() => setDialog(null)}
         >
           {dialog === 'notifications' ? (
-            <>
-              <div className="notice-row">
-                <div className="notice-symbol">
-                  <Bell size={21} />
-                </div>
-                <div>
-                  <h3>{t('工作台框架已就绪')}</h3>
-                  <p>{t('现在可以浏览患者档案、问诊安排与健康趋势示例。')}</p>
-                  <Badge tone="teal">{t('本地演示通知')}</Badge>
-                </div>
-              </div>
-              <div className="notice-row">
-                <div className="notice-symbol amber">
-                  <CalendarDays size={21} />
-                </div>
-                <div>
-                  <h3>{t('消息推送将在后续迭代上线')}</h3>
-                  <p>{t('目前没有连接患者端或消息服务，也不会发送临床提醒。')}</p>
-                  <Badge tone="amber">{t('待上线 · 后续迭代')}</Badge>
-                </div>
-              </div>
-            </>
+            <div className="notification-center-list">
+              {unread.interactionTotal + unread.conversationTotal === 0 && (
+                <p className="notification-empty">{t('目前没有社区消息')}</p>
+              )}
+              {unread.notificationItems.length > 0 && (
+                <section className="notification-center-section">
+                  <header>
+                    <strong>{t('社区互动')}</strong>
+                    <span>{unread.interactionTotal} {t('条消息')}</span>
+                    <UnreadBadge count={unread.interactionUnread} />
+                  </header>
+                  {unread.notificationItems.map((item) => (
+                    <button
+                      key={item.id}
+                      className={item.readAt ? '' : 'unread'}
+                      onClick={() => {
+                        setDialog(null);
+                        navigate(item.postId ? `/community/posts/${item.postId}` : '/community');
+                      }}
+                    >
+                      <span className="notice-symbol"><Bell size={17} /></span>
+                      <span>
+                        <strong>
+                          {item.kind.startsWith('report-') || item.kind === 'content-moderated'
+                            ? t(noticeText(item.kind))
+                            : `${item.actorDisplayName} ${t(noticeText(item.kind))}`}
+                        </strong>
+                        <small>{formatDate(item.createdAt, { dateStyle: 'medium', timeStyle: 'short' })}</small>
+                      </span>
+                    </button>
+                  ))}
+                </section>
+              )}
+              {unread.conversationItems.length > 0 && (
+                <section className="notification-center-section">
+                  <header>
+                    <strong>{t('同行私信')}</strong>
+                    <span>{unread.conversationTotal} {t('条会话')}</span>
+                    <UnreadBadge count={unread.directUnread} />
+                  </header>
+                  {unread.conversationItems.map((item) => (
+                    <button
+                      key={item.id}
+                      className={item.unreadCount ? 'unread' : ''}
+                      onClick={() => {
+                        setDialog(null);
+                        navigate('/community/messages');
+                      }}
+                    >
+                      <span className="notice-symbol"><MessageSquareText size={17} /></span>
+                      <span>
+                        <strong>{item.peer.displayName}</strong>
+                        <small>{item.lastMessage || t('查看同行私信')}</small>
+                      </span>
+                      <UnreadBadge count={item.unreadCount} />
+                    </button>
+                  ))}
+                </section>
+              )}
+            </div>
           ) : (
             <>
               <p className="modal-lead">

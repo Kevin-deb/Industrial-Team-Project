@@ -54,6 +54,9 @@
   color: #1b5cab;
   font-weight: 650;
 }
+.community-tabs .unread-count-badge {
+  margin-left: 2px;
+}
 .community-boundary-note {
   margin: 12px 0;
   padding: 9px 12px;
@@ -655,6 +658,12 @@
   font-size: 12px;
   font-weight: 600;
   text-align: right;
+}
+.community-personal-menu .community-entry-count {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
 }
 .community-notice-scroll {
   max-height: 500px;

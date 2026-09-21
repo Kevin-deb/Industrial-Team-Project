@@ -12,6 +12,7 @@ import type {
   SocialMembership,
   SocialMessagePage,
   SocialNotification,
+  NotificationReadResult,
   SocialPage,
   SocialPostDetail,
   SocialPostSummary,
@@ -416,6 +417,23 @@ export class SocialService {
         return this.repository.findNotification(id, context.actorId)!;
       },
       id,
+    );
+  }
+  markAllNotificationsRead(
+    commandId: string,
+    context: RequestContext,
+  ): NotificationReadResult {
+    this.assertEnabled(context);
+    return this.execute(
+      'social.notifications.read-all',
+      commandId,
+      { commandId },
+      context,
+      () => ({
+        updatedCount: this.repository.markAllNotificationsRead(context.actorId, context.now),
+        readAt: context.now,
+      }),
+      'notifications',
     );
   }
   listConversations(context: RequestContext) {
