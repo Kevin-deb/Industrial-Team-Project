@@ -78,6 +78,51 @@ export const migrations = [
   sessionAuthMethodMigration,
 ];
 
+const legacyAuthOrder = [
+  [17, 21, authMigration.name],
+  [18, 22, demoInitialPasswordMigration.name],
+  [19, 23, healthObservationConfirmationMigration.name],
+  [20, 24, sessionAuthMethodMigration.name],
+] as const;
+
+/**
+ * One released demo build used versions 17-20 for authentication immediately before
+ * main assigned those versions to the clinical lifecycle. Recognize only that exact
+ * history, move it to 21-24, and install the missing clinical migrations atomically.
+ */
+function upgradeLegacyAuthMigrationOrder(database: DatabaseSync): void {
+  const tail = database
+    .prepare('SELECT version,name FROM schema_migrations WHERE version>=17 ORDER BY version')
+    .all();
+  const isLegacyOrder =
+    tail.length === legacyAuthOrder.length &&
+    tail.every(
+      (row, index) =>
+        row.version === legacyAuthOrder[index][0] && row.name === legacyAuthOrder[index][2],
+    );
+  if (!isLegacyOrder) return;
+
+  database.exec('BEGIN IMMEDIATE');
+  try {
+    for (const [oldVersion, newVersion] of [...legacyAuthOrder].reverse())
+      database
+        .prepare('UPDATE schema_migrations SET version=? WHERE version=?')
+        .run(newVersion, oldVersion);
+    for (const migration of migrations.filter(
+      ({ version }) => version >= 17 && version <= 20,
+    )) {
+      database.exec(migration.sql);
+      database
+        .prepare('INSERT INTO schema_migrations(version,name,applied_at) VALUES(?,?,?)')
+        .run(migration.version, migration.name, new Date().toISOString());
+    }
+    database.exec('COMMIT');
+  } catch (error) {
+    database.exec('ROLLBACK');
+    throw error;
+  }
+}
+
 /** Refuse a newer or inconsistent migration history instead of silently running incompatible code. */
 export function validateMigrationHistory(database: DatabaseSync): void {
   const applied = database
@@ -101,6 +146,7 @@ export function openDatabase(path: string): DatabaseSync {
     database.exec(
       'CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL)',
     );
+    upgradeLegacyAuthMigrationOrder(database);
     validateMigrationHistory(database);
     for (const migration of migrations) {
       const applied = database
