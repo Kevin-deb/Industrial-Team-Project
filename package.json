@@ -18,6 +18,8 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test -w @doctor/api && npm run test -w @doctor/web && npm run test -w @doctor/desktop",
     "test:e2e": "playwright test",
+    "database:export": "tsx scripts/export-database-sql.ts",
+    "database:verify": "npm run test -w @doctor/api -- --test-name-pattern='standalone SQL'",
     "check:boundaries": "node scripts/check-boundaries.mjs",
     "check": "npm run check:boundaries && npm run typecheck && npm test && npm run build",
     "format": "prettier --write .",
