@@ -480,6 +480,15 @@ export class SqliteSocialRepository {
         .run(readAt, id, actorId).changes > 0
     );
   }
+  markAllNotificationsRead(actorId: string, readAt: string): number {
+    return Number(
+      this.db
+        .prepare(
+          'UPDATE social_notifications SET read_at=? WHERE recipient_id=? AND read_at IS NULL',
+        )
+        .run(readAt, actorId).changes,
+    );
+  }
   createNotification(item: SocialNotification, recipientId: string, actorId: string) {
     this.db
       .prepare(

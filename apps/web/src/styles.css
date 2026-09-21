@@ -472,15 +472,65 @@ input::placeholder {
 .notification-button {
   position: relative;
 }
-.notification-button > span {
-  width: 5px;
-  height: 5px;
+.unread-count-badge {
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #d94a4a;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+}
+.nav-item > .unread-count-badge {
+  margin-left: auto;
+}
+.notification-button > .unread-count-badge {
   position: absolute;
-  right: 8px;
-  top: 7px;
-  background: #db9f78;
-  border: 1px solid white;
-  border-radius: 50%;
+  right: 1px;
+  top: 0;
+  border: 2px solid #fff;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 3px;
+}
+.notification-center-list {
+  display: grid;
+  gap: 8px;
+}
+.notification-center-list > button {
+  width: 100%;
+  border: 1px solid #e2e8ec;
+  border-radius: 9px;
+  background: #fff;
+  color: #29454f;
+  padding: 12px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 11px;
+  text-align: left;
+}
+.notification-center-list > button:hover {
+  border-color: #9fc6da;
+  background: #f7fbfd;
+}
+.notification-center-list > button > span:nth-child(2) {
+  display: grid;
+  gap: 3px;
+}
+.notification-center-list small,
+.notification-center-list > button > span:last-child,
+.notification-empty {
+  color: #728a94;
+  font-size: 11px;
+}
+.notification-empty {
+  margin: 0 0 4px;
 }
 .topbar-divider {
   height: 21px;

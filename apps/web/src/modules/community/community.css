@@ -54,6 +54,9 @@
   color: #1b5cab;
   font-weight: 650;
 }
+.community-tabs .unread-count-badge {
+  margin-left: 2px;
+}
 .community-boundary-note {
   margin: 12px 0;
   padding: 9px 12px;
