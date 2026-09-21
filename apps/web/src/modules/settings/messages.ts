@@ -32,6 +32,18 @@ export const settingsMessages: Record<string, string> = {
   当前环境: 'Environment',
   '本地演示 · 固定虚构身份': 'Local demo · Fixed fictional identity',
   编辑医生资料: 'Edit doctor profile',
+  门诊地点: 'Clinic location',
+  个人简介: 'Profile summary',
+  资料已保存: 'Profile saved',
+  请输入有效的工作邮箱: 'Enter a valid work email',
+  请输入有效的联系电话: 'Enter a valid phone number',
+  '机构、科室、职称与执业资质属于审核资料，当前只允许编辑联系方式和工作简介。':
+    'Institution, department, title, and license credentials require review. Only contact details and profile summary can be edited now.',
+  取消: 'Cancel',
+  保存资料: 'Save profile',
+  '线上诊疗中心 3 诊室': 'Online care center · Room 3',
+  '擅长慢病连续管理、在线随访和多学科协作。':
+    'Focuses on chronic disease continuity, online follow-up, and multidisciplinary collaboration.',
   '资料编辑将支持更新联系信息与工作资料。机构、科室、职称及执业资质变更需要配置相应的验证和审批流程，当前演示资料不可修改。':
     'Profile editing will support contact and professional details. Institution, department, title, and qualification changes will require verification and approval workflows. The demo profile cannot be edited.',
   '资料编辑 · 尚未上线': 'Edit profile · Coming soon',
@@ -45,6 +57,23 @@ export const settingsMessages: Record<string, string> = {
   '当前采用适合医疗工作台的浅色风格。': 'A light theme designed for a medical workspace.',
   浅色: 'Light',
   通知偏好: 'Notification preferences',
+  已保存: 'Saved',
+  '按工作类型管理提醒，并保存在当前设备。':
+    'Manage reminders by workflow. Preferences are saved on this device.',
+  接诊提醒: 'Consultation reminders',
+  '预约前、患者进入诊间和问诊即将超时提醒。':
+    'Reminders before appointments, when patients enter the room, and before a consultation times out.',
+  随访提醒: 'Follow-up reminders',
+  '复诊计划、健康指标异常和待处理随访提醒。':
+    'Follow-up plans, abnormal health metrics, and pending follow-up tasks.',
+  社区互动通知: 'Community interaction notifications',
+  '同行评论、私信和社区互动提醒。': 'Peer comments, direct messages, and community interactions.',
+  浏览器提示: 'Browser alerts',
+  '允许后在当前浏览器弹出本地提醒。': 'Show local alerts in the current browser when enabled.',
+  免打扰时段: 'Quiet hours',
+  '开启后，该时段内只保留页面内提示。': 'When enabled, this period only keeps in-page notices.',
+  开始: 'Start',
+  结束: 'End',
   '接诊、随访与社区通知的独立偏好将在后续接入。':
     'Separate preferences for appointments, follow-up, and community notifications are planned.',
   '接诊安排、健康随访与社区消息将使用独立通知类型。您可以单独管理接收方式及社区消息总开关；当前没有发送站内、短信或邮件通知。':

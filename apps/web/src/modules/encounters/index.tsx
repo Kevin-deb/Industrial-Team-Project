@@ -6,6 +6,7 @@ import {
   CalendarDays,
   CalendarPlus,
   CheckCheck,
+  ClipboardList,
   Clock3,
   Download,
   FileText,
@@ -23,8 +24,18 @@ import {
   Video,
   X,
 } from 'lucide-react';
-import type { Encounter } from '@doctor/contracts';
-import { useApi } from '../../shared/api';
+import type {
+  CreateMedicalRecordRequest,
+  Encounter,
+  EncounterAvailabilityWindow,
+  EncounterContext,
+  EncounterNotice,
+  EncounterMessage as ApiEncounterMessage,
+  MedicalRecordDetail,
+  MedicalRecordTemplateDefinition,
+  MedicalRecordTemplateId,
+} from '@doctor/contracts';
+import { requestApi, useApi } from '../../shared/api';
 import { Badge, Button, EmptyState, LoadingState, PageHeader } from '../../shared/ui';
 import {
   DetailGrid,
@@ -83,328 +94,18 @@ type SavedEncounterRecord = {
   audioSaved: boolean;
   videoSaved: boolean;
 };
-type AvailabilityWindow = {
-  id: string;
-  date: string;
-  type: Encounter['type'];
-  start: string;
-  end: string;
-  capacity: number;
-  booked: number;
-};
-type NoticeLog = {
-  id: string;
-  encounterId: string;
-  patientName: string;
-  kind: '资料提醒' | '按时进入提醒' | '改期通知';
-  content: string;
-  status: '待患者确认' | '患者已接受' | '已发送';
-};
-const extraDemoEncounters: Encounter[] = [
-  {
-    id: 'ENC-005',
-    patientId: 'PAT-004',
-    patientName: '张淑兰',
-    type: 'video',
-    status: 'waiting',
-    scheduledAt: '2026-09-11T08:40:00+08:00',
-    reason: '胸闷症状复查',
-    durationMinutes: 20,
-  },
-  {
-    id: 'ENC-006',
-    patientId: 'PAT-005',
-    patientName: '刘桂芬',
-    type: 'text',
-    status: 'waiting',
-    scheduledAt: '2026-09-20T09:20:00+08:00',
-    reason: '饮食运动计划调整',
-    durationMinutes: 15,
-  },
-  {
-    id: 'ENC-007',
-    patientId: 'PAT-007',
-    patientName: '孙雅琴',
-    type: 'video',
-    status: 'waiting',
-    scheduledAt: '2026-09-11T10:30:00+08:00',
-    reason: '膝关节疼痛康复咨询',
-    durationMinutes: 20,
-  },
-  {
-    id: 'ENC-008',
-    patientId: 'PAT-001',
-    patientName: '陈建国',
-    type: 'text',
-    status: 'completed',
-    scheduledAt: '2026-09-08T16:00:00+08:00',
-    reason: '家庭血压记录复核',
-    durationMinutes: 15,
-  },
-  {
-    id: 'ENC-009',
-    patientId: 'PAT-002',
-    patientName: '王秀英',
-    type: 'video',
-    status: 'waiting',
-    scheduledAt: '2026-09-12T11:10:00+08:00',
-    reason: '餐后血糖波动评估',
-    durationMinutes: 20,
-  },
-  {
-    id: 'ENC-010',
-    patientId: 'PAT-006',
-    patientName: '赵德华',
-    type: 'text',
-    status: 'waiting',
-    scheduledAt: '2026-09-20T14:30:00+08:00',
-    reason: '咳嗽气短用药咨询',
-    durationMinutes: 15,
-  },
-  {
-    id: 'ENC-011',
-    patientId: 'PAT-003',
-    patientName: '李志明',
-    type: 'video',
-    status: 'completed',
-    scheduledAt: '2026-09-07T09:00:00+08:00',
-    reason: '头晕症状随访',
-    durationMinutes: 20,
-  },
-  {
-    id: 'ENC-012',
-    patientId: 'PAT-004',
-    patientName: '张淑兰',
-    type: 'text',
-    status: 'waiting',
-    scheduledAt: '2026-09-21T08:00:00+08:00',
-    reason: '冠心病用药答疑',
-    durationMinutes: 15,
-  },
-  {
-    id: 'ENC-013',
-    patientId: 'PAT-005',
-    patientName: '刘桂芬',
-    type: 'video',
-    status: 'waiting',
-    scheduledAt: '2026-09-14T09:50:00+08:00',
-    reason: '糖尿病随访视频问诊',
-    durationMinutes: 20,
-  },
-  {
-    id: 'ENC-014',
-    patientId: 'PAT-007',
-    patientName: '孙雅琴',
-    type: 'text',
-    status: 'completed',
-    scheduledAt: '2026-09-06T13:30:00+08:00',
-    reason: '康复训练反馈',
-    durationMinutes: 15,
-  },
-];
-const clinicalBriefs: Record<string, ClinicalBrief> = {
-  'ENC-001': {
-    chiefComplaint: '近两日反复偏头痛',
-    presentIllness: '患者自述右侧颞部搏动性疼痛，午后明显，偶有恶心，无肢体麻木或言语不清。',
-    pastHistory: '高血压病史3年，平时血压控制尚可。',
-    surgicalHistory: '否认重大手术史。',
-    medicationHistory: '间断服用苯磺酸氨氯地平片。',
-    allergyHistory: '否认药物及食物过敏史。',
-  },
-  'ENC-002': {
-    chiefComplaint: '餐后血糖波动一周',
-    presentIllness: '近一周餐后2小时血糖多次升高，伴口干，无明显乏力、胸闷或意识异常。',
-    pastHistory: '2型糖尿病病史5年。',
-    surgicalHistory: '阑尾切除术后多年，恢复良好。',
-    medicationHistory: '规律服用二甲双胍，近期饮食控制不稳定。',
-    allergyHistory: '青霉素过敏史。',
-  },
-  'ENC-003': {
-    chiefComplaint: '咳嗽气短三天',
-    presentIllness: '受凉后出现阵发性咳嗽，活动后轻度气短，无高热，无咯血。',
-    pastHistory: '慢性支气管炎病史，季节变化时易反复。',
-    surgicalHistory: '否认重大手术史。',
-    medicationHistory: '偶用吸入支气管舒张剂。',
-    allergyHistory: '花粉过敏史。',
-  },
-  'ENC-004': {
-    chiefComplaint: '常规健康随访',
-    presentIllness: '近期总体平稳，睡眠一般，偶有头晕，未诉明显胸痛、气促。',
-    pastHistory: '高脂血症病史。',
-    surgicalHistory: '胆囊切除术后。',
-    medicationHistory: '规律服用他汀类降脂药。',
-    allergyHistory: '否认明确过敏史。',
-  },
-};
-const patientHistories: Record<string, HistoryRecord[]> = {
-  'PAT-001': [
-    {
-      id: 'MR-PAT001-01',
-      title: '高血压复诊',
-      date: '2026-08-21',
-      department: '全科医学科',
-      diagnosis: '原发性高血压',
-      outcome: '调整家庭血压监测频率，继续规律用药。',
-    },
-    {
-      id: 'MR-PAT001-02',
-      title: '头痛门诊咨询',
-      date: '2026-06-13',
-      department: '神经内科',
-      diagnosis: '偏头痛待随访',
-      outcome: '建议记录诱因，必要时完善影像检查。',
-    },
-  ],
-  'PAT-002': [
-    {
-      id: 'MR-PAT002-01',
-      title: '糖尿病随访',
-      date: '2026-08-30',
-      department: '内分泌科',
-      diagnosis: '2型糖尿病',
-      outcome: '评估餐后血糖，强调饮食与运动管理。',
-    },
-    {
-      id: 'MR-PAT002-02',
-      title: '低血糖风险评估',
-      date: '2026-07-16',
-      department: '内分泌科',
-      diagnosis: '2型糖尿病伴血糖波动',
-      outcome: '调整晚餐后加餐建议，提醒随身携带糖块并记录低血糖时间。',
-    },
-  ],
-  'PAT-004': [
-    {
-      id: 'MR-PAT004-01',
-      title: '胸闷症状复查',
-      date: '2026-08-28',
-      department: '心血管内科',
-      diagnosis: '冠心病稳定期',
-      outcome: '复核心电图与用药依从性，建议继续观察活动耐量变化。',
-    },
-    {
-      id: 'MR-PAT004-02',
-      title: '冠心病用药答疑',
-      date: '2026-07-22',
-      department: '心血管内科',
-      diagnosis: '冠心病二级预防',
-      outcome: '解释抗血小板药物服用注意事项，提醒出现黑便或出血及时就医。',
-    },
-  ],
-  'PAT-005': [
-    {
-      id: 'MR-PAT005-01',
-      title: '饮食运动计划调整',
-      date: '2026-09-02',
-      department: '内分泌科',
-      diagnosis: '糖尿病前期管理',
-      outcome: '建议每周至少五次中等强度步行，晚餐主食量减少三分之一。',
-    },
-    {
-      id: 'MR-PAT005-02',
-      title: '体重管理线上随访',
-      date: '2026-08-05',
-      department: '营养门诊',
-      diagnosis: '超重伴代谢风险',
-      outcome: '建立饮食日志，四周后复核体重、腰围与空腹血糖。',
-    },
-  ],
-  'PAT-006': [
-    {
-      id: 'MR-PAT006-01',
-      title: '呼吸道症状复诊',
-      date: '2026-07-18',
-      department: '呼吸内科',
-      diagnosis: '慢性支气管炎',
-      outcome: '季节变化时加强观察，按需使用吸入药物。',
-    },
-    {
-      id: 'MR-PAT006-02',
-      title: '咳嗽用药咨询',
-      date: '2026-06-29',
-      department: '呼吸内科',
-      diagnosis: '感染后咳嗽',
-      outcome: '短期对症处理，若出现发热、喘憋或痰中带血需线下就诊。',
-    },
-  ],
-  'PAT-007': [
-    {
-      id: 'MR-PAT007-01',
-      title: '膝关节疼痛康复咨询',
-      date: '2026-08-17',
-      department: '康复医学科',
-      diagnosis: '膝骨关节炎康复期',
-      outcome: '指导股四头肌训练，避免长时间爬楼与负重深蹲。',
-    },
-    {
-      id: 'MR-PAT007-02',
-      title: '康复训练反馈',
-      date: '2026-07-09',
-      department: '康复医学科',
-      diagnosis: '膝关节慢性疼痛',
-      outcome: '疼痛较前减轻，建议继续低冲击运动并记录疼痛评分。',
-    },
-  ],
-  'PAT-003': [
-    {
-      id: 'MR-PAT003-01',
-      title: '慢病管理随访',
-      date: '2026-08-03',
-      department: '全科医学科',
-      diagnosis: '高脂血症',
-      outcome: '继续降脂治疗，三个月后复查血脂。',
-    },
-    {
-      id: 'MR-PAT003-02',
-      title: '头晕症状随访',
-      date: '2026-06-26',
-      department: '神经内科',
-      diagnosis: '眩晕待查',
-      outcome: '建议监测血压并记录发作时长，若伴肢体无力需急诊评估。',
-    },
-  ],
-};
-const initialAvailabilityWindows: AvailabilityWindow[] = [
-  {
-    id: 'AW-001',
-    date: '2026-09-21',
-    type: 'text',
-    start: '08:00',
-    end: '20:00',
-    capacity: 8,
-    booked: 3,
-  },
-  {
-    id: 'AW-002',
-    date: '2026-09-21',
-    type: 'video',
-    start: '09:00',
-    end: '11:30',
-    capacity: 6,
-    booked: 2,
-  },
-  {
-    id: 'AW-003',
-    date: '2026-09-22',
-    type: 'video',
-    start: '14:00',
-    end: '17:00',
-    capacity: 5,
-    booked: 1,
-  },
-];
+type AvailabilityWindow = EncounterAvailabilityWindow;
+type NoticeLog = EncounterNotice;
 
-function clinicalBrief(encounter: Encounter) {
-  return (
-    clinicalBriefs[encounter.id] ?? {
-      chiefComplaint: encounter.reason,
-      presentIllness: '患者已提交在线问诊资料，详细病情需进入诊间后进一步核对。',
-      pastHistory: '暂无补充记录。',
-      surgicalHistory: '暂无补充记录。',
-      medicationHistory: '暂无补充记录。',
-      allergyHistory: '暂无补充记录。',
-    }
-  );
+function emptyClinicalBrief(encounter: Encounter): ClinicalBrief {
+  return {
+    chiefComplaint: encounter.reason,
+    presentIllness: '正在加载患者提交的问诊资料。',
+    pastHistory: '正在加载',
+    surgicalHistory: '正在加载',
+    medicationHistory: '正在加载',
+    allergyHistory: '正在加载',
+  };
 }
 
 function addMinutes(value: string, minutes: number) {
@@ -445,49 +146,27 @@ type RoomMessage = {
   imageName?: string;
 };
 
-function initialMessages(encounter: Encounter, brief: ClinicalBrief): RoomMessage[] {
-  return [
-    {
-      id: `${encounter.id}-patient-1`,
-      sender: 'patient',
-      body:
-        encounter.type === 'text'
-          ? `医生您好，我想咨询一下：${brief.chiefComplaint}。`
-          : '医生您好，我已准备好视频问诊。',
-      time: '09:12',
-    },
-    {
-      id: `${encounter.id}-system-1`,
-      sender: 'system',
-      body:
-        encounter.type === 'text'
-          ? '图文问诊已开始，本次服务窗口为48h。'
-          : '视频问诊待呼叫，系统将同时连接医生与患者。',
-      time: '09:13',
-    },
-  ];
+function roomMessageFromApi(
+  message: ApiEncounterMessage,
+  formatDate: (value: string, options?: Intl.DateTimeFormatOptions) => string,
+): RoomMessage {
+  return {
+    id: message.id,
+    sender: message.sender,
+    body: message.body,
+    imageUrl: message.imageUrl,
+    imageName: message.imageName,
+    time: formatDate(message.sentAt, { hour: '2-digit', minute: '2-digit' }),
+  };
 }
 
-function briefDiagnosis(encounter: Encounter) {
-  if (encounter.reason.includes('血压')) return '血压管理';
-  if (encounter.reason.includes('血糖')) return '血糖管理';
-  if (encounter.reason.includes('呼吸')) return '呼吸健康随访';
-  return '常规健康随访';
-}
-
-function historyRecords(encounter: Encounter) {
-  return (
-    patientHistories[encounter.patientId] ?? [
-      {
-        id: `${encounter.patientId}-MR-01`,
-        title: '既往在线随访',
-        date: '2026-07-24',
-        department: '全科医学科',
-        diagnosis: briefDiagnosis(encounter),
-        outcome: '已完成线上评估，建议按计划复诊。',
-      },
-    ]
-  );
+function readImageAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
 }
 
 function ClinicalSummary({ brief }: { brief: ClinicalBrief }) {
@@ -512,6 +191,212 @@ function ClinicalSummary({ brief }: { brief: ClinicalBrief }) {
       </dl>
     </section>
   );
+}
+
+function emptyRecordBody(template: MedicalRecordTemplateDefinition) {
+  return Object.fromEntries(template.fields.map((field) => [field.key, ''])) as Record<string, string>;
+}
+
+function bodyFromBrief(template: MedicalRecordTemplateDefinition, brief: ClinicalBrief, encounter: Encounter) {
+  const body = emptyRecordBody(template);
+  if (template.id === 'outpatient') {
+    body.chiefComplaint = brief.chiefComplaint;
+    body.presentIllness = brief.presentIllness;
+    body.medicalAndAllergyHistory = [
+      `既往史：${brief.pastHistory}`,
+      `手术史：${brief.surgicalHistory}`,
+      `用药史：${brief.medicationHistory}`,
+      `过敏史：${brief.allergyHistory}`,
+    ].join('\n');
+    body.examinationAndInvestigations = '在线问诊资料待医生补充，必要时建议线下查体或完善辅助检查。';
+    body.assessmentAndPlan = `围绕“${encounter.reason}”继续评估，结合沟通记录完善诊疗计划。`;
+  } else if (template.id === 'followup') {
+    body.followUpPurpose = encounter.reason;
+    body.healthMonitoringData = '患者通过在线诊疗提交资料，待医生结合健康数据补充。';
+    body.currentMedicationAndAdherence = brief.medicationHistory;
+    body.lifestyleAndCare = '生活方式与照护情况待问诊过程中补充。';
+    body.nextFollowUpArrangement = '根据本次问诊结果安排后续随访。';
+  } else if (template.id === 'consult') {
+    body.consultationRequestAndPurpose = encounter.reason;
+    body.participatingClinicians = '在线诊疗医生';
+    body.caseSummary = `${brief.chiefComplaint}\n${brief.presentIllness}`;
+    body.discussionNotes = '诊间沟通后补充。';
+    body.combinedOpinionAndNextSteps = '待医生形成综合意见。';
+  }
+  return body;
+}
+
+function EncounterRecordDialog({
+  encounter,
+  brief,
+  onClose,
+  onSaved,
+}: {
+  encounter: Encounter;
+  brief: ClinicalBrief;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const { t } = useI18n();
+  const { data: templates, loading, error } = useApi<MedicalRecordTemplateDefinition[]>('/record-templates');
+  const [templateId, setTemplateId] = useState<MedicalRecordTemplateId>('outpatient');
+  const [title, setTitle] = useState(`${encounter.patientName}在线问诊病历`);
+  const [diagnosis, setDiagnosis] = useState(encounter.reason);
+  const [body, setBody] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
+  const template = templates?.find((item) => item.id === templateId) ?? templates?.[0];
+
+  useEffect(() => {
+    if (!template || Object.keys(body).length) return;
+    setTemplateId(template.id);
+    setBody(bodyFromBrief(template, brief, encounter));
+  }, [body, brief, encounter, template]);
+
+  function changeTemplate(nextId: MedicalRecordTemplateId) {
+    const nextTemplate = templates?.find((item) => item.id === nextId);
+    if (!nextTemplate) return;
+    setTemplateId(nextId);
+    setBody(bodyFromBrief(nextTemplate, brief, encounter));
+  }
+
+  async function saveRecord() {
+    if (!template) return;
+    setSaving(true);
+    setNotice(null);
+    try {
+      const payload: CreateMedicalRecordRequest = {
+        patientId: encounter.patientId,
+        encounterId: encounter.id,
+        templateId: template.id,
+        title: title.trim(),
+        diagnosis: diagnosis.trim(),
+        body,
+      };
+      const saved = await requestApi<MedicalRecordDetail>('/records', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      setNotice({ tone: 'success', text: `病历已保存：${saved.data.id}` });
+      onSaved();
+    } catch (reason) {
+      setNotice({
+        tone: 'error',
+        text: reason instanceof Error ? reason.message : '保存病历失败，请稍后重试。',
+      });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <FeatureDialog
+      title={t('开立电子病历')}
+      subtitle={`${encounter.patientName} · ${encounter.id}`}
+      onClose={onClose}
+      wide
+    >
+      {loading || error || !template ? (
+        <LoadingState error={error || (!loading ? '无法加载病历模板' : null)} />
+      ) : (
+        <form
+          className="record-editor"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void saveRecord();
+          }}
+        >
+          <div className="record-editor-grid">
+            <label>
+              <span>{t('患者')}</span>
+              <input value={`${encounter.patientName} · ${encounter.patientId}`} disabled readOnly />
+            </label>
+            <label>
+              <span>{t('关联问诊')}</span>
+              <input value={`${encounter.id} · ${encounter.reason}`} disabled readOnly />
+            </label>
+            <label>
+              <span>{t('病历模板')}</span>
+              <select
+                aria-label={t('选择病历模板')}
+                value={template.id}
+                onChange={(event) => changeTemplate(event.target.value as MedicalRecordTemplateId)}
+              >
+                {(templates ?? []).map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {t(item.titleKey)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>{t('病历标题')}</span>
+              <input
+                aria-label={t('病历标题')}
+                maxLength={120}
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+              />
+            </label>
+            <label className="record-editor-span">
+              <span>{t('诊断')}</span>
+              <input
+                aria-label={t('诊断')}
+                maxLength={200}
+                value={diagnosis}
+                onChange={(event) => setDiagnosis(event.target.value)}
+              />
+            </label>
+          </div>
+          <div className="record-editor-fields">
+            <div className="record-editor-section-title">
+              <div>
+                <strong>{t(template.titleKey)}</strong>
+                <span>{t(template.subtitleKey)}</span>
+              </div>
+              <Badge tone="blue">{t('来自电子病历模板')}</Badge>
+            </div>
+            {template.fields.map((field) => (
+              <label key={field.key}>
+                <span>
+                  {t(field.labelKey)}
+                  {field.requiredOnSubmit ? t('（提交必填）') : ''}
+                </span>
+                <textarea
+                  aria-label={t(field.labelKey)}
+                  maxLength={field.maxLength}
+                  rows={4}
+                  value={body[field.key] ?? ''}
+                  onChange={(event) =>
+                    setBody((value) => ({ ...value, [field.key]: event.target.value }))
+                  }
+                />
+              </label>
+            ))}
+          </div>
+          {notice && (
+            <div className={`record-editor-notice ${notice.tone}`} role="status">
+              {t(notice.text)}
+            </div>
+          )}
+          <div className="record-editor-actions">
+            <Button variant="secondary" type="button" onClick={onClose}>
+              {t('关闭')}
+            </Button>
+            <Button type="submit" disabled={saving || !title.trim() || !diagnosis.trim()}>
+              <FileText size={16} />
+              {t(saving ? '保存中' : '保存到电子病历')}
+            </Button>
+          </div>
+        </form>
+      )}
+    </FeatureDialog>
+  );
+}
+
+function EncounterDetailClinical({ encounter }: { encounter: Encounter }) {
+  const { data } = useApi<EncounterContext>(`/encounters/${encodeURIComponent(encounter.id)}/context`);
+  return <ClinicalSummary brief={data?.brief ?? emptyClinicalBrief(encounter)} />;
 }
 
 function PatientFolder({
@@ -621,11 +506,13 @@ function AppointmentManagementDialog({
   encounters: Encounter[];
   nowMs: number;
   onClose: () => void;
-  onRescheduleAccepted: (id: string, nextScheduledAt: string) => void;
+  onRescheduleAccepted: (id: string) => void;
 }) {
   const { t, formatDate } = useI18n();
+  const availability = useApi<AvailabilityWindow[]>('/encounter-availability');
+  const noticeData = useApi<NoticeLog[]>('/encounter-notices');
   const firstWaiting = encounters.find((item) => encounterDisplayStatus(item, nowMs) !== 'completed');
-  const [windows, setWindows] = useState(initialAvailabilityWindows);
+  const [windows, setWindows] = useState<AvailabilityWindow[]>([]);
   const [newWindow, setNewWindow] = useState({
     date: '2026-09-22',
     type: 'video' as Encounter['type'],
@@ -638,53 +525,45 @@ function AppointmentManagementDialog({
   const [nextTime, setNextTime] = useState('10:00');
   const [noticeText, setNoticeText] = useState('请患者在问诊前补充近期检查结果和当前用药。');
   const [noticeFeedback, setNoticeFeedback] = useState('');
-  const [notices, setNotices] = useState<NoticeLog[]>([
-    {
-      id: 'NOTICE-001',
-      encounterId: 'ENC-012',
-      patientName: '张淑兰',
-      kind: '按时进入提醒',
-      content: '已提醒患者在服务窗口内保持在线。',
-      status: '已发送',
-    },
-  ]);
+  const [notices, setNotices] = useState<NoticeLog[]>([]);
+  useEffect(() => {
+    setWindows(availability.data ?? []);
+  }, [availability.data]);
+  useEffect(() => {
+    setNotices(noticeData.data ?? []);
+  }, [noticeData.data]);
   const selectedEncounter = encounters.find((item) => item.id === selectedEncounterId);
   const addWindow = useCallback(() => {
-    setWindows((current) => [
-      {
-        id: `AW-${Date.now()}`,
-        date: newWindow.date,
-        type: newWindow.type,
-        start: newWindow.start,
-        end: newWindow.end,
-        capacity: newWindow.capacity,
-        booked: 0,
-      },
-      ...current,
-    ]);
+    void requestApi<AvailabilityWindow>('/encounter-availability', {
+      method: 'POST',
+      body: JSON.stringify(newWindow),
+    }).then((response) => {
+      setWindows((current) => [response.data, ...current]);
+      availability.reload();
+    });
   }, [newWindow]);
   const sendNotice = useCallback(
     (kind: NoticeLog['kind']) => {
       if (!selectedEncounter) return;
-      setNotices((current) => [
-        {
-          id: `NOTICE-${Date.now()}`,
+      const proposedScheduledAt = kind === '改期通知' ? `${nextDate}T${nextTime}:00+08:00` : undefined;
+      void requestApi<NoticeLog>('/encounter-notices', {
+        method: 'POST',
+        body: JSON.stringify({
           encounterId: selectedEncounter.id,
-          patientName: selectedEncounter.patientName,
           kind,
           content:
             kind === '改期通知'
               ? `建议改至 ${nextDate} ${nextTime}，等待患者确认。`
               : noticeText,
-          status: kind === '改期通知' ? '待患者确认' : '已发送',
-        },
-        ...current,
-      ]);
-      if (kind !== '改期通知') {
-        setNoticeFeedback('已通知患者');
-      }
+          proposedScheduledAt,
+        }),
+      }).then((response) => {
+        setNotices((current) => [response.data, ...current]);
+        noticeData.reload();
+        if (kind !== '改期通知') setNoticeFeedback('已通知患者');
+      });
     },
-    [nextDate, nextTime, noticeText, selectedEncounter],
+    [nextDate, nextTime, noticeData, noticeText, selectedEncounter],
   );
   useEffect(() => {
     if (!noticeFeedback) return undefined;
@@ -693,21 +572,17 @@ function AppointmentManagementDialog({
   }, [noticeFeedback]);
   const acceptReschedule = useCallback(
     (notice: NoticeLog) => {
-      const nextScheduledAt = `${nextDate}T${nextTime}:00+08:00`;
-      onRescheduleAccepted(notice.encounterId, nextScheduledAt);
-      setNotices((current) =>
-        current.map((item) =>
-          item.id === notice.id
-            ? {
-                ...item,
-                status: '患者已接受',
-                content: `${item.content} 平台已自动调整接诊时段。`,
-              }
-            : item,
-        ),
-      );
+      void requestApi<NoticeLog>(`/encounter-notices/${encodeURIComponent(notice.id)}/accept`, {
+        method: 'POST',
+      }).then((response) => {
+        setNotices((current) =>
+          current.map((item) => (item.id === notice.id ? response.data : item)),
+        );
+        onRescheduleAccepted(response.data.encounterId);
+        noticeData.reload();
+      });
     },
-    [nextDate, nextTime, onRescheduleAccepted],
+    [noticeData, onRescheduleAccepted],
   );
   const pendingCount = encounters.filter(
     (item) => encounterDisplayStatus(item, nowMs) === 'waiting',
@@ -823,15 +698,23 @@ function AppointmentManagementDialog({
                     type="number"
                     min={window.booked}
                     value={window.capacity}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      const capacity = Math.max(window.booked, Number(event.target.value) || 1);
                       setWindows((current) =>
                         current.map((item) =>
                           item.id === window.id
-                            ? { ...item, capacity: Math.max(window.booked, Number(event.target.value) || 1) }
+                            ? { ...item, capacity }
                             : item,
                         ),
-                      )
-                    }
+                      );
+                      void requestApi<AvailabilityWindow>(
+                        `/encounter-availability/${encodeURIComponent(window.id)}`,
+                        {
+                          method: 'PATCH',
+                          body: JSON.stringify({ capacity }),
+                        },
+                      ).then(() => availability.reload());
+                    }}
                   />
                 </label>
                 <Badge tone={window.booked >= window.capacity ? 'amber' : 'teal'}>
@@ -979,12 +862,14 @@ function EncounterRoom({
   onComplete: (id: string, record: SavedEncounterRecord) => void;
 }) {
   const { t, formatDate } = useI18n();
-  const brief = clinicalBrief(encounter);
+  const roomContext = useApi<EncounterContext>(`/encounters/${encodeURIComponent(encounter.id)}/context`);
+  const brief = roomContext.data?.brief ?? emptyClinicalBrief(encounter);
   const [draft, setDraft] = useState('');
-  const [messages, setMessages] = useState<RoomMessage[]>(() => initialMessages(encounter, brief));
+  const [messages, setMessages] = useState<RoomMessage[]>([]);
   const [callStarted, setCallStarted] = useState(false);
   const [folderOpen, setFolderOpen] = useState(true);
   const [recordsOpen, setRecordsOpen] = useState(false);
+  const [recordDialogOpen, setRecordDialogOpen] = useState(false);
   const [previewImage, setPreviewImage] = useState<{ url: string; name?: string } | null>(null);
   const [doctorStream, setDoctorStream] = useState<MediaStream | null>(null);
   const [cameraError, setCameraError] = useState('');
@@ -993,7 +878,12 @@ function EncounterRoom({
   const isVideo = encounter.type === 'video';
   const isCompleted = encounter.status === 'completed';
   const displayStatus = encounterDisplayStatus(encounter);
-  const priorRecords = useMemo(() => historyRecords(encounter), [encounter]);
+  const priorRecords = roomContext.data?.historyRecords ?? [];
+  const roomSavedRecords = roomContext.data?.savedRecords ?? savedRecords;
+  useEffect(() => {
+    if (!roomContext.data) return;
+    setMessages(roomContext.data.messages.map((message) => roomMessageFromApi(message, formatDate)));
+  }, [formatDate, roomContext.data]);
   const playDoctorVideo = useCallback(
     (node: HTMLVideoElement | null = doctorVideoRef.current) => {
       if (!node || !doctorStream) return;
@@ -1063,54 +953,61 @@ function EncounterRoom({
     if (isCompleted) return;
     const body = draft.trim();
     if (!body) return;
-    setMessages((current) => [
-      ...current,
-      {
-        id: `${encounter.id}-doctor-${current.length + 1}`,
-        sender: 'doctor',
-        body,
-        time: formatDate(new Date().toISOString(), { hour: '2-digit', minute: '2-digit' }),
-      },
-    ]);
-    setDraft('');
-  }, [draft, encounter.id, formatDate, isCompleted]);
+    void requestApi<ApiEncounterMessage>(`/encounters/${encodeURIComponent(encounter.id)}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ body }),
+    }).then((response) => {
+      setMessages((current) => [...current, roomMessageFromApi(response.data, formatDate)]);
+      setDraft('');
+      roomContext.reload();
+    });
+  }, [draft, encounter.id, formatDate, isCompleted, roomContext]);
   const sendImage = useCallback(
     (files: FileList | null) => {
       if (isCompleted) return;
       const file = files?.[0];
       if (!file) return;
-      setMessages((current) => [
-        ...current,
-        {
-          id: `${encounter.id}-doctor-image-${current.length + 1}`,
-          sender: 'doctor',
-          body: file.name,
-          imageUrl: URL.createObjectURL(file),
-          imageName: file.name,
-          time: formatDate(new Date().toISOString(), { hour: '2-digit', minute: '2-digit' }),
-        },
-      ]);
+      void readImageAsDataUrl(file)
+        .then((imageUrl) =>
+          requestApi<ApiEncounterMessage>(
+            `/encounters/${encodeURIComponent(encounter.id)}/messages`,
+            {
+              method: 'POST',
+              body: JSON.stringify({ body: file.name, imageUrl, imageName: file.name }),
+            },
+          ),
+        )
+        .then((response) => {
+          setMessages((current) => [...current, roomMessageFromApi(response.data, formatDate)]);
+          roomContext.reload();
+        });
     },
-    [encounter.id, formatDate, isCompleted],
+    [encounter.id, formatDate, isCompleted, roomContext],
   );
   const endEncounter = useCallback(() => {
     if (isCompleted) return;
     setCallStarted(false);
     stopCamera();
-    onComplete(encounter.id, {
-      id: `${encounter.id}-saved`,
-      title: '本次问诊记录',
-      savedAt: new Date().toISOString(),
-      mode: encounter.type,
-      messageCount: messages.filter((message) => message.sender !== 'system').length,
-      audioSaved: encounter.type === 'video',
-      videoSaved: encounter.type === 'video',
+    void requestApi<SavedEncounterRecord>(
+      `/encounters/${encodeURIComponent(encounter.id)}/complete`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          mode: encounter.type,
+          messageCount: messages.filter((message) => message.sender !== 'system').length,
+          audioSaved: encounter.type === 'video',
+          videoSaved: encounter.type === 'video',
+        }),
+      },
+    ).then((response) => {
+      onComplete(encounter.id, response.data);
+      roomContext.reload();
+      setRecordsOpen(true);
     });
-    setRecordsOpen(true);
-  }, [encounter.id, encounter.type, isCompleted, messages, onComplete, stopCamera]);
+  }, [encounter.id, encounter.type, isCompleted, messages, onComplete, roomContext, stopCamera]);
   const exportRecord = useCallback(() => {
     const record =
-      savedRecords[0] ??
+      roomSavedRecords[0] ??
       (isCompleted
         ? {
             id: `${encounter.id}-completed-export`,
@@ -1149,7 +1046,7 @@ function EncounterRoom({
     link.download = `${encounter.id}-consultation-record.txt`;
     link.click();
     URL.revokeObjectURL(url);
-  }, [brief, encounter, formatDate, isCompleted, messages, savedRecords]);
+  }, [brief, encounter, formatDate, isCompleted, messages, roomSavedRecords]);
   return (
     <div className="encounter-room-page">
       <header className="encounter-room-header">
@@ -1173,6 +1070,10 @@ function EncounterRoom({
       <div className="encounter-room-layout">
         <aside className="encounter-room-sidebar">
           <div className="encounter-room-actions">
+            <Button variant="secondary" onClick={() => setRecordDialogOpen(true)}>
+              <ClipboardList size={14} />
+              {t('开病历')}
+            </Button>
             <Button
               className="encounter-end-button"
               variant="secondary"
@@ -1185,7 +1086,7 @@ function EncounterRoom({
             <Button
               variant="secondary"
               onClick={exportRecord}
-              disabled={!savedRecords.length && !isCompleted}
+              disabled={!roomSavedRecords.length && !isCompleted}
             >
               <Download size={14} />
               {t('导出记录')}
@@ -1213,7 +1114,7 @@ function EncounterRoom({
             onToggle={() => setFolderOpen((value) => !value)}
           />
           <SavedRecordsPanel
-            records={savedRecords}
+            records={roomSavedRecords}
             open={recordsOpen}
             onToggle={() => setRecordsOpen((value) => !value)}
             onExport={exportRecord}
@@ -1414,6 +1315,17 @@ function EncounterRoom({
           </figure>
         </div>
       )}
+      {recordDialogOpen && (
+        <EncounterRecordDialog
+          encounter={encounter}
+          brief={brief}
+          onClose={() => setRecordDialogOpen(false)}
+          onSaved={() => {
+            roomContext.reload();
+            setFolderOpen(true);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -1429,27 +1341,24 @@ export function EncountersPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [roomId, setRoomId] = useState<string | null>(null);
   const [statusOverrides, setStatusOverrides] = useState<Record<string, Encounter['status']>>({});
-  const [scheduleOverrides, setScheduleOverrides] = useState<Record<string, string>>({});
   const [savedRecordsByEncounter, setSavedRecordsByEncounter] = useState<
     Record<string, SavedEncounterRecord[]>
   >({});
   const encounterRows = useMemo(() => {
     const byId = new Map<string, Encounter>();
-    [...(data ?? []), ...extraDemoEncounters].forEach((item) => {
+    (data ?? []).forEach((item) => {
       if (!byId.has(item.id)) byId.set(item.id, item);
     });
     return Array.from(byId.values())
       .map((item) => ({
         ...item,
-        scheduledAt: scheduleOverrides[item.id] ?? item.scheduledAt,
         status: statusOverrides[item.id] ?? (item.status === 'scheduled' ? 'waiting' : item.status),
       }))
       .sort((left, right) => Date.parse(left.scheduledAt) - Date.parse(right.scheduledAt));
-  }, [data, scheduleOverrides, statusOverrides]);
+  }, [data, statusOverrides]);
   const nowMs = Date.now();
   const selected = encounterRows.find((item) => item.id === selectedId) ?? null;
   const activeRoom = encounterRows.find((item) => item.id === roomId) ?? null;
-  const selectedBrief = selected ? clinicalBrief(selected) : null;
   const [appointmentOpen, setAppointmentOpen] = useState(false);
   const close = useCallback(() => setSelectedId(null), []);
   const completeEncounter = useCallback((id: string, record: SavedEncounterRecord) => {
@@ -1459,11 +1368,12 @@ export function EncountersPage() {
       if (records.some((item) => item.id === record.id)) return current;
       return { ...current, [id]: [record, ...records] };
     });
-  }, []);
-  const applyReschedule = useCallback((id: string, nextScheduledAt: string) => {
-    setScheduleOverrides((current) => ({ ...current, [id]: nextScheduledAt }));
+    reload();
+  }, [reload]);
+  const applyReschedule = useCallback((id: string) => {
     setStatusOverrides((current) => ({ ...current, [id]: 'waiting' }));
-  }, []);
+    reload();
+  }, [reload]);
   const encounters = useMemo(
     () =>
       encounterRows.filter((item) => {
@@ -1690,7 +1600,7 @@ export function EncountersPage() {
               {t('进入诊间')}
             </Button>
           </div>
-          {selectedBrief && <ClinicalSummary brief={selectedBrief} />}
+          <EncounterDetailClinical encounter={selected} />
         </FeatureDialog>
       )}
       {appointmentOpen && (

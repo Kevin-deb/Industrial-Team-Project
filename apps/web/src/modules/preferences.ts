@@ -15,6 +15,7 @@ export function useCommunityPreference() {
   const preferences = useSocialPreferences();
   const update = useUpdateSocialPreferences();
   const enabled = preferences.data?.data.enabled ?? getCommunityEnabled();
+  const notificationsEnabled = preferences.data?.data.notificationsEnabled ?? enabled;
   useEffect(() => {
     if (!preferences.data) return;
     try {
@@ -27,9 +28,14 @@ export function useCommunityPreference() {
   function toggle() {
     update.mutate({ enabled: !enabled, notificationsEnabled: !enabled });
   }
+  function setNotificationsEnabled(next: boolean) {
+    update.mutate({ enabled: enabled || next, notificationsEnabled: next });
+  }
   return {
     enabled,
+    notificationsEnabled,
     toggle,
+    setNotificationsEnabled,
     saveError: update.error?.message ?? preferences.error?.message ?? null,
   };
 }

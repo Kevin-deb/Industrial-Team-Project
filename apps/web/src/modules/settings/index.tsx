@@ -1,10 +1,14 @@
 import { useI18n } from '../../shared/i18n';
-import { useCallback, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import {
   Bell,
+  BellRing,
+  CalendarCheck,
+  Edit3,
   Fingerprint,
   Mail,
   MessageCircle,
+  Save,
   Settings2,
   ShieldCheck,
   UserRound,
@@ -12,9 +16,57 @@ import {
 import type { Session } from '@doctor/contracts';
 import { requestApi, useApi } from '../../shared/api';
 import { useAuth } from '../../auth/AuthProvider';
-import { Badge, Card, LoadingState, PageHeader } from '../../shared/ui';
-import { FeatureDialog, LinkAction, PersonAvatar, PlannedDialog, ReadOnlyNote, SectionTitle } from '../ui';
+import { Badge, Button, Card, LoadingState, PageHeader } from '../../shared/ui';
+import { FeatureDialog, LinkAction, PersonAvatar, ReadOnlyNote, SectionTitle } from '../ui';
 import { useCommunityPreference } from '../preferences';
+
+const PROFILE_STORAGE_KEY = 'carelink-doctor-profile-overrides';
+const NOTIFICATION_STORAGE_KEY = 'carelink-workspace-notification-preferences';
+
+type DoctorProfileDraft = {
+  email: string;
+  phone: string;
+  specialty: string;
+  outpatientLocation: string;
+  bio: string;
+};
+
+type NotificationPreferences = {
+  encounter: boolean;
+  followUp: boolean;
+  browser: boolean;
+  quietHours: boolean;
+  quietStart: string;
+  quietEnd: string;
+};
+
+const defaultNotifications: NotificationPreferences = {
+  encounter: true,
+  followUp: true,
+  browser: false,
+  quietHours: true,
+  quietStart: '21:00',
+  quietEnd: '08:00',
+};
+
+function readStoredProfile(): Partial<DoctorProfileDraft> {
+  try {
+    return JSON.parse(localStorage.getItem(PROFILE_STORAGE_KEY) ?? '{}') as Partial<DoctorProfileDraft>;
+  } catch {
+    return {};
+  }
+}
+
+function readStoredNotifications(): NotificationPreferences {
+  try {
+    return {
+      ...defaultNotifications,
+      ...(JSON.parse(localStorage.getItem(NOTIFICATION_STORAGE_KEY) ?? '{}') as Partial<NotificationPreferences>),
+    };
+  } catch {
+    return defaultNotifications;
+  }
+}
 
 const securityFeatures = [
   {
@@ -40,10 +92,55 @@ const securityFeatures = [
 export function SettingsPage() {
   const { t, language, setLanguage } = useI18n();
   const { data, loading, error, reload } = useApi<Session>('/session');
-  const { enabled, toggle, saveError } = useCommunityPreference();
-  const [planned, setPlanned] = useState<{ title: string; description: string } | null>(null);
+  const {
+    enabled,
+    notificationsEnabled,
+    toggle,
+    setNotificationsEnabled,
+    saveError,
+  } = useCommunityPreference();
+  const [profileOverrides, setProfileOverrides] = useState<Partial<DoctorProfileDraft>>(() => readStoredProfile());
+  const [notifications, setNotifications] = useState<NotificationPreferences>(() => readStoredNotifications());
+  const [profileEditorOpen, setProfileEditorOpen] = useState(false);
+  const [profileSaved, setProfileSaved] = useState(false);
+  const [notificationSaved, setNotificationSaved] = useState(false);
   const [changePassword, setChangePassword] = useState(false);
-  const close = useCallback(() => setPlanned(null), []);
+  const notificationsReady = useRef(false);
+  useEffect(() => {
+    if (!notificationsReady.current) {
+      notificationsReady.current = true;
+      return undefined;
+    }
+    try {
+      localStorage.setItem(NOTIFICATION_STORAGE_KEY, JSON.stringify(notifications));
+      window.dispatchEvent(new CustomEvent('carelink-notification-preferences-changed'));
+      setNotificationSaved(true);
+      const timer = window.setTimeout(() => setNotificationSaved(false), 1600);
+      return () => window.clearTimeout(timer);
+    } catch {
+      return undefined;
+    }
+  }, [notifications]);
+  const mergedProfile = data
+    ? {
+        email: profileOverrides.email ?? data.doctor.email ?? '',
+        phone: profileOverrides.phone ?? data.doctor.phone ?? '',
+        specialty: profileOverrides.specialty ?? data.doctor.specialty ?? '',
+        outpatientLocation: profileOverrides.outpatientLocation ?? '线上诊疗中心 3 诊室',
+        bio: profileOverrides.bio ?? '擅长慢病连续管理、在线随访和多学科协作。',
+      }
+    : null;
+  function saveProfile(next: DoctorProfileDraft) {
+    setProfileOverrides(next);
+    try {
+      localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(next));
+    } catch {
+      /* The visible form still updates for the current session. */
+    }
+    setProfileEditorOpen(false);
+    setProfileSaved(true);
+    window.setTimeout(() => setProfileSaved(false), 1800);
+  }
   return (
     <div className="feature-page">
       <PageHeader
@@ -75,9 +172,10 @@ export function SettingsPage() {
                   { label: '医生职称', value: data.doctor.title },
                   { label: '医生编号', value: data.doctor.id },
                   { label: '执业编号', value: data.doctor.licenseNumber ?? '—' },
-                  { label: '专业方向', value: data.doctor.specialty ?? '—' },
-                  { label: '工作邮箱', value: data.doctor.email ?? '—' },
-                  { label: '联系电话', value: data.doctor.phone ?? '—' },
+                  { label: '专业方向', value: mergedProfile?.specialty || '—' },
+                  { label: '工作邮箱', value: mergedProfile?.email || '—' },
+                  { label: '联系电话', value: mergedProfile?.phone || '—' },
+                  { label: '门诊地点', value: mergedProfile?.outpatientLocation || '—' },
                   { label: '身份证件', value: data.doctor.governmentIdMasked ?? '—' },
                   { label: '资质状态', value: data.doctor.credentialStatus === 'verified' ? '已核验' : '待核验' },
                   { label: '人员状态', value: data.doctor.personnelStatus === 'verified' ? '医院人员已审核' : '待审核' },
@@ -88,16 +186,16 @@ export function SettingsPage() {
                     <strong>{t(item.value)}</strong>
                   </div>
                 ))}
-                <LinkAction
-                  onClick={() =>
-                    setPlanned({
-                      title: '编辑医生资料',
-                      description:
-                        '资料编辑将支持更新联系信息与工作资料。机构、科室、职称及执业资质变更需要配置相应的验证和审批流程，当前演示资料不可修改。',
-                    })
-                  }
-                >
-                  {t('资料编辑 · 尚未上线')}
+                {mergedProfile?.bio && (
+                  <div className="settings-profile-bio">
+                    <span>{t('个人简介')}</span>
+                    <p>{t(mergedProfile.bio)}</p>
+                  </div>
+                )}
+                {profileSaved && <p className="settings-save-hint">{t('资料已保存')}</p>}
+                <LinkAction onClick={() => setProfileEditorOpen(true)}>
+                  <Edit3 size={15} />
+                  {t('编辑医生资料')}
                 </LinkAction>
               </Card>
               <Card className="feature-card-pad">
@@ -162,20 +260,16 @@ export function SettingsPage() {
                       <Bell size={15} />
                       {t('通知偏好')}
                     </h3>
-                    <p>{t('接诊、随访与社区通知的独立偏好将在后续接入。')}</p>
+                    <p>{t('按工作类型管理提醒，并保存在当前设备。')}</p>
                   </div>
-                  <LinkAction
-                    onClick={() =>
-                      setPlanned({
-                        title: '通知偏好',
-                        description:
-                          '接诊安排、健康随访与社区消息将使用独立通知类型。您可以单独管理接收方式及社区消息总开关；当前没有发送站内、短信或邮件通知。',
-                      })
-                    }
-                  >
-                    {t('查看规划')}
-                  </LinkAction>
+                  {notificationSaved && <Badge tone="teal">{t('已保存')}</Badge>}
                 </div>
+                <NotificationPreferencePanel
+                  value={notifications}
+                  onChange={setNotifications}
+                  communityNotificationsEnabled={notificationsEnabled}
+                  onCommunityNotificationChange={setNotificationsEnabled}
+                />
               </Card>
             </div>
             <Card className="feature-card-pad">
@@ -211,16 +305,213 @@ export function SettingsPage() {
           </ReadOnlyNote>
         </>
       )}
-      {planned && (
-        <PlannedDialog
-          title={planned.title}
-          iteration={planned.title === '通知偏好' ? 'Iteration 2' : 'Iteration 1'}
-          onClose={close}
-        >
-          <p>{t(planned.description)}</p>
-        </PlannedDialog>
+      {profileEditorOpen && data && mergedProfile && (
+        <ProfileEditDialog
+          doctorName={data.doctor.name}
+          value={mergedProfile}
+          onSave={saveProfile}
+          onClose={() => setProfileEditorOpen(false)}
+        />
       )}
       {changePassword && <ChangePasswordDialog onClose={() => setChangePassword(false)} />}
+    </div>
+  );
+}
+
+function ProfileEditDialog({
+  doctorName,
+  value,
+  onSave,
+  onClose,
+}: {
+  doctorName: string;
+  value: DoctorProfileDraft;
+  onSave: (value: DoctorProfileDraft) => void;
+  onClose: () => void;
+}) {
+  const { t } = useI18n();
+  const [draft, setDraft] = useState(value);
+  const [error, setError] = useState('');
+  function update(field: keyof DoctorProfileDraft, next: string) {
+    setDraft((current) => ({ ...current, [field]: next }));
+  }
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    const email = draft.email.trim();
+    const phone = draft.phone.trim();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setError('请输入有效的工作邮箱');
+      return;
+    }
+    if (phone && !/^[0-9+\-\s]{6,20}$/.test(phone)) {
+      setError('请输入有效的联系电话');
+      return;
+    }
+    onSave({
+      email,
+      phone,
+      specialty: draft.specialty.trim(),
+      outpatientLocation: draft.outpatientLocation.trim(),
+      bio: draft.bio.trim(),
+    });
+  }
+  return (
+    <FeatureDialog title={t('编辑医生资料')} subtitle={doctorName} onClose={onClose}>
+      <form className="settings-edit-form" onSubmit={submit}>
+        <label>
+          {t('工作邮箱')}
+          <input value={draft.email} onChange={(event) => update('email', event.target.value)} />
+        </label>
+        <label>
+          {t('联系电话')}
+          <input value={draft.phone} onChange={(event) => update('phone', event.target.value)} />
+        </label>
+        <label>
+          {t('专业方向')}
+          <input value={draft.specialty} onChange={(event) => update('specialty', event.target.value)} />
+        </label>
+        <label>
+          {t('门诊地点')}
+          <input
+            value={draft.outpatientLocation}
+            onChange={(event) => update('outpatientLocation', event.target.value)}
+          />
+        </label>
+        <label>
+          {t('个人简介')}
+          <textarea rows={4} value={draft.bio} onChange={(event) => update('bio', event.target.value)} />
+        </label>
+        <p className="settings-form-note">
+          {t('机构、科室、职称与执业资质属于审核资料，当前只允许编辑联系方式和工作简介。')}
+        </p>
+        {error && <p className="auth-error">{t(error)}</p>}
+        <div className="settings-form-actions">
+          <Button variant="secondary" onClick={onClose}>
+            {t('取消')}
+          </Button>
+          <Button type="submit">
+            <Save size={15} />
+            {t('保存资料')}
+          </Button>
+        </div>
+      </form>
+    </FeatureDialog>
+  );
+}
+
+function NotificationPreferencePanel({
+  value,
+  onChange,
+  communityNotificationsEnabled,
+  onCommunityNotificationChange,
+}: {
+  value: NotificationPreferences;
+  onChange: (value: NotificationPreferences) => void;
+  communityNotificationsEnabled: boolean;
+  onCommunityNotificationChange: (value: boolean) => void;
+}) {
+  const { t } = useI18n();
+  const set = <K extends keyof NotificationPreferences>(key: K, next: NotificationPreferences[K]) =>
+    onChange({ ...value, [key]: next });
+  return (
+    <div className="settings-notification-panel">
+      <NotificationRow
+        icon={<CalendarCheck size={16} />}
+        title="接诊提醒"
+        description="预约前、患者进入诊间和问诊即将超时提醒。"
+        checked={value.encounter}
+        onChange={(next) => set('encounter', next)}
+      />
+      <NotificationRow
+        icon={<BellRing size={16} />}
+        title="随访提醒"
+        description="复诊计划、健康指标异常和待处理随访提醒。"
+        checked={value.followUp}
+        onChange={(next) => set('followUp', next)}
+      />
+      <NotificationRow
+        icon={<MessageCircle size={16} />}
+        title="社区互动通知"
+        description="同行评论、私信和社区互动提醒。"
+        checked={communityNotificationsEnabled}
+        onChange={onCommunityNotificationChange}
+      />
+      <NotificationRow
+        icon={<Bell size={16} />}
+        title="浏览器提示"
+        description="允许后在当前浏览器弹出本地提醒。"
+        checked={value.browser}
+        onChange={(next) => set('browser', next)}
+      />
+      <div className="settings-quiet-row">
+        <div>
+          <h3>{t('免打扰时段')}</h3>
+          <p>{t('开启后，该时段内只保留页面内提示。')}</p>
+        </div>
+        <button
+          className="feature-switch"
+          role="switch"
+          aria-checked={value.quietHours}
+          aria-label={t('免打扰时段')}
+          onClick={() => set('quietHours', !value.quietHours)}
+        >
+          <span />
+        </button>
+      </div>
+      <div className="settings-time-range" aria-disabled={!value.quietHours}>
+        <label>
+          {t('开始')}
+          <input
+            type="time"
+            value={value.quietStart}
+            disabled={!value.quietHours}
+            onChange={(event) => set('quietStart', event.target.value)}
+          />
+        </label>
+        <label>
+          {t('结束')}
+          <input
+            type="time"
+            value={value.quietEnd}
+            disabled={!value.quietHours}
+            onChange={(event) => set('quietEnd', event.target.value)}
+          />
+        </label>
+      </div>
+    </div>
+  );
+}
+
+function NotificationRow({
+  icon,
+  title,
+  description,
+  checked,
+  onChange,
+}: {
+  icon: ReactNode;
+  title: string;
+  description: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="settings-notification-row">
+      <span>{icon}</span>
+      <div>
+        <h3>{t(title)}</h3>
+        <p>{t(description)}</p>
+      </div>
+      <button
+        className="feature-switch"
+        role="switch"
+        aria-checked={checked}
+        aria-label={t(title)}
+        onClick={() => onChange(!checked)}
+      >
+        <span />
+      </button>
     </div>
   );
 }

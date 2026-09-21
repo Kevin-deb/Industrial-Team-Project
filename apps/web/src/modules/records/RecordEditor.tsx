@@ -159,12 +159,24 @@ export function RecordEditor({ recordId, onClose, onSaved }: EditorProps) {
     () => (encounters ?? []).filter((item) => item.patientId === form.patientId),
     [encounters, form.patientId],
   );
+  const eligibleConsultations = useMemo(
+    () =>
+      (consultations ?? []).filter(
+        (item) => item.patientId === record?.patientId && item.status !== 'completed',
+      ),
+    [consultations, record?.patientId],
+  );
   const complete = Boolean(
     template &&
     form.title.trim() &&
     form.diagnosis.trim() &&
     template.fields.every((field) => !field.requiredOnSubmit || form.body[field.key]?.trim()),
   );
+
+  useEffect(() => {
+    if (!consultationId) return;
+    if (!eligibleConsultations.some((item) => item.id === consultationId)) setConsultationId('');
+  }, [consultationId, eligibleConsultations]);
 
   function closeSafely() {
     if (dirty && !window.confirm(t('尚有未保存的更改，确定要关闭吗？'))) return;
@@ -764,15 +776,16 @@ export function RecordEditor({ recordId, onClose, onSaved }: EditorProps) {
                   onChange={(event) => setConsultationId(event.target.value)}
                 >
                   <option value="">{t('选择会诊')}</option>
-                  {(consultations ?? [])
-                    .filter((item) => item.patientId === record.patientId)
-                    .map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.title} · {item.id}
-                      </option>
-                    ))}
+                  {eligibleConsultations.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.title} · {item.id}
+                    </option>
+                  ))}
                 </select>
               </label>
+              {!eligibleConsultations.length && (
+                <p>{t('当前患者暂无你已参会且可引用材料的远程会诊。')}</p>
+              )}
               <label>
                 <span>{t('引用用途')}</span>
                 <input

@@ -38,15 +38,42 @@ INSERT INTO "care_plans"("id","patient_id","doctor_id","title","status","goals_j
 INSERT INTO "care_plans"("id","patient_id","doctor_id","title","status","goals_json","next_review","completion_percent","current_version","created_at","updated_at") VALUES('PLAN-007','PAT-006','doctor-demo-001','呼吸健康记录','active','["记录日常活动情况","按时参加随访"]','2026-09-20',50,1,'2026-09-01T09:00:00+08:00','2026-09-10T12:00:00+08:00');
 INSERT INTO "care_plans"("id","patient_id","doctor_id","title","status","goals_json","next_review","completion_percent","current_version","created_at","updated_at") VALUES('PLAN-008','PAT-008','doctor-demo-001','定期随访安排','draft','["确认复查资料","记录居家测量"]','2026-09-25',20,1,'2026-09-01T09:00:00+08:00','2026-09-10T12:00:00+08:00');
 
--- consultation_participants: 4 row(s)
+-- consultation_material_uploads: 11 row(s)
+INSERT INTO "consultation_material_uploads"("id","consultation_id","title","description","file_name","object_url","uploaded_by","uploaded_at") VALUES('CMU-001','CON-001','近三个月血压趋势','患者家庭血压监测汇总。','近三个月血压趋势.txt',NULL,'doctor-demo-001','2026-09-10T09:00:00+08:00');
+INSERT INTO "consultation_material_uploads"("id","consultation_id","title","description","file_name","object_url","uploaded_by","uploaded_at") VALUES('CMU-002','CON-001','心电图摘要','近期心电图核心结论。','心电图摘要.txt',NULL,'doctor-demo-001','2026-09-10T09:05:00+08:00');
+INSERT INTO "consultation_material_uploads"("id","consultation_id","title","description","file_name","object_url","uploaded_by","uploaded_at") VALUES('CMU-003','CON-001','当前用药清单','患者现用药物与剂量。','当前用药清单.txt',NULL,'doctor-demo-001','2026-09-10T09:10:00+08:00');
+INSERT INTO "consultation_material_uploads"("id","consultation_id","title","description","file_name","object_url","uploaded_by","uploaded_at") VALUES('CMU-004','CON-002','血糖监测记录','近两周空腹与餐后血糖。','血糖监测记录.txt',NULL,'doctor-demo-001','2026-09-10T10:00:00+08:00');
+INSERT INTO "consultation_material_uploads"("id","consultation_id","title","description","file_name","object_url","uploaded_by","uploaded_at") VALUES('CMU-005','CON-002','饮食运动记录','患者近期饮食与运动摘要。','饮食运动记录.txt',NULL,'doctor-demo-001','2026-09-10T10:05:00+08:00');
+INSERT INTO "consultation_material_uploads"("id","consultation_id","title","description","file_name","object_url","uploaded_by","uploaded_at") VALUES('CMU-006','CON-IN-001','病情摘要','术后康复会诊病情摘要。','病情摘要.txt',NULL,'doctor-demo-002','2026-09-01T00:00:00.000Z');
+INSERT INTO "consultation_material_uploads"("id","consultation_id","title","description","file_name","object_url","uploaded_by","uploaded_at") VALUES('CMU-007','CON-IN-001','检查结果','影像与实验室检查摘要。','检查结果.txt',NULL,'doctor-demo-002','2026-09-01T00:00:00.000Z');
+INSERT INTO "consultation_material_uploads"("id","consultation_id","title","description","file_name","object_url","uploaded_by","uploaded_at") VALUES('CMU-008','CON-IN-001','用药记录','围术期及当前用药记录。','用药记录.txt',NULL,'doctor-demo-002','2026-09-01T00:00:00.000Z');
+INSERT INTO "consultation_material_uploads"("id","consultation_id","title","description","file_name","object_url","uploaded_by","uploaded_at") VALUES('CMU-009','CON-IN-002','足部照片摘要','患者足部皮肤状态与破溃风险摘要。','足部照片摘要.txt',NULL,'doctor-demo-003','2026-09-01T00:00:00.000Z');
+INSERT INTO "consultation_material_uploads"("id","consultation_id","title","description","file_name","object_url","uploaded_by","uploaded_at") VALUES('CMU-010','CON-IN-002','血糖波动记录','近两周空腹及餐后血糖波动。','血糖波动记录.txt',NULL,'doctor-demo-003','2026-09-01T00:00:00.000Z');
+INSERT INTO "consultation_material_uploads"("id","consultation_id","title","description","file_name","object_url","uploaded_by","uploaded_at") VALUES('CMU-011','CON-IN-002','护理评估表','居家足部护理执行情况。','护理评估表.txt',NULL,'doctor-demo-003','2026-09-01T00:00:00.000Z');
+
+-- consultation_messages: 4 row(s)
+INSERT INTO "consultation_messages"("id","consultation_id","sender_identity_id","body","sent_at","image_url","image_name") VALUES('CMSG-001','CON-001','doctor-demo-002','建议先核对近期指标和当前用药，再形成联合意见。','2026-09-10T15:05:00+08:00',NULL,NULL);
+INSERT INTO "consultation_messages"("id","consultation_id","sender_identity_id","body","sent_at","image_url","image_name") VALUES('CMSG-002','CON-001','doctor-demo-001','已打开本次会诊材料，等待各专科补充意见。','2026-09-10T15:07:00+08:00',NULL,NULL);
+INSERT INTO "consultation_messages"("id","consultation_id","sender_identity_id","body","sent_at","image_url","image_name") VALUES('CMSG-003','CON-IN-001','doctor-demo-002','已提交术后康复资料，请全科协助评估随访计划。','2026-09-11T15:20:00+08:00',NULL,NULL);
+INSERT INTO "consultation_messages"("id","consultation_id","sender_identity_id","body","sent_at","image_url","image_name") VALUES('CMSG-004','CON-IN-002','doctor-demo-003','患者近期足部麻木加重，邀请全科一起评估综合干预方案。','2026-09-12T16:40:00+08:00',NULL,NULL);
+
+-- consultation_participants: 10 row(s)
 INSERT INTO "consultation_participants"("consultation_id","identity_id","participant_role","joined_at","left_at") VALUES('CON-001','doctor-demo-001','expert',NULL,NULL);
 INSERT INTO "consultation_participants"("consultation_id","identity_id","participant_role","joined_at","left_at") VALUES('CON-001','doctor-demo-002','expert',NULL,NULL);
 INSERT INTO "consultation_participants"("consultation_id","identity_id","participant_role","joined_at","left_at") VALUES('CON-002','doctor-demo-001','expert',NULL,NULL);
 INSERT INTO "consultation_participants"("consultation_id","identity_id","participant_role","joined_at","left_at") VALUES('CON-002','doctor-demo-003','expert',NULL,NULL);
+INSERT INTO "consultation_participants"("consultation_id","identity_id","participant_role","joined_at","left_at") VALUES('CON-IN-001','doctor-demo-001','invited',NULL,NULL);
+INSERT INTO "consultation_participants"("consultation_id","identity_id","participant_role","joined_at","left_at") VALUES('CON-IN-001','doctor-demo-002','requester',NULL,NULL);
+INSERT INTO "consultation_participants"("consultation_id","identity_id","participant_role","joined_at","left_at") VALUES('CON-IN-001','doctor-demo-003','expert',NULL,NULL);
+INSERT INTO "consultation_participants"("consultation_id","identity_id","participant_role","joined_at","left_at") VALUES('CON-IN-002','doctor-demo-001','invited',NULL,NULL);
+INSERT INTO "consultation_participants"("consultation_id","identity_id","participant_role","joined_at","left_at") VALUES('CON-IN-002','doctor-demo-002','expert',NULL,NULL);
+INSERT INTO "consultation_participants"("consultation_id","identity_id","participant_role","joined_at","left_at") VALUES('CON-IN-002','doctor-demo-003','requester',NULL,NULL);
 
--- consultations: 2 row(s)
+-- consultations: 4 row(s)
 INSERT INTO "consultations"("id","patient_id","requested_by","title","specialty","status","scheduled_at","summary","completed_at") VALUES('CON-001','PAT-004','doctor-demo-001','老年心血管多学科会诊','心血管内科 · 全科医学','scheduled','2026-09-10T15:00:00+08:00','展示会诊资料、专家协作与报告草稿的未来工作流程。',NULL);
 INSERT INTO "consultations"("id","patient_id","requested_by","title","specialty","status","scheduled_at","summary","completed_at") VALUES('CON-002','PAT-002','doctor-demo-001','糖尿病综合健康评估','内分泌科 · 全科医学','requested','2026-09-11T10:00:00+08:00','申请、临时授权和专家确认将在后续迭代实现。',NULL);
+INSERT INTO "consultations"("id","patient_id","requested_by","title","specialty","status","scheduled_at","summary","completed_at") VALUES('CON-IN-001','PAT-004','doctor-demo-002','术后康复联合评估','康复医学科 · 骨科 · 全科医学','requested','2026-09-12T15:30:00+08:00','其他医生发来的会诊申请，需要确认是否参与并查看患者资料。',NULL);
+INSERT INTO "consultations"("id","patient_id","requested_by","title","specialty","status","scheduled_at","summary","completed_at") VALUES('CON-IN-002','PAT-005','doctor-demo-003','糖尿病足风险联合会诊','内分泌科 · 全科医学 · 护理管理','requested','2026-09-13T09:30:00+08:00','其他医生邀请当前医生参与糖尿病足风险评估，需要查看资料后确认是否参会。',NULL);
 
 -- doctors: 5 row(s)
 INSERT INTO "doctors"("identity_id","license_number","specialty","phone","government_id_type","government_id_masked","credential_status","personnel_status","enabled","created_at","updated_at") VALUES('doctor-demo-001','DEMO-LIC-001','全科医学','13800000001','居民身份证','**************1001','verified','verified',1,'2026-09-01T00:00:00.000Z','2026-09-01T00:00:00.000Z');
@@ -55,21 +82,47 @@ INSERT INTO "doctors"("identity_id","license_number","specialty","phone","govern
 INSERT INTO "doctors"("identity_id","license_number","specialty","phone","government_id_type","government_id_masked","credential_status","personnel_status","enabled","created_at","updated_at") VALUES('doctor-demo-004','DEMO-LIC-004','老年医学','13800000004','居民身份证','**************1004','verified','verified',1,'2026-09-01T00:00:00.000Z','2026-09-01T00:00:00.000Z');
 INSERT INTO "doctors"("identity_id","license_number","specialty","phone","government_id_type","government_id_masked","credential_status","personnel_status","enabled","created_at","updated_at") VALUES('doctor-demo-005','DEMO-LIC-005','呼吸与重症医学','13800000005','居民身份证','**************1005','verified','verified',1,'2026-09-01T00:00:00.000Z','2026-09-01T00:00:00.000Z');
 
--- encounters: 14 row(s)
-INSERT INTO "encounters"("id","patient_id","doctor_id","type","status","scheduled_at","reason","duration_minutes","rtc_room_id","ended_at","archived_at") VALUES('ENC-001','PAT-001','doctor-demo-001','video','waiting','2026-09-10T09:30:00+08:00','血压监测随访',20,NULL,NULL,NULL);
-INSERT INTO "encounters"("id","patient_id","doctor_id","type","status","scheduled_at","reason","duration_minutes","rtc_room_id","ended_at","archived_at") VALUES('ENC-002','PAT-002','doctor-demo-001','text','waiting','2026-09-10T10:00:00+08:00','血糖数据复核',15,NULL,NULL,NULL);
-INSERT INTO "encounters"("id","patient_id","doctor_id","type","status","scheduled_at","reason","duration_minutes","rtc_room_id","ended_at","archived_at") VALUES('ENC-003','PAT-006','doctor-demo-001','video','waiting','2026-09-10T14:00:00+08:00','呼吸健康随访',20,NULL,NULL,NULL);
-INSERT INTO "encounters"("id","patient_id","doctor_id","type","status","scheduled_at","reason","duration_minutes","rtc_room_id","ended_at","archived_at") VALUES('ENC-004','PAT-003','doctor-demo-001','text','completed','2026-09-09T15:30:00+08:00','常规健康随访',15,NULL,NULL,NULL);
-INSERT INTO "encounters"("id","patient_id","doctor_id","type","status","scheduled_at","reason","duration_minutes","rtc_room_id","ended_at","archived_at") VALUES('ENC-005','PAT-004','doctor-demo-001','video','waiting','2026-09-11T08:40:00+08:00','胸闷症状复查',20,NULL,NULL,NULL);
-INSERT INTO "encounters"("id","patient_id","doctor_id","type","status","scheduled_at","reason","duration_minutes","rtc_room_id","ended_at","archived_at") VALUES('ENC-006','PAT-005','doctor-demo-001','text','waiting','2026-09-20T09:20:00+08:00','饮食运动计划调整',15,NULL,NULL,NULL);
-INSERT INTO "encounters"("id","patient_id","doctor_id","type","status","scheduled_at","reason","duration_minutes","rtc_room_id","ended_at","archived_at") VALUES('ENC-007','PAT-007','doctor-demo-001','video','waiting','2026-09-11T10:30:00+08:00','膝关节疼痛康复咨询',20,NULL,NULL,NULL);
+-- encounter_availability_windows: 3 row(s)
+INSERT INTO "encounter_availability_windows"("id","doctor_id","window_date","type","start_time","end_time","capacity","booked") VALUES('AW-001','doctor-demo-001','2026-09-21','text','08:00','20:00',8,3);
+INSERT INTO "encounter_availability_windows"("id","doctor_id","window_date","type","start_time","end_time","capacity","booked") VALUES('AW-002','doctor-demo-001','2026-09-21','video','09:00','11:30',6,2);
+INSERT INTO "encounter_availability_windows"("id","doctor_id","window_date","type","start_time","end_time","capacity","booked") VALUES('AW-003','doctor-demo-001','2026-09-22','video','14:00','17:00',5,1);
+
+-- encounter_clinical_briefs: 6 row(s)
+INSERT INTO "encounter_clinical_briefs"("encounter_id","chief_complaint","present_illness","past_history","surgical_history","medication_history","allergy_history") VALUES('ENC-001','近两日反复偏头痛','患者自述右侧颞部搏动性疼痛，午后明显，偶有恶心，无肢体麻木或言语不清。','高血压病史3年，平时血压控制尚可。','否认重大手术史。','间断服用苯磺酸氨氯地平片。','否认药物及食物过敏史。');
+INSERT INTO "encounter_clinical_briefs"("encounter_id","chief_complaint","present_illness","past_history","surgical_history","medication_history","allergy_history") VALUES('ENC-005','胸闷症状复查','患者近一周活动后偶有胸闷，休息后可缓解，无明显出汗或晕厥。','冠心病病史5年。','否认近期手术史。','规律服用抗血小板及降脂药物。','磺胺类过敏史。');
+INSERT INTO "encounter_clinical_briefs"("encounter_id","chief_complaint","present_illness","past_history","surgical_history","medication_history","allergy_history") VALUES('ENC-006','饮食运动计划调整','近期餐后血糖较前波动，患者希望调整饮食和步行计划。','糖尿病前期管理中。','否认重大手术史。','暂未使用降糖药。','否认明确过敏史。');
+INSERT INTO "encounter_clinical_briefs"("encounter_id","chief_complaint","present_illness","past_history","surgical_history","medication_history","allergy_history") VALUES('ENC-008','家庭血压记录复核','患者提交一周家庭血压记录，晨起血压偶有升高。','高血压病史8年。','否认重大手术史。','规律服用降压药。','青霉素过敏史。');
+INSERT INTO "encounter_clinical_briefs"("encounter_id","chief_complaint","present_illness","past_history","surgical_history","medication_history","allergy_history") VALUES('ENC-011','头晕症状随访','患者偶有头晕，改变体位时明显，无肢体无力或言语不清。','高脂血症病史。','胆囊切除术后。','规律服用他汀类药物。','否认明确过敏史。');
+INSERT INTO "encounter_clinical_briefs"("encounter_id","chief_complaint","present_illness","past_history","surgical_history","medication_history","allergy_history") VALUES('ENC-012','冠心病用药答疑','患者咨询抗血小板药物服用注意事项，近期无黑便或明显出血。','冠心病病史5年。','否认近期手术史。','服用阿司匹林及他汀类药物。','磺胺类过敏史。');
+
+-- encounter_messages: 12 row(s)
+INSERT INTO "encounter_messages"("id","encounter_id","sender_identity_id","sender_patient_id","body","sent_at","sender_role","image_url","image_name") VALUES('MSG-ENC-001-P1','ENC-001',NULL,'PAT-001','医生您好，我已准备好视频问诊。','2026-09-22T08:30:00+08:00','patient',NULL,NULL);
+INSERT INTO "encounter_messages"("id","encounter_id","sender_identity_id","sender_patient_id","body","sent_at","sender_role","image_url","image_name") VALUES('MSG-ENC-001-S1','ENC-001','doctor-demo-001',NULL,'视频问诊待呼叫，系统将同时连接医生与患者。','2026-09-22T08:30:00+08:00','system',NULL,NULL);
+INSERT INTO "encounter_messages"("id","encounter_id","sender_identity_id","sender_patient_id","body","sent_at","sender_role","image_url","image_name") VALUES('MSG-ENC-005-P1','ENC-005',NULL,'PAT-004','医生您好，我已准备好视频问诊。','2026-09-22T09:30:00+08:00','patient',NULL,NULL);
+INSERT INTO "encounter_messages"("id","encounter_id","sender_identity_id","sender_patient_id","body","sent_at","sender_role","image_url","image_name") VALUES('MSG-ENC-005-S1','ENC-005','doctor-demo-001',NULL,'视频问诊待呼叫，系统将同时连接医生与患者。','2026-09-22T09:30:00+08:00','system',NULL,NULL);
+INSERT INTO "encounter_messages"("id","encounter_id","sender_identity_id","sender_patient_id","body","sent_at","sender_role","image_url","image_name") VALUES('MSG-ENC-006-P1','ENC-006',NULL,'PAT-005','医生您好，我想咨询一下：饮食运动计划调整。','2026-09-23T09:20:00+08:00','patient',NULL,NULL);
+INSERT INTO "encounter_messages"("id","encounter_id","sender_identity_id","sender_patient_id","body","sent_at","sender_role","image_url","image_name") VALUES('MSG-ENC-006-S1','ENC-006','doctor-demo-001',NULL,'图文问诊已开始，本次服务窗口为48h。','2026-09-23T09:20:00+08:00','system',NULL,NULL);
+INSERT INTO "encounter_messages"("id","encounter_id","sender_identity_id","sender_patient_id","body","sent_at","sender_role","image_url","image_name") VALUES('MSG-ENC-008-P1','ENC-008',NULL,'PAT-001','医生您好，我想咨询一下：家庭血压记录复核。','2026-09-08T16:00:00+08:00','patient',NULL,NULL);
+INSERT INTO "encounter_messages"("id","encounter_id","sender_identity_id","sender_patient_id","body","sent_at","sender_role","image_url","image_name") VALUES('MSG-ENC-008-S1','ENC-008','doctor-demo-001',NULL,'图文问诊已开始，本次服务窗口为48h。','2026-09-08T16:00:00+08:00','system',NULL,NULL);
+INSERT INTO "encounter_messages"("id","encounter_id","sender_identity_id","sender_patient_id","body","sent_at","sender_role","image_url","image_name") VALUES('MSG-ENC-011-P1','ENC-011',NULL,'PAT-003','医生您好，我已准备好视频问诊。','2026-09-07T09:00:00+08:00','patient',NULL,NULL);
+INSERT INTO "encounter_messages"("id","encounter_id","sender_identity_id","sender_patient_id","body","sent_at","sender_role","image_url","image_name") VALUES('MSG-ENC-011-S1','ENC-011','doctor-demo-001',NULL,'视频问诊待呼叫，系统将同时连接医生与患者。','2026-09-07T09:00:00+08:00','system',NULL,NULL);
+INSERT INTO "encounter_messages"("id","encounter_id","sender_identity_id","sender_patient_id","body","sent_at","sender_role","image_url","image_name") VALUES('MSG-ENC-012-P1','ENC-012',NULL,'PAT-004','医生您好，我想咨询一下：冠心病用药答疑。','2026-09-21T08:00:00+08:00','patient',NULL,NULL);
+INSERT INTO "encounter_messages"("id","encounter_id","sender_identity_id","sender_patient_id","body","sent_at","sender_role","image_url","image_name") VALUES('MSG-ENC-012-S1','ENC-012','doctor-demo-001',NULL,'图文问诊已开始，本次服务窗口为48h。','2026-09-21T08:00:00+08:00','system',NULL,NULL);
+
+-- encounter_notices: 1 row(s)
+INSERT INTO "encounter_notices"("id","encounter_id","kind","content","status","proposed_scheduled_at","created_at") VALUES('NOTICE-001','ENC-012','按时进入提醒','已提醒患者在服务窗口内保持在线。','已发送',NULL,'2026-09-21T09:00:00+08:00');
+
+-- encounter_saved_records: 2 row(s)
+INSERT INTO "encounter_saved_records"("id","encounter_id","title","saved_at","mode","message_count","audio_saved","video_saved") VALUES('ESR-ENC-008-001','ENC-008','本次问诊记录','2026-09-08T16:40:00+08:00','text',12,1,0);
+INSERT INTO "encounter_saved_records"("id","encounter_id","title","saved_at","mode","message_count","audio_saved","video_saved") VALUES('ESR-ENC-011-001','ENC-011','本次问诊记录','2026-09-07T09:25:00+08:00','video',6,1,1);
+
+-- encounters: 6 row(s)
+INSERT INTO "encounters"("id","patient_id","doctor_id","type","status","scheduled_at","reason","duration_minutes","rtc_room_id","ended_at","archived_at") VALUES('ENC-001','PAT-001','doctor-demo-001','video','waiting','2026-09-22T08:30:00+08:00','血压监测随访',20,NULL,NULL,NULL);
+INSERT INTO "encounters"("id","patient_id","doctor_id","type","status","scheduled_at","reason","duration_minutes","rtc_room_id","ended_at","archived_at") VALUES('ENC-005','PAT-004','doctor-demo-001','video','waiting','2026-09-22T09:30:00+08:00','胸闷症状复查',20,NULL,NULL,NULL);
+INSERT INTO "encounters"("id","patient_id","doctor_id","type","status","scheduled_at","reason","duration_minutes","rtc_room_id","ended_at","archived_at") VALUES('ENC-006','PAT-005','doctor-demo-001','text','waiting','2026-09-23T09:20:00+08:00','饮食运动计划调整',15,NULL,NULL,NULL);
 INSERT INTO "encounters"("id","patient_id","doctor_id","type","status","scheduled_at","reason","duration_minutes","rtc_room_id","ended_at","archived_at") VALUES('ENC-008','PAT-001','doctor-demo-001','text','completed','2026-09-08T16:00:00+08:00','家庭血压记录复核',15,NULL,NULL,NULL);
-INSERT INTO "encounters"("id","patient_id","doctor_id","type","status","scheduled_at","reason","duration_minutes","rtc_room_id","ended_at","archived_at") VALUES('ENC-009','PAT-002','doctor-demo-001','video','waiting','2026-09-12T11:10:00+08:00','餐后血糖波动评估',20,NULL,NULL,NULL);
-INSERT INTO "encounters"("id","patient_id","doctor_id","type","status","scheduled_at","reason","duration_minutes","rtc_room_id","ended_at","archived_at") VALUES('ENC-010','PAT-006','doctor-demo-001','text','waiting','2026-09-20T14:30:00+08:00','咳嗽气短用药咨询',15,NULL,NULL,NULL);
 INSERT INTO "encounters"("id","patient_id","doctor_id","type","status","scheduled_at","reason","duration_minutes","rtc_room_id","ended_at","archived_at") VALUES('ENC-011','PAT-003','doctor-demo-001','video','completed','2026-09-07T09:00:00+08:00','头晕症状随访',20,NULL,NULL,NULL);
 INSERT INTO "encounters"("id","patient_id","doctor_id","type","status","scheduled_at","reason","duration_minutes","rtc_room_id","ended_at","archived_at") VALUES('ENC-012','PAT-004','doctor-demo-001','text','waiting','2026-09-21T08:00:00+08:00','冠心病用药答疑',15,NULL,NULL,NULL);
-INSERT INTO "encounters"("id","patient_id","doctor_id","type","status","scheduled_at","reason","duration_minutes","rtc_room_id","ended_at","archived_at") VALUES('ENC-013','PAT-005','doctor-demo-001','video','waiting','2026-09-14T09:50:00+08:00','糖尿病随访视频问诊',20,NULL,NULL,NULL);
-INSERT INTO "encounters"("id","patient_id","doctor_id","type","status","scheduled_at","reason","duration_minutes","rtc_room_id","ended_at","archived_at") VALUES('ENC-014','PAT-007','doctor-demo-001','text','completed','2026-09-06T13:30:00+08:00','康复训练反馈',15,NULL,NULL,NULL);
 
 -- feature_settings: 5 row(s)
 INSERT INTO "feature_settings"("id","enabled","configured_by","updated_at") VALUES('community',0,NULL,'2026-09-10T00:00:00+08:00');
@@ -939,17 +992,19 @@ INSERT INTO "medical_order_versions"("id","order_id","version","payload_json","a
 -- medical_orders: 1 row(s)
 INSERT INTO "medical_orders"("id","record_id","patient_id","type","status","current_version","created_by","created_at","stopped_at","stop_reason") VALUES('ORD-001','REC-001','PAT-001','examination','draft',1,'doctor-demo-001','2026-09-10T08:45:00+08:00',NULL,NULL);
 
--- medical_record_versions: 4 row(s)
+-- medical_record_versions: 5 row(s)
 INSERT INTO "medical_record_versions"("id","record_id","version","template_id","body_json","authored_by","authored_at","amendment_reason","template_version","title","diagnosis") VALUES('version-REC-001','REC-001',1,'followup','{"followUpPurpose":"仅用于演示，非临床病历","healthMonitoringData":"","currentMedicationAndAdherence":"","lifestyleAndCare":"","nextFollowUpArrangement":""}','doctor-demo-001','2026-09-10T08:45:00+08:00',NULL,1,'高血压随访记录','高血压');
 INSERT INTO "medical_record_versions"("id","record_id","version","template_id","body_json","authored_by","authored_at","amendment_reason","template_version","title","diagnosis") VALUES('version-REC-002','REC-002',1,'followup','{"followUpPurpose":"仅用于演示，非临床病历","healthMonitoringData":"","currentMedicationAndAdherence":"","lifestyleAndCare":"","nextFollowUpArrangement":""}','doctor-demo-003','2026-09-09T16:20:00+08:00',NULL,1,'血糖复查记录','2 型糖尿病');
 INSERT INTO "medical_record_versions"("id","record_id","version","template_id","body_json","authored_by","authored_at","amendment_reason","template_version","title","diagnosis") VALUES('version-REC-003','REC-003',1,'followup','{"followUpPurpose":"仅用于演示，非临床病历","healthMonitoringData":"","currentMedicationAndAdherence":"","lifestyleAndCare":"","nextFollowUpArrangement":""}','doctor-demo-002','2026-09-09T14:10:00+08:00',NULL,1,'心血管专科病历','冠心病');
 INSERT INTO "medical_record_versions"("id","record_id","version","template_id","body_json","authored_by","authored_at","amendment_reason","template_version","title","diagnosis") VALUES('version-REC-004','REC-004',1,'followup','{"followUpPurpose":"仅用于演示，非临床病历","healthMonitoringData":"","currentMedicationAndAdherence":"","lifestyleAndCare":"","nextFollowUpArrangement":""}','doctor-demo-003','2026-09-08T11:00:00+08:00',NULL,1,'慢病随访归档','高血压');
+INSERT INTO "medical_record_versions"("id","record_id","version","template_id","body_json","authored_by","authored_at","amendment_reason","template_version","title","diagnosis") VALUES('version-REC-005','REC-005',1,'followup','{"followUpPurpose":"仅用于演示，非临床病历","healthMonitoringData":"","currentMedicationAndAdherence":"","lifestyleAndCare":"","nextFollowUpArrangement":""}','doctor-demo-001','2026-09-02T10:20:00+08:00',NULL,1,'饮食运动计划随访','糖尿病前期管理');
 
--- medical_records: 4 row(s)
+-- medical_records: 5 row(s)
 INSERT INTO "medical_records"("id","patient_id","encounter_id","title","diagnosis","status","author_id","updated_at","version","archived_at") VALUES('REC-001','PAT-001',NULL,'高血压随访记录','高血压','draft','doctor-demo-001','2026-09-10T08:45:00+08:00',1,NULL);
 INSERT INTO "medical_records"("id","patient_id","encounter_id","title","diagnosis","status","author_id","updated_at","version","archived_at") VALUES('REC-002','PAT-002',NULL,'血糖复查记录','2 型糖尿病','pending-review','doctor-demo-003','2026-09-09T16:20:00+08:00',1,NULL);
 INSERT INTO "medical_records"("id","patient_id","encounter_id","title","diagnosis","status","author_id","updated_at","version","archived_at") VALUES('REC-003','PAT-004',NULL,'心血管专科病历','冠心病','pending-review','doctor-demo-002','2026-09-09T14:10:00+08:00',1,NULL);
 INSERT INTO "medical_records"("id","patient_id","encounter_id","title","diagnosis","status","author_id","updated_at","version","archived_at") VALUES('REC-004','PAT-003',NULL,'慢病随访归档','高血压','archived','doctor-demo-003','2026-09-08T11:00:00+08:00',1,'2026-09-08T11:00:00+08:00');
+INSERT INTO "medical_records"("id","patient_id","encounter_id","title","diagnosis","status","author_id","updated_at","version","archived_at") VALUES('REC-005','PAT-005',NULL,'饮食运动计划随访','糖尿病前期管理','draft','doctor-demo-001','2026-09-02T10:20:00+08:00',1,NULL);
 
 -- patient_archive_versions: 9 row(s)
 INSERT INTO "patient_archive_versions"("id","patient_id","version","payload_json","authored_by","created_at","change_reason") VALUES('archive-PAT-001','PAT-001',1,'{"diagnosis":"高血压","synthetic":true}','doctor-demo-001','2026-09-01T00:00:00.000Z','Synthetic demonstration baseline');

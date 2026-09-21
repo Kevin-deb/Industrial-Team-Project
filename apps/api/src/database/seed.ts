@@ -4,6 +4,10 @@ import { hashSecret } from '../platform/auth.js';
 export const DEMO_DOCTOR_ID = 'doctor-demo-001';
 export const DEMO_DATE = '2026-09-10';
 
+function hasTable(db: DatabaseSync, table: string): boolean {
+  return !!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table);
+}
+
 /** Fixed synthetic fixtures; never call provider adapters or imply that notifications were sent. */
 export function seedDemo(db: DatabaseSync): void {
   if (db.prepare('SELECT id FROM identities WHERE id=?').get(DEMO_DOCTOR_ID)) return;
@@ -204,39 +208,9 @@ export function seedDemo(db: DatabaseSync): void {
       DEMO_DOCTOR_ID,
       'video',
       'waiting',
-      '2026-09-10T09:30:00+08:00',
+      '2026-09-22T08:30:00+08:00',
       '血压监测随访',
       20,
-    );
-    encounter.run(
-      'ENC-002',
-      'PAT-002',
-      DEMO_DOCTOR_ID,
-      'text',
-      'waiting',
-      '2026-09-10T10:00:00+08:00',
-      '血糖数据复核',
-      15,
-    );
-    encounter.run(
-      'ENC-003',
-      'PAT-006',
-      DEMO_DOCTOR_ID,
-      'video',
-      'waiting',
-      '2026-09-10T14:00:00+08:00',
-      '呼吸健康随访',
-      20,
-    );
-    encounter.run(
-      'ENC-004',
-      'PAT-003',
-      DEMO_DOCTOR_ID,
-      'text',
-      'completed',
-      '2026-09-09T15:30:00+08:00',
-      '常规健康随访',
-      15,
     );
     encounter.run(
       'ENC-005',
@@ -244,7 +218,7 @@ export function seedDemo(db: DatabaseSync): void {
       DEMO_DOCTOR_ID,
       'video',
       'waiting',
-      '2026-09-11T08:40:00+08:00',
+      '2026-09-22T09:30:00+08:00',
       '胸闷症状复查',
       20,
     );
@@ -254,19 +228,9 @@ export function seedDemo(db: DatabaseSync): void {
       DEMO_DOCTOR_ID,
       'text',
       'waiting',
-      '2026-09-20T09:20:00+08:00',
+      '2026-09-23T09:20:00+08:00',
       '饮食运动计划调整',
       15,
-    );
-    encounter.run(
-      'ENC-007',
-      'PAT-007',
-      DEMO_DOCTOR_ID,
-      'video',
-      'waiting',
-      '2026-09-11T10:30:00+08:00',
-      '膝关节疼痛康复咨询',
-      20,
     );
     encounter.run(
       'ENC-008',
@@ -276,26 +240,6 @@ export function seedDemo(db: DatabaseSync): void {
       'completed',
       '2026-09-08T16:00:00+08:00',
       '家庭血压记录复核',
-      15,
-    );
-    encounter.run(
-      'ENC-009',
-      'PAT-002',
-      DEMO_DOCTOR_ID,
-      'video',
-      'waiting',
-      '2026-09-12T11:10:00+08:00',
-      '餐后血糖波动评估',
-      20,
-    );
-    encounter.run(
-      'ENC-010',
-      'PAT-006',
-      DEMO_DOCTOR_ID,
-      'text',
-      'waiting',
-      '2026-09-20T14:30:00+08:00',
-      '咳嗽气短用药咨询',
       15,
     );
     encounter.run(
@@ -318,26 +262,7 @@ export function seedDemo(db: DatabaseSync): void {
       '冠心病用药答疑',
       15,
     );
-    encounter.run(
-      'ENC-013',
-      'PAT-005',
-      DEMO_DOCTOR_ID,
-      'video',
-      'waiting',
-      '2026-09-14T09:50:00+08:00',
-      '糖尿病随访视频问诊',
-      20,
-    );
-    encounter.run(
-      'ENC-014',
-      'PAT-007',
-      DEMO_DOCTOR_ID,
-      'text',
-      'completed',
-      '2026-09-06T13:30:00+08:00',
-      '康复训练反馈',
-      15,
-    );
+    seedOnlineCareDemo(db);
     const record = db.prepare(
       'INSERT INTO medical_records(id,patient_id,title,diagnosis,status,author_id,updated_at,version,archived_at) VALUES(?,?,?,?,?,?,?,?,?)',
     );
@@ -377,6 +302,15 @@ export function seedDemo(db: DatabaseSync): void {
         'archived',
         'doctor-demo-003',
         '2026-09-08T11:00:00+08:00',
+      ],
+      [
+        'REC-005',
+        'PAT-005',
+        '饮食运动计划随访',
+        '糖尿病前期管理',
+        'draft',
+        DEMO_DOCTOR_ID,
+        '2026-09-02T10:20:00+08:00',
       ],
     ];
     const hasClinicalTemplateVersion = !!db
@@ -512,6 +446,40 @@ export function seedDemo(db: DatabaseSync): void {
       db.prepare(
         'INSERT INTO consultation_participants(consultation_id,identity_id,participant_role) VALUES(?,?,?)',
       ).run(pair[0]!, pair[1]!, 'expert');
+    if (hasTable(db, 'consultation_material_uploads')) {
+      const consultationMaterial = db.prepare(
+        `INSERT OR IGNORE INTO consultation_material_uploads(
+          id,consultation_id,title,description,file_name,uploaded_by,uploaded_at
+        ) VALUES(?,?,?,?,?,?,?)`,
+      );
+      for (const material of [
+        ['CMU-001', 'CON-001', '近三个月血压趋势', '患者家庭血压监测汇总。', '近三个月血压趋势.txt', DEMO_DOCTOR_ID, '2026-09-10T09:00:00+08:00'],
+        ['CMU-002', 'CON-001', '心电图摘要', '近期心电图核心结论。', '心电图摘要.txt', DEMO_DOCTOR_ID, '2026-09-10T09:05:00+08:00'],
+        ['CMU-003', 'CON-001', '当前用药清单', '患者现用药物与剂量。', '当前用药清单.txt', DEMO_DOCTOR_ID, '2026-09-10T09:10:00+08:00'],
+        ['CMU-004', 'CON-002', '血糖监测记录', '近两周空腹与餐后血糖。', '血糖监测记录.txt', DEMO_DOCTOR_ID, '2026-09-10T10:00:00+08:00'],
+        ['CMU-005', 'CON-002', '饮食运动记录', '患者近期饮食与运动摘要。', '饮食运动记录.txt', DEMO_DOCTOR_ID, '2026-09-10T10:05:00+08:00'],
+      ])
+        consultationMaterial.run(...material);
+    }
+    if (hasTable(db, 'consultation_messages')) {
+      const consultationMessage = db.prepare(
+        'INSERT OR IGNORE INTO consultation_messages(id,consultation_id,sender_identity_id,body,sent_at) VALUES(?,?,?,?,?)',
+      );
+      consultationMessage.run(
+        'CMSG-001',
+        'CON-001',
+        'doctor-demo-002',
+        '建议先核对近期指标和当前用药，再形成联合意见。',
+        '2026-09-10T15:05:00+08:00',
+      );
+      consultationMessage.run(
+        'CMSG-002',
+        'CON-001',
+        DEMO_DOCTOR_ID,
+        '已打开本次会诊材料，等待各专科补充意见。',
+        '2026-09-10T15:07:00+08:00',
+      );
+    }
     const obs = db.prepare(
       'INSERT INTO health_observations(id,patient_id,metric,value,unit,measured_at,received_at,source,source_label) VALUES(?,?,?,?,?,?,?,?,?)',
     );
@@ -684,6 +652,44 @@ export function seedDemo(db: DatabaseSync): void {
   }
 }
 
+function seedOnlineCareDemo(db: DatabaseSync): void {
+  if (!db.prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='encounter_clinical_briefs'").get())
+    return;
+  db.exec(`
+    INSERT OR IGNORE INTO encounter_clinical_briefs VALUES
+      ('ENC-001','近两日反复偏头痛','患者自述右侧颞部搏动性疼痛，午后明显，偶有恶心，无肢体麻木或言语不清。','高血压病史3年，平时血压控制尚可。','否认重大手术史。','间断服用苯磺酸氨氯地平片。','否认药物及食物过敏史。'),
+      ('ENC-005','胸闷症状复查','患者近一周活动后偶有胸闷，休息后可缓解，无明显出汗或晕厥。','冠心病病史5年。','否认近期手术史。','规律服用抗血小板及降脂药物。','磺胺类过敏史。'),
+      ('ENC-006','饮食运动计划调整','近期餐后血糖较前波动，患者希望调整饮食和步行计划。','糖尿病前期管理中。','否认重大手术史。','暂未使用降糖药。','否认明确过敏史。'),
+      ('ENC-008','家庭血压记录复核','患者提交一周家庭血压记录，晨起血压偶有升高。','高血压病史8年。','否认重大手术史。','规律服用降压药。','青霉素过敏史。'),
+      ('ENC-011','头晕症状随访','患者偶有头晕，改变体位时明显，无肢体无力或言语不清。','高脂血症病史。','胆囊切除术后。','规律服用他汀类药物。','否认明确过敏史。'),
+      ('ENC-012','冠心病用药答疑','患者咨询抗血小板药物服用注意事项，近期无黑便或明显出血。','冠心病病史5年。','否认近期手术史。','服用阿司匹林及他汀类药物。','磺胺类过敏史。');
+
+    INSERT OR IGNORE INTO encounter_saved_records VALUES
+      ('ESR-ENC-008-001','ENC-008','本次问诊记录','2026-09-08T16:40:00+08:00','text',12,1,0),
+      ('ESR-ENC-011-001','ENC-011','本次问诊记录','2026-09-07T09:25:00+08:00','video',6,1,1);
+
+    INSERT OR IGNORE INTO encounter_availability_windows VALUES
+      ('AW-001','doctor-demo-001','2026-09-21','text','08:00','20:00',8,3),
+      ('AW-002','doctor-demo-001','2026-09-21','video','09:00','11:30',6,2),
+      ('AW-003','doctor-demo-001','2026-09-22','video','14:00','17:00',5,1);
+
+    INSERT OR IGNORE INTO encounter_notices VALUES
+      ('NOTICE-001','ENC-012','按时进入提醒','已提醒患者在服务窗口内保持在线。','已发送',NULL,'2026-09-21T09:00:00+08:00');
+
+    INSERT OR IGNORE INTO encounter_messages(id,encounter_id,sender_identity_id,sender_patient_id,body,sent_at,sender_role,image_url,image_name)
+    SELECT 'MSG-' || id || '-P1', id, NULL, patient_id,
+      CASE WHEN type='text' THEN '医生您好，我想咨询一下：' || reason || '。' ELSE '医生您好，我已准备好视频问诊。' END,
+      scheduled_at, 'patient', NULL, NULL
+    FROM encounters;
+
+    INSERT OR IGNORE INTO encounter_messages(id,encounter_id,sender_identity_id,sender_patient_id,body,sent_at,sender_role,image_url,image_name)
+    SELECT 'MSG-' || id || '-S1', id, doctor_id, NULL,
+      CASE WHEN type='text' THEN '图文问诊已开始，本次服务窗口为48h。' ELSE '视频问诊待呼叫，系统将同时连接医生与患者。' END,
+      scheduled_at, 'system', NULL, NULL
+    FROM encounters;
+  `);
+}
+
 /** Additive login/profile fixtures run after social identities exist; safe for upgraded databases. */
 export function seedAuthFoundation(db: DatabaseSync): void {
   const at = '2026-09-01T00:00:00.000Z';
@@ -767,6 +773,85 @@ export function seedAuthFoundation(db: DatabaseSync): void {
       'doctor-demo-003',
       at,
       'Synthetic demonstration baseline',
+    );
+
+    db.prepare(
+      'INSERT OR IGNORE INTO consultations(id,patient_id,requested_by,title,specialty,status,scheduled_at,summary) VALUES(?,?,?,?,?,?,?,?)',
+    ).run(
+      'CON-IN-001',
+      'PAT-004',
+      'doctor-demo-002',
+      '术后康复联合评估',
+      '康复医学科 · 骨科 · 全科医学',
+      'requested',
+      '2026-09-12T15:30:00+08:00',
+      '其他医生发来的会诊申请，需要确认是否参与并查看患者资料。',
+    );
+    db.prepare(
+      'INSERT OR IGNORE INTO consultations(id,patient_id,requested_by,title,specialty,status,scheduled_at,summary) VALUES(?,?,?,?,?,?,?,?)',
+    ).run(
+      'CON-IN-002',
+      'PAT-005',
+      'doctor-demo-003',
+      '糖尿病足风险联合会诊',
+      '内分泌科 · 全科医学 · 护理管理',
+      'requested',
+      '2026-09-13T09:30:00+08:00',
+      '其他医生邀请当前医生参与糖尿病足风险评估，需要查看资料后确认是否参会。',
+    );
+    for (const pair of [
+      [DEMO_DOCTOR_ID, 'invited'],
+      ['doctor-demo-002', 'requester'],
+      ['doctor-demo-003', 'expert'],
+    ])
+      db.prepare(
+        'INSERT OR IGNORE INTO consultation_participants(consultation_id,identity_id,participant_role) VALUES(?,?,?)',
+      ).run('CON-IN-001', pair[0]!, pair[1]!);
+    for (const pair of [
+      [DEMO_DOCTOR_ID, 'invited'],
+      ['doctor-demo-003', 'requester'],
+      ['doctor-demo-002', 'expert'],
+    ])
+      db.prepare(
+        'INSERT OR IGNORE INTO consultation_participants(consultation_id,identity_id,participant_role) VALUES(?,?,?)',
+      ).run('CON-IN-002', pair[0]!, pair[1]!);
+    for (const material of [
+      ['CMU-006', '病情摘要', '术后康复会诊病情摘要。', '病情摘要.txt'],
+      ['CMU-007', '检查结果', '影像与实验室检查摘要。', '检查结果.txt'],
+      ['CMU-008', '用药记录', '围术期及当前用药记录。', '用药记录.txt'],
+    ])
+      db.prepare(
+        `INSERT OR IGNORE INTO consultation_material_uploads(
+          id,consultation_id,title,description,file_name,uploaded_by,uploaded_at
+        ) VALUES(?,?,?,?,?,?,?)`,
+      ).run(material[0]!, 'CON-IN-001', material[1]!, material[2]!, material[3]!, 'doctor-demo-002', at);
+    for (const material of [
+      ['CMU-009', '足部照片摘要', '患者足部皮肤状态与破溃风险摘要。', '足部照片摘要.txt'],
+      ['CMU-010', '血糖波动记录', '近两周空腹及餐后血糖波动。', '血糖波动记录.txt'],
+      ['CMU-011', '护理评估表', '居家足部护理执行情况。', '护理评估表.txt'],
+    ])
+      db.prepare(
+        `INSERT OR IGNORE INTO consultation_material_uploads(
+          id,consultation_id,title,description,file_name,uploaded_by,uploaded_at
+        ) VALUES(?,?,?,?,?,?,?)`,
+      ).run(material[0]!, 'CON-IN-002', material[1]!, material[2]!, material[3]!, 'doctor-demo-003', at);
+    db.prepare(
+      'INSERT OR IGNORE INTO consultation_messages(id,consultation_id,sender_identity_id,body,sent_at) VALUES(?,?,?,?,?)',
+    ).run(
+      'CMSG-003',
+      'CON-IN-001',
+      'doctor-demo-002',
+      '已提交术后康复资料，请全科协助评估随访计划。',
+      '2026-09-11T15:20:00+08:00',
+    );
+    db.prepare(
+      'INSERT OR IGNORE INTO consultation_messages(id,consultation_id,sender_identity_id,body,sent_at) VALUES(?,?,?,?,?)',
+    ).run(
+      'CMSG-004',
+      'CON-IN-002',
+      'doctor-demo-003',
+      '患者近期足部麻木加重，邀请全科一起评估综合干预方案。',
+      '2026-09-12T16:40:00+08:00',
     );
 
     const grants = [

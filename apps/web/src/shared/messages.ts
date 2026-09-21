@@ -198,6 +198,7 @@ export const shellMessages: Record<string, string> = {
   '2026 年 9 月 10 日': '10 September 2026',
   星期四: 'Thursday',
   演示日期: 'Demo date',
+  今日: 'Today',
   '欢迎回来，': 'Welcome back, ',
   '。': '.',
   '今天也一起，让专业的诊疗与温暖的关怀同行。':

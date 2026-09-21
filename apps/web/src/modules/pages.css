@@ -1832,6 +1832,9 @@
   gap: 12px;
   flex-wrap: wrap;
 }
+.consultation-workflow-card {
+  margin-top: 30px;
+}
 .consultation-accept-button {
   min-height: 30px;
   padding: 0 11px !important;
@@ -1896,6 +1899,50 @@
 .consultation-request-form input:focus {
   border-color: #6187b6;
   box-shadow: 0 0 0 3px #1d63b80d;
+}
+.consultation-patient-picker {
+  position: relative;
+}
+.consultation-patient-results {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  display: grid;
+  gap: 6px;
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 8px;
+  border: 1px solid #dfe8ec;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 18px 38px #24404a1f;
+}
+.consultation-patient-results button {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #36555e;
+  cursor: pointer;
+  font: inherit;
+  padding: 9px 10px;
+  text-align: left;
+}
+.consultation-patient-results button:hover {
+  background: #f3f8fb;
+}
+.consultation-patient-results strong {
+  font-size: 12px;
+}
+.consultation-patient-results span,
+.consultation-patient-results p {
+  margin: 0;
+  color: #8a9da4;
+  font-size: 11px;
 }
 .consultation-doctor-picker {
   display: grid;
@@ -2112,6 +2159,7 @@
 }
 .consultation-material-item span {
   min-width: 0;
+  flex: 1;
   overflow-wrap: anywhere;
 }
 .consultation-material-item button {
@@ -2131,6 +2179,15 @@
   border-color: #9fc4d0;
   background: #eef7f9;
   color: #276f83;
+}
+.consultation-material-item button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.consultation-material-item button:disabled:hover {
+  border-color: #d9e6eb;
+  background: #fff;
+  color: #5b8390;
 }
 .consultation-setting-panel p {
   margin: 0;
@@ -2635,6 +2692,126 @@
   color: #9faeb3;
   line-height: 1.8;
   margin: 0;
+}
+.settings-profile-bio {
+  border-top: 1px solid #ecf1f2;
+  padding-top: 18px;
+  margin-top: 18px;
+}
+.settings-profile-bio span,
+.settings-form-note {
+  font-size: 11px;
+  color: #97a7af;
+}
+.settings-profile-bio p {
+  margin: 8px 0 0;
+  color: #5b737e;
+  font-size: 12px;
+  line-height: 1.8;
+}
+.settings-save-hint {
+  margin: 14px 0 0;
+  color: #168b7a;
+  font-size: 11px;
+}
+.settings-edit-form {
+  display: grid;
+  gap: 15px;
+}
+.settings-edit-form label,
+.settings-time-range label {
+  display: grid;
+  gap: 7px;
+  color: #6f8790;
+  font-size: 11px;
+}
+.settings-edit-form input,
+.settings-edit-form textarea,
+.settings-time-range input {
+  width: 100%;
+  border: 1px solid #dfe9ec;
+  border-radius: 8px;
+  background: #fff;
+  color: #3f5962;
+  font: inherit;
+  padding: 10px 12px;
+  outline: none;
+}
+.settings-edit-form textarea {
+  resize: vertical;
+  min-height: 96px;
+}
+.settings-edit-form input:focus,
+.settings-edit-form textarea:focus,
+.settings-time-range input:focus {
+  border-color: #73b6c5;
+  box-shadow: 0 0 0 3px #57b7c51f;
+}
+.settings-form-note {
+  margin: 2px 0 0;
+  line-height: 1.8;
+}
+.settings-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.settings-notification-panel {
+  border: 1px solid #e8eef0;
+  border-radius: 8px;
+  background: #fbfcfd;
+  margin-top: 16px;
+  overflow: hidden;
+}
+.settings-notification-row,
+.settings-quiet-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 15px;
+  border-top: 1px solid #edf2f3;
+}
+.settings-notification-row:first-child {
+  border-top: 0;
+}
+.settings-notification-row > span {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: #eef7f9;
+  color: #2f7d8d;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.settings-notification-row > div,
+.settings-quiet-row > div {
+  min-width: 0;
+  flex: 1;
+}
+.settings-notification-row h3,
+.settings-quiet-row h3 {
+  margin: 0 0 5px;
+  color: #58727d;
+  font-size: 12px;
+}
+.settings-notification-row p,
+.settings-quiet-row p {
+  margin: 0;
+  color: #9aaab0;
+  font-size: 10px;
+  line-height: 1.7;
+}
+.settings-time-range {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 0 15px 15px;
+}
+.settings-time-range[aria-disabled='true'] {
+  opacity: 0.55;
 }
 .feature-coming-panel {
   display: flex;

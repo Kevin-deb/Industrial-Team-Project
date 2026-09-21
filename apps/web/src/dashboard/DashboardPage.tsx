@@ -74,6 +74,7 @@ export function DashboardPage() {
   const schedule = data.schedule.filter(
     (item) => scheduleTab === '全部' || isPendingEncounter(item.status),
   );
+  const today = new Date().toISOString();
   return (
     <div className="dashboard">
       <PageHeader
@@ -84,11 +85,11 @@ export function DashboardPage() {
           <div className="date-chip">
             <CalendarDays size={16} />
             <span>
-              {formatDate('2026-09-10', { year: 'numeric', month: 'long', day: 'numeric' })}
+              {formatDate(today, { year: 'numeric', month: 'long', day: 'numeric' })}
             </span>
             <span className="date-separator" />
-            {formatDate('2026-09-10', { weekday: 'long' })}
-            <Badge tone="slate">{t('演示日期')}</Badge>
+            {formatDate(today, { weekday: 'long' })}
+            <Badge tone="slate">{t('今日')}</Badge>
           </div>
         }
       />
