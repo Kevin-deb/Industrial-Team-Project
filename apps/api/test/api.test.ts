@@ -64,7 +64,7 @@ test('read APIs use consistent envelopes and dashboard counts are derived from s
     const data = (await app.inject('/api/v1/dashboard')).json().data;
     assert.deepEqual(data.stats, {
       patients: 8,
-      pendingEncounters: 10,
+      pendingEncounters: 4,
       pendingReviews: 2,
       healthAlerts: 2,
     });

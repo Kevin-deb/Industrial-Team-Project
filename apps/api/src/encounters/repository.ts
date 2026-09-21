@@ -383,21 +383,30 @@ export class SqliteEncounterRepository implements EncounterRepository {
   }
 
   private historyRecords(patientId: string): EncounterHistoryRecord[] {
-    const records = this.db
+    return this.db
       .prepare(
-        `SELECT * FROM encounter_history_records
-         WHERE patient_id=? ORDER BY record_date DESC,id`,
+        `SELECT r.id,r.title,r.updated_at,i.department,r.diagnosis,r.status
+         FROM medical_records r
+         JOIN identities i ON i.id=r.author_id
+         WHERE r.patient_id=?
+         ORDER BY r.updated_at DESC,r.id`,
       )
       .all(patientId)
       .map((row) => ({
         id: String(row.id),
         title: String(row.title),
-        date: String(row.record_date),
+        date: String(row.updated_at),
         department: String(row.department),
         diagnosis: String(row.diagnosis),
-        outcome: String(row.outcome),
+        outcome: `电子病历状态：${this.recordStatusLabel(String(row.status))}`,
       }));
-    return records;
+  }
+
+  private recordStatusLabel(status: string): string {
+    if (status === 'draft') return '草稿';
+    if (status === 'pending-review') return '待审核';
+    if (status === 'archived') return '已归档';
+    return status;
   }
 
   private savedRecords(encounterId: string): SavedEncounterRecord[] {

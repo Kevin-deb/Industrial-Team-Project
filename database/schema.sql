@@ -606,4 +606,7 @@ INSERT INTO schema_migrations(version,name,applied_at) VALUES(23,'health_observa
 INSERT INTO schema_migrations(version,name,applied_at) VALUES(24,'independent_password_email_and_face_sessions','2026-09-21T00:00:00.000Z');
 INSERT INTO schema_migrations(version,name,applied_at) VALUES(25,'online_care_persistent_workspace','2026-09-21T00:00:00.000Z');
 INSERT INTO schema_migrations(version,name,applied_at) VALUES(26,'online_care_fixture_backfill','2026-09-21T00:00:00.000Z');
+INSERT INTO schema_migrations(version,name,applied_at) VALUES(27,'online_care_typical_fixture_trim','2026-09-21T00:00:00.000Z');
+INSERT INTO schema_migrations(version,name,applied_at) VALUES(28,'online_care_typical_clinical_link','2026-09-21T00:00:00.000Z');
+INSERT INTO schema_migrations(version,name,applied_at) VALUES(29,'online_care_records_alignment','2026-09-21T00:00:00.000Z');
 COMMIT;
