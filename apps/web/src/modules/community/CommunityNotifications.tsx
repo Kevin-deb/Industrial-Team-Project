@@ -59,7 +59,7 @@ export function CommunityNotifications({ onClose }: { onClose: () => void }) {
     </div>
   );
 }
-function noticeText(kind: string) {
+export function noticeText(kind: string) {
   const messages: Record<string, string> = {
     comment: '评论了你的帖子', reply: '回复了你的评论',
     like: '点赞了你的帖子', bookmark: '收藏了你的帖子',

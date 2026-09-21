@@ -149,13 +149,11 @@ export const useGroupPosts = (
     }),
   );
 export const useGroupTags = (id: string) =>
-  useLocalizedEQuery(
-    useQuery({
-      queryKey: socialKeys.groupTags(id),
-      queryFn: () => requestEApi<SocialGroupTags>(`/social/groups/${encodeURIComponent(id)}/tags`),
-      enabled: Boolean(id),
-    }),
-  );
+  useQuery({
+    queryKey: socialKeys.groupTags(id),
+    queryFn: () => requestEApi<SocialGroupTags>(`/social/groups/${encodeURIComponent(id)}/tags`),
+    enabled: Boolean(id),
+  });
 export const usePost = (id: string) =>
   useLocalizedEQuery(
     useQuery({

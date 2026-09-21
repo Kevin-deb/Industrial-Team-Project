@@ -56,12 +56,13 @@ describe('global community unread indicators', () => {
           return envelope({ enabled: true, notificationsEnabled: true, updatedAt: '2026-09-21' });
         if (url.includes('/social/me/notifications'))
           return envelope(
-            Array.from({ length: interactionUnread }, (_, index) => ({
+            Array.from({ length: Math.max(2, interactionUnread) }, (_, index) => ({
               id: `NOTICE-${index}`,
               kind: 'like',
               actorDisplayName: '周明',
               postId: 'POST-1',
               createdAt: '2026-09-21T12:00:00+08:00',
+              ...(index >= interactionUnread ? { readAt: '2026-09-21T12:00:30+08:00' } : {}),
             })),
           );
         if (url.endsWith('/social/notifications/read') && init?.method === 'POST') {
@@ -96,11 +97,14 @@ describe('global community unread indicators', () => {
     expect(await screen.findByRole('link', { name: /同行协作.*5/ })).toBeInTheDocument();
     const bell = screen.getByRole('button', { name: /通知中心.*5 条未读/ });
     fireEvent.click(bell);
-    expect(await screen.findByRole('button', { name: /社区互动.*2 条未读/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /同行私信.*3 条未读/ })).toBeInTheDocument();
+    expect(await screen.findByText('2 条消息')).toBeInTheDocument();
+    expect(screen.getByText('1 条会话')).toBeInTheDocument();
+    expect(screen.getAllByText('周明 点赞了你的帖子')).toHaveLength(2);
+    expect(screen.getByText('新的私信')).toBeInTheDocument();
     await waitFor(() =>
       expect(screen.getByRole('button', { name: /通知中心.*3 条未读/ })).toBeInTheDocument(),
     );
+    expect(screen.getAllByText('周明 点赞了你的帖子')).toHaveLength(2);
 
     interactionUnread = 3;
     listener?.({

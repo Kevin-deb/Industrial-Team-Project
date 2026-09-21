@@ -62,7 +62,8 @@ describe('CommunityPage', () => {
     await waitFor(() => expect(entry).toHaveTextContent('2'));
     fireEvent.click(entry);
     expect(await screen.findByRole('dialog', { name: '我的消息' })).toBeInTheDocument();
-    await waitFor(() => expect(entry).toHaveTextContent('0'));
+    await waitFor(() => expect(entry.querySelector('.unread-count-badge')).not.toBeInTheDocument());
+    expect(entry).toHaveTextContent('2');
     delete window.carelinkRealtime;
   });
   it('shows unavailable content rather than loading forever after moderation', async () => {
@@ -88,6 +89,44 @@ describe('CommunityPage', () => {
     fireEvent.click(within(article).getByRole('button', { name: '点赞回复' }));
     await waitFor(() => expect(within(article).getByRole('button', { name: '取消点赞回复' })).toBeInTheDocument());
     expect(within(article).getByRole('button', { name: '收藏回复' })).toBeInTheDocument();
+  });
+  it('renders a reply immediately below the comment it targets', async () => {
+    const comments = [
+      {
+        id: 'COMMENT-A', postId: post.id, body: 'A 的评论', author: post.author,
+        displayMode: 'named', contentBlocks: [], createdAt: '2026-09-01T10:00:00+08:00',
+      },
+      {
+        id: 'COMMENT-B', postId: post.id, body: 'B 的评论', author: post.author,
+        displayMode: 'named', contentBlocks: [], createdAt: '2026-09-01T11:00:00+08:00',
+      },
+      {
+        id: 'COMMENT-C', postId: post.id, body: '另一条最新评论', author: post.author,
+        displayMode: 'named', contentBlocks: [], createdAt: '2026-09-01T12:00:00+08:00',
+      },
+      {
+        id: 'COMMENT-B-REPLY', postId: post.id, parentCommentId: 'COMMENT-B',
+        body: 'A 回复 B', author: post.author, displayMode: 'named', contentBlocks: [],
+        createdAt: '2026-09-01T13:00:00+08:00',
+      },
+    ];
+    vi.stubGlobal('fetch', vi.fn(async () => envelope({
+      ...post,
+      body: '主题正文',
+      contentBlocks: [],
+      comments,
+    })));
+    renderWithEProviders(<I18nProvider><MemoryRouter initialEntries={['/posts/POST-001']}>
+      <Routes><Route path="/posts/:postId" element={<PostPage />} /></Routes>
+    </MemoryRouter></I18nProvider>);
+
+    const bodies = await screen.findAllByText(/A 的评论|B 的评论|另一条最新评论|A 回复 B/);
+    expect(bodies.map((node) => node.textContent)).toEqual([
+      'A 的评论',
+      'B 的评论',
+      'A 回复 B',
+      '另一条最新评论',
+    ]);
   });
   beforeEach(() => {
     availableTags = ['老年医学', '随访管理', '同行经验', '健康教育'];
@@ -191,6 +230,9 @@ describe('CommunityPage', () => {
     expect(await screen.findByRole('heading', { name: '社区首页' })).toBeInTheDocument();
     for (const name of ['我的点赞', '我的收藏', '我的帖子', '我的消息'])
       expect(await screen.findByRole('button', { name: new RegExp(name) })).toBeInTheDocument();
+    const messageEntry = screen.getByRole('button', { name: /我的消息/ });
+    expect(messageEntry).toHaveTextContent('1');
+    expect(messageEntry.querySelector('.unread-count-badge')).toHaveTextContent('1');
     expect(screen.queryByRole('link', { name: '我的社区' })).not.toBeInTheDocument();
     expect(await screen.findByRole('link', { name: /同行私信.*1/ })).toBeInTheDocument();
 
@@ -266,6 +308,28 @@ describe('CommunityPage', () => {
         expect.anything(),
       ),
     );
+  });
+
+  it('keeps tag filter values stable when the English label is displayed', async () => {
+    localStorage.setItem('carelink-language', 'en');
+    renderWithEProviders(
+      <I18nProvider>
+        <MemoryRouter initialEntries={['/community/groups/GROUP-GERIATRICS']}>
+          <Routes>
+            <Route path="/community/*" element={<CommunityPage />} />
+          </Routes>
+        </MemoryRouter>
+      </I18nProvider>,
+    );
+
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Peer experience' }));
+    await waitFor(() =>
+      expect(vi.mocked(fetch)).toHaveBeenCalledWith(
+        expect.stringContaining(`tags=${encodeURIComponent('同行经验')}`),
+        expect.anything(),
+      ),
+    );
+    expect(await screen.findByText('Clearer outpatient follow-up records: Geriatrics')).toBeVisible();
   });
 
   it('keeps a dedicated fixed-height post composer when case material is toggled', async () => {

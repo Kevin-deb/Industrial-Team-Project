@@ -1,6 +1,7 @@
 import { fireEvent, screen } from '@testing-library/react';
 import { useState } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { I18nProvider, translate } from '../../../shared/i18n';
 import { renderWithEProviders } from '../../e-shared/test-utils';
 import { MixedContentComposer, type ComposerValue } from './MixedContentComposer';
 
@@ -10,10 +11,16 @@ function Harness() {
 }
 
 describe('MixedContentComposer', () => {
+  beforeEach(() => localStorage.clear());
+
   it('rejects an image over 5 MiB before starting an upload', () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
-    const { container } = renderWithEProviders(<Harness />);
+    const { container } = renderWithEProviders(
+      <I18nProvider>
+        <Harness />
+      </I18nProvider>,
+    );
     const input = container.querySelector<HTMLInputElement>(
       'input[type="file"][accept^="image/"]',
     )!;
@@ -25,5 +32,23 @@ describe('MixedContentComposer', () => {
 
     expect(fetchMock).not.toHaveBeenCalled();
     expect(screen.getByRole('alert')).toHaveTextContent('图片不能超过 5 MB');
+  });
+
+  it('localizes the complete composer surface in English mode', () => {
+    localStorage.setItem('carelink-language', 'en');
+    renderWithEProviders(
+      <I18nProvider>
+        <Harness />
+      </I18nProvider>,
+    );
+
+    expect(
+      screen.getByPlaceholderText('Type text or add images, audio, and de-identified medical data…'),
+    ).toBeInTheDocument();
+    for (const name of ['Add image', 'Record or upload audio', 'Add emoji', 'Add medical data'])
+      expect(screen.getByRole('button', { name })).toBeInTheDocument();
+    expect(screen.getByText(/Images 0\/4 · Audio 0\/1 · Data cards 0\/2/)).toBeInTheDocument();
+    expect(translate('删除', 'en')).toBe('Delete');
+    expect(translate('删除帖子', 'en')).toBe('Delete post');
   });
 });

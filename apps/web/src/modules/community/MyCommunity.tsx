@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useI18n } from '../../shared/i18n';
 import { CommunityNotifications } from './CommunityNotifications';
 import { usePersonalPosts } from './queries';
-import { useSocialUnread } from './unread';
+import { UnreadBadge, useSocialUnread } from './unread';
 
 export function MyCommunity() {
   const { t } = useI18n();
@@ -32,7 +32,8 @@ export function MyCommunity() {
       label: '我的消息',
       icon: Bell,
       path: '',
-      count: unread.interactionUnread,
+      count: unread.interactionTotal,
+      unread: unread.interactionUnread,
     },
   ] as const;
   return (
@@ -60,7 +61,10 @@ export function MyCommunity() {
                 )}
               </small>
             </span>
-            <b>{item.count ?? '…'}</b>
+            <b className="community-entry-count">
+              <span>{item.count ?? '…'}</span>
+              {'unread' in item && <UnreadBadge count={item.unread} />}
+            </b>
           </button>
         ))}
       </div>

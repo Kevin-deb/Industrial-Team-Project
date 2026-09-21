@@ -659,6 +659,12 @@
   font-weight: 600;
   text-align: right;
 }
+.community-personal-menu .community-entry-count {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
 .community-notice-scroll {
   max-height: 500px;
   overflow-y: auto;

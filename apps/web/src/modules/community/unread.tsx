@@ -21,6 +21,10 @@ export function useSocialUnread(enabled = true) {
     0,
   );
   return {
+    notificationItems,
+    conversationItems,
+    interactionTotal: notificationItems.length,
+    conversationTotal: conversationItems.length,
     interactionUnread,
     directUnread,
     totalUnread: interactionUnread + directUnread,

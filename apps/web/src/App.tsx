@@ -43,6 +43,7 @@ import {
   useSocialUnread,
 } from './modules/community/unread';
 import { useReadAllNotifications } from './modules/community/queries';
+import { noticeText } from './modules/community/CommunityNotifications';
 
 const navigation = [
   { path: '/', label: '工作台', en: 'Overview', icon: LayoutDashboard },
@@ -311,41 +312,64 @@ export function App() {
         >
           {dialog === 'notifications' ? (
             <div className="notification-center-list">
-              {unread.totalUnread === 0 && (
-                <p className="notification-empty">{t('目前没有未读社区消息')}</p>
+              {unread.interactionTotal + unread.conversationTotal === 0 && (
+                <p className="notification-empty">{t('目前没有社区消息')}</p>
               )}
-              <button
-                aria-label={`${t('社区互动')}，${unread.interactionUnread} ${t('条未读')}`}
-                onClick={() => {
-                  setDialog(null);
-                  navigate('/community');
-                }}
-              >
-                <span className="notice-symbol">
-                  <Bell size={19} />
-                </span>
-                <span>
-                  <strong>{t('社区互动')}</strong>
-                  <small>{t('查看互动消息和举报处理进度')}</small>
-                </span>
-                <span>{`${unread.interactionUnread} ${t('条未读')}`}</span>
-              </button>
-              <button
-                aria-label={`${t('同行私信')}，${unread.directUnread} ${t('条未读')}`}
-                onClick={() => {
-                  setDialog(null);
-                  navigate('/community/messages');
-                }}
-              >
-                <span className="notice-symbol">
-                  <MessageSquareText size={19} />
-                </span>
-                <span>
-                  <strong>{t('同行私信')}</strong>
-                  <small>{t('查看同行私信')}</small>
-                </span>
-                <span>{`${unread.directUnread} ${t('条未读')}`}</span>
-              </button>
+              {unread.notificationItems.length > 0 && (
+                <section className="notification-center-section">
+                  <header>
+                    <strong>{t('社区互动')}</strong>
+                    <span>{unread.interactionTotal} {t('条消息')}</span>
+                    <UnreadBadge count={unread.interactionUnread} />
+                  </header>
+                  {unread.notificationItems.map((item) => (
+                    <button
+                      key={item.id}
+                      className={item.readAt ? '' : 'unread'}
+                      onClick={() => {
+                        setDialog(null);
+                        navigate(item.postId ? `/community/posts/${item.postId}` : '/community');
+                      }}
+                    >
+                      <span className="notice-symbol"><Bell size={17} /></span>
+                      <span>
+                        <strong>
+                          {item.kind.startsWith('report-') || item.kind === 'content-moderated'
+                            ? t(noticeText(item.kind))
+                            : `${item.actorDisplayName} ${t(noticeText(item.kind))}`}
+                        </strong>
+                        <small>{formatDate(item.createdAt, { dateStyle: 'medium', timeStyle: 'short' })}</small>
+                      </span>
+                    </button>
+                  ))}
+                </section>
+              )}
+              {unread.conversationItems.length > 0 && (
+                <section className="notification-center-section">
+                  <header>
+                    <strong>{t('同行私信')}</strong>
+                    <span>{unread.conversationTotal} {t('条会话')}</span>
+                    <UnreadBadge count={unread.directUnread} />
+                  </header>
+                  {unread.conversationItems.map((item) => (
+                    <button
+                      key={item.id}
+                      className={item.unreadCount ? 'unread' : ''}
+                      onClick={() => {
+                        setDialog(null);
+                        navigate('/community/messages');
+                      }}
+                    >
+                      <span className="notice-symbol"><MessageSquareText size={17} /></span>
+                      <span>
+                        <strong>{item.peer.displayName}</strong>
+                        <small>{item.lastMessage || t('查看同行私信')}</small>
+                      </span>
+                      <UnreadBadge count={item.unreadCount} />
+                    </button>
+                  ))}
+                </section>
+              )}
             </div>
           ) : (
             <>
