@@ -2,7 +2,7 @@
 -- Contains no real patient or clinician information.
 PRAGMA foreign_keys=OFF;
 BEGIN;
--- access_grants: 8 row(s)
+-- access_grants: 13 row(s)
 INSERT INTO "access_grants"("id","identity_id","patient_id","scope","task_id","expires_at","revoked_at","created_at") VALUES('grant-d2-p5','doctor-demo-002','PAT-005','patient:read',NULL,NULL,NULL,'2026-09-01T00:00:00.000Z');
 INSERT INTO "access_grants"("id","identity_id","patient_id","scope","task_id","expires_at","revoked_at","created_at") VALUES('grant-d2-p9','doctor-demo-002','PAT-009','patient:read',NULL,NULL,NULL,'2026-09-01T00:00:00.000Z');
 INSERT INTO "access_grants"("id","identity_id","patient_id","scope","task_id","expires_at","revoked_at","created_at") VALUES('grant-d3-p2','doctor-demo-003','PAT-002','patient:read',NULL,NULL,NULL,'2026-09-01T00:00:00.000Z');
@@ -11,6 +11,11 @@ INSERT INTO "access_grants"("id","identity_id","patient_id","scope","task_id","e
 INSERT INTO "access_grants"("id","identity_id","patient_id","scope","task_id","expires_at","revoked_at","created_at") VALUES('grant-d4-p7','doctor-demo-004','PAT-007','patient:read',NULL,NULL,NULL,'2026-09-01T00:00:00.000Z');
 INSERT INTO "access_grants"("id","identity_id","patient_id","scope","task_id","expires_at","revoked_at","created_at") VALUES('grant-d5-p3','doctor-demo-005','PAT-003','patient:read',NULL,NULL,NULL,'2026-09-01T00:00:00.000Z');
 INSERT INTO "access_grants"("id","identity_id","patient_id","scope","task_id","expires_at","revoked_at","created_at") VALUES('grant-d5-p8','doctor-demo-005','PAT-008','patient:read',NULL,NULL,NULL,'2026-09-01T00:00:00.000Z');
+INSERT INTO "access_grants"("id","identity_id","patient_id","scope","task_id","expires_at","revoked_at","created_at") VALUES('grant-CON-IN-001-doctor-demo-001','doctor-demo-001','PAT-009','patient:read','CON-IN-001','2026-12-31T23:59:59+08:00',NULL,'2026-09-01T00:00:00.000Z');
+INSERT INTO "access_grants"("id","identity_id","patient_id","scope","task_id","expires_at","revoked_at","created_at") VALUES('grant-CON-IN-001-doctor-demo-003','doctor-demo-003','PAT-009','patient:read','CON-IN-001','2026-12-31T23:59:59+08:00',NULL,'2026-09-01T00:00:00.000Z');
+INSERT INTO "access_grants"("id","identity_id","patient_id","scope","task_id","expires_at","revoked_at","created_at") VALUES('grant-CON-IN-001-doctor-demo-004','doctor-demo-004','PAT-009','patient:read','CON-IN-001','2026-12-31T23:59:59+08:00',NULL,'2026-09-01T00:00:00.000Z');
+INSERT INTO "access_grants"("id","identity_id","patient_id","scope","task_id","expires_at","revoked_at","created_at") VALUES('grant-CON-IN-002-doctor-demo-001','doctor-demo-001','PAT-005','patient:read','CON-IN-002','2026-12-31T23:59:59+08:00',NULL,'2026-09-01T00:00:00.000Z');
+INSERT INTO "access_grants"("id","identity_id","patient_id","scope","task_id","expires_at","revoked_at","created_at") VALUES('grant-CON-IN-002-doctor-demo-002','doctor-demo-002','PAT-005','patient:read','CON-IN-002','2026-12-31T23:59:59+08:00',NULL,'2026-09-01T00:00:00.000Z');
 
 -- audit_events: 4 row(s)
 INSERT INTO "audit_events"("id","actor_id","action","target_type","target_id","occurred_at","outcome","description") VALUES('AUD-001','doctor-demo-001','demo.record.view','medical-record','REC-001','2026-09-10T08:45:00+08:00','success','演示事件：查看病历草稿');

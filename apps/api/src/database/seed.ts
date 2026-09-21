@@ -870,6 +870,19 @@ export function seedAuthFoundation(db: DatabaseSync): void {
        VALUES(?,?,?,'patient:read',NULL,NULL,NULL,?)`,
     );
     for (const [id, identityId, patientId] of grants) grant.run(id, identityId, patientId, at);
+    const consultationGrants = [
+      ['grant-CON-IN-001-doctor-demo-001', 'doctor-demo-001', 'PAT-009', 'CON-IN-001'],
+      ['grant-CON-IN-001-doctor-demo-003', 'doctor-demo-003', 'PAT-009', 'CON-IN-001'],
+      ['grant-CON-IN-001-doctor-demo-004', 'doctor-demo-004', 'PAT-009', 'CON-IN-001'],
+      ['grant-CON-IN-002-doctor-demo-001', 'doctor-demo-001', 'PAT-005', 'CON-IN-002'],
+      ['grant-CON-IN-002-doctor-demo-002', 'doctor-demo-002', 'PAT-005', 'CON-IN-002'],
+    ] as const;
+    const consultationGrant = db.prepare(
+      `INSERT OR IGNORE INTO access_grants(id,identity_id,patient_id,scope,task_id,expires_at,revoked_at,created_at)
+       VALUES(?,?,?,'patient:read',?,'2026-12-31T23:59:59+08:00',NULL,?)`,
+    );
+    for (const [id, identityId, patientId, taskId] of consultationGrants)
+      consultationGrant.run(id, identityId, patientId, taskId, at);
     db.exec('COMMIT');
   } catch (error) {
     db.exec('ROLLBACK');
