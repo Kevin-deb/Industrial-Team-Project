@@ -1170,6 +1170,7 @@
   aspect-ratio: 4 / 3;
   min-height: 126px;
   gap: 10px;
+  overflow: hidden;
   background: #20343d;
   border: 2px solid #ffffff;
   box-shadow: 0 14px 34px #10252d38;
@@ -1179,7 +1180,14 @@
   font-size: 13px;
 }
 .encounter-video-tile--doctor span {
+  position: relative;
+  z-index: 1;
+  max-width: calc(100% - 16px);
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: rgb(12 28 34 / 46%);
   font-size: 11px;
+  text-align: center;
 }
 .encounter-video-avatar {
   display: inline-flex;
@@ -1197,6 +1205,14 @@
   width: 46px;
   height: 46px;
   font-size: 15px;
+}
+.encounter-doctor-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
 }
 .encounter-call-status {
   display: flex;
@@ -1241,6 +1257,11 @@
   background: #fff;
   color: #607a83;
   cursor: pointer;
+}
+.encounter-call-controls > button.is-active:not(.button) {
+  color: #fff;
+  background: #326eb7;
+  border-color: #326eb7;
 }
 .encounter-danger-button {
   color: #a84d5b !important;

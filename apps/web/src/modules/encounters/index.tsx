@@ -1,5 +1,5 @@
 import { useI18n } from '../../shared/i18n';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
   Camera,
@@ -378,8 +378,55 @@ function EncounterRoom({ encounter, onBack }: { encounter: Encounter; onBack: ()
   const [recordsOpen, setRecordsOpen] = useState(false);
   const [savedRecords, setSavedRecords] = useState<SavedEncounterRecord[]>([]);
   const [previewImage, setPreviewImage] = useState<{ url: string; name?: string } | null>(null);
+  const [doctorStream, setDoctorStream] = useState<MediaStream | null>(null);
+  const [cameraError, setCameraError] = useState('');
+  const doctorVideoRef = useRef<HTMLVideoElement | null>(null);
   const isVideo = encounter.type === 'video';
   const priorRecords = useMemo(() => historyRecords(encounter), [encounter]);
+  useEffect(() => {
+    if (doctorVideoRef.current) {
+      doctorVideoRef.current.srcObject = doctorStream;
+    }
+  }, [doctorStream]);
+  useEffect(
+    () => () => {
+      doctorStream?.getTracks().forEach((track) => track.stop());
+    },
+    [doctorStream],
+  );
+  const startCamera = useCallback(async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError('当前浏览器不支持摄像头预览');
+      return false;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      setDoctorStream((current) => {
+        current?.getTracks().forEach((track) => track.stop());
+        return stream;
+      });
+      setCameraError('');
+      return true;
+    } catch {
+      setCameraError('摄像头未开启，请允许浏览器访问摄像头');
+      return false;
+    }
+  }, []);
+  const stopCamera = useCallback(() => {
+    setDoctorStream((current) => {
+      current?.getTracks().forEach((track) => track.stop());
+      return null;
+    });
+  }, []);
+  const toggleCall = useCallback(async () => {
+    if (callStarted) {
+      setCallStarted(false);
+      stopCamera();
+      return;
+    }
+    await startCamera();
+    setCallStarted(true);
+  }, [callStarted, startCamera, stopCamera]);
   const sendMessage = useCallback(() => {
     const body = draft.trim();
     if (!body) return;
@@ -414,6 +461,7 @@ function EncounterRoom({ encounter, onBack }: { encounter: Encounter; onBack: ()
   );
   const endEncounter = useCallback(() => {
     setCallStarted(false);
+    stopCamera();
     setSavedRecords((current) => {
       if (current.some((record) => record.id === `${encounter.id}-saved`)) return current;
       return [
@@ -430,7 +478,7 @@ function EncounterRoom({ encounter, onBack }: { encounter: Encounter; onBack: ()
       ];
     });
     setRecordsOpen(true);
-  }, [encounter.id, encounter.type, messages]);
+  }, [encounter.id, encounter.type, messages, stopCamera]);
   const exportRecord = useCallback(() => {
     const record = savedRecords[0];
     if (!record) return;
@@ -531,8 +579,22 @@ function EncounterRoom({ encounter, onBack }: { encounter: Encounter; onBack: ()
                   <span>{callStarted ? t('患者已接入视频') : t('等待系统呼叫患者')}</span>
                 </div>
                 <div className="encounter-video-tile encounter-video-tile--doctor">
-                  <div className="encounter-video-avatar">{t('我')}</div>
-                  <span>{t(callStarted ? '医生画面' : '本机摄像头待开启')}</span>
+                  {doctorStream ? (
+                    <video
+                      className="encounter-doctor-video"
+                      ref={doctorVideoRef}
+                      autoPlay
+                      muted
+                      playsInline
+                    />
+                  ) : (
+                    <div className="encounter-video-avatar">{t('我')}</div>
+                  )}
+                  <span>
+                    {cameraError
+                      ? t(cameraError)
+                      : t(doctorStream ? '医生摄像头已开启' : '本机摄像头待开启')}
+                  </span>
                 </div>
               </div>
               <div className="encounter-call-status">
@@ -545,13 +607,26 @@ function EncounterRoom({ encounter, onBack }: { encounter: Encounter; onBack: ()
                 <button aria-label={t('麦克风')}>
                   <Mic size={18} />
                 </button>
-                <button aria-label={t('摄像头')}>
+                <button
+                  type="button"
+                  className={doctorStream ? 'is-active' : ''}
+                  aria-label={t('摄像头')}
+                  onClick={() => {
+                    if (doctorStream) {
+                      stopCamera();
+                    } else {
+                      void startCamera();
+                    }
+                  }}
+                >
                   <Camera size={18} />
                 </button>
                 <Button
                   className={callStarted ? 'encounter-danger-button' : ''}
                   variant={callStarted ? 'secondary' : 'primary'}
-                  onClick={() => setCallStarted((value) => !value)}
+                  onClick={() => {
+                    void toggleCall();
+                  }}
                 >
                   {callStarted ? <PhoneOff size={17} /> : <PhoneCall size={17} />}
                   {t(callStarted ? '结束通话' : '开始视频接诊')}
