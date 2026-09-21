@@ -2,7 +2,7 @@
 
 CareLink is an installable Windows desktop application for the doctor side of the Smart Medical and Elderly Care Big Data Public Service Platform. Version 0.2.0 delivers the Iteration 0 framework: a light medical workspace, Chinese and English interface switching, synthetic patient data, a local database, versioned service contracts and independently owned modules for a five-person team.
 
-**Current scope: framework demonstration using fictional records.** Patient search, filters, local structured medical-record drafts, health charts, navigation, audit browsing and local preferences are available. Identity verification, record review/archive, prescriptions, live consultation, recording, notifications, uploads and exports remain clearly marked as planned. Reserved service commands return `501 FEATURE_NOT_IMPLEMENTED`.
+**Current scope: framework demonstration using fictional records.** Patient search, filters, local structured medical-record drafts, record submit/review/archive/correction, health charts, navigation, audit browsing and local preferences are available. Identity verification, prescriptions, live consultation, recording, notifications, uploads and exports remain clearly marked as planned. Reserved service commands return `501 FEATURE_NOT_IMPLEMENTED`.
 
 ![CareLink Windows doctor workspace in Chinese](docs/images/dashboard.png)
 

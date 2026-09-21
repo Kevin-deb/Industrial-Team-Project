@@ -13,7 +13,7 @@ import { plannedCommands } from '../src/platform/planned-commands.js';
 test('migrations create every domain and coherent synthetic clinical relationships', () => {
   const db = openDatabase(':memory:');
   try {
-    assert.equal(db.prepare('SELECT COUNT(*) count FROM schema_migrations').get()!.count, 16);
+    assert.equal(db.prepare('SELECT COUNT(*) count FROM schema_migrations').get()!.count, 20);
     assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), []);
     assert.equal(db.prepare('SELECT COUNT(*) count FROM patients').get()!.count, 9);
     const archive = db
@@ -45,7 +45,9 @@ test('read APIs use consistent envelopes and dashboard counts are derived from s
       'dashboard',
       'patients',
       'encounters',
+      'record-templates',
       'records',
+      'order-templates',
       'consultations',
       'health/overview',
       'audit',
@@ -254,7 +256,7 @@ test('reopening the file database preserves data and does not reseed or rerun mi
     }
     const db = openDatabase(path);
     try {
-      assert.equal(db.prepare('SELECT COUNT(*) count FROM schema_migrations').get()!.count, 16);
+      assert.equal(db.prepare('SELECT COUNT(*) count FROM schema_migrations').get()!.count, 20);
     } finally {
       db.close();
     }
@@ -324,7 +326,7 @@ test('startup refuses mismatched, incomplete and future database migration histo
     const mutations = [
       "UPDATE schema_migrations SET name='unexpected' WHERE version=2",
       'DELETE FROM schema_migrations WHERE version=2',
-      "INSERT INTO schema_migrations VALUES(17,'future','2026-09-10T00:00:00Z')",
+      "INSERT INTO schema_migrations VALUES(21,'future','2026-09-10T00:00:00Z')",
     ];
     for (const [index, mutation] of mutations.entries()) {
       const path = join(folder, 'invalid-' + index + '.sqlite');

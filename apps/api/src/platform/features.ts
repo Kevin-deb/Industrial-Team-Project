@@ -52,8 +52,8 @@ export const features: Feature[] = [
     id: 'records',
     name: '结构化病历与医嘱',
     domain: 'clinical',
-    status: 'planned',
-    description: '草稿、医嘱版本、上级审核与归档待上线。',
+    status: 'demo',
+    description: '本地演示可提交、审核、归档、修订、开立医嘱，并向会诊引用固定病历版本。',
     iteration: 'Iteration 2',
   },
   {
