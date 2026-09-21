@@ -637,6 +637,7 @@ function AppointmentManagementDialog({
   const [nextDate, setNextDate] = useState('2026-09-22');
   const [nextTime, setNextTime] = useState('10:00');
   const [noticeText, setNoticeText] = useState('请患者在问诊前补充近期检查结果和当前用药。');
+  const [noticeFeedback, setNoticeFeedback] = useState('');
   const [notices, setNotices] = useState<NoticeLog[]>([
     {
       id: 'NOTICE-001',
@@ -679,9 +680,17 @@ function AppointmentManagementDialog({
         },
         ...current,
       ]);
+      if (kind !== '改期通知') {
+        setNoticeFeedback('已通知患者');
+      }
     },
     [nextDate, nextTime, noticeText, selectedEncounter],
   );
+  useEffect(() => {
+    if (!noticeFeedback) return undefined;
+    const timer = window.setTimeout(() => setNoticeFeedback(''), 2600);
+    return () => window.clearTimeout(timer);
+  }, [noticeFeedback]);
   const acceptReschedule = useCallback(
     (notice: NoticeLog) => {
       const nextScheduledAt = `${nextDate}T${nextTime}:00+08:00`;
@@ -892,12 +901,23 @@ function AppointmentManagementDialog({
               />
             </label>
             <div className="appointment-notice-actions">
-              <Button variant="secondary" onClick={() => sendNotice('资料提醒')}>
+              <Button
+                className="appointment-notice-button appointment-notice-button--material"
+                variant="secondary"
+                onClick={() => sendNotice('资料提醒')}
+              >
                 {t('提醒补充资料')}
               </Button>
-              <Button variant="secondary" onClick={() => sendNotice('按时进入提醒')}>
+              <Button
+                className="appointment-notice-button appointment-notice-button--entry"
+                variant="secondary"
+                onClick={() => sendNotice('按时进入提醒')}
+              >
                 {t('提醒按时进入')}
               </Button>
+              {noticeFeedback && (
+                <span className="appointment-notice-feedback">{t(noticeFeedback)}</span>
+              )}
             </div>
             <div className="appointment-reschedule">
               <label>

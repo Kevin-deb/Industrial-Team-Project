@@ -76,6 +76,7 @@ export const encountersMessages: Record<string, string> = {
     'Ask the patient to add recent test results and current medication before the visit.',
   提醒补充资料: 'Ask for materials',
   提醒按时进入: 'Remind to join on time',
+  已通知患者: 'Patient notified',
   改期日期: 'New date',
   改期时间: 'New time',
   发送改期通知: 'Send reschedule notice',
