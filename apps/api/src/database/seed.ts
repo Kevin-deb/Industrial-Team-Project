@@ -221,7 +221,7 @@ export function seedDemo(db: DatabaseSync): void {
       'PAT-006',
       DEMO_DOCTOR_ID,
       'video',
-      'scheduled',
+      'waiting',
       '2026-09-10T14:00:00+08:00',
       '呼吸健康随访',
       20,
@@ -234,6 +234,106 @@ export function seedDemo(db: DatabaseSync): void {
       'completed',
       '2026-09-09T15:30:00+08:00',
       '常规健康随访',
+      15,
+    );
+    encounter.run(
+      'ENC-005',
+      'PAT-004',
+      DEMO_DOCTOR_ID,
+      'video',
+      'waiting',
+      '2026-09-11T08:40:00+08:00',
+      '胸闷症状复查',
+      20,
+    );
+    encounter.run(
+      'ENC-006',
+      'PAT-005',
+      DEMO_DOCTOR_ID,
+      'text',
+      'waiting',
+      '2026-09-20T09:20:00+08:00',
+      '饮食运动计划调整',
+      15,
+    );
+    encounter.run(
+      'ENC-007',
+      'PAT-007',
+      DEMO_DOCTOR_ID,
+      'video',
+      'waiting',
+      '2026-09-11T10:30:00+08:00',
+      '膝关节疼痛康复咨询',
+      20,
+    );
+    encounter.run(
+      'ENC-008',
+      'PAT-001',
+      DEMO_DOCTOR_ID,
+      'text',
+      'completed',
+      '2026-09-08T16:00:00+08:00',
+      '家庭血压记录复核',
+      15,
+    );
+    encounter.run(
+      'ENC-009',
+      'PAT-002',
+      DEMO_DOCTOR_ID,
+      'video',
+      'waiting',
+      '2026-09-12T11:10:00+08:00',
+      '餐后血糖波动评估',
+      20,
+    );
+    encounter.run(
+      'ENC-010',
+      'PAT-006',
+      DEMO_DOCTOR_ID,
+      'text',
+      'waiting',
+      '2026-09-20T14:30:00+08:00',
+      '咳嗽气短用药咨询',
+      15,
+    );
+    encounter.run(
+      'ENC-011',
+      'PAT-003',
+      DEMO_DOCTOR_ID,
+      'video',
+      'completed',
+      '2026-09-07T09:00:00+08:00',
+      '头晕症状随访',
+      20,
+    );
+    encounter.run(
+      'ENC-012',
+      'PAT-004',
+      DEMO_DOCTOR_ID,
+      'text',
+      'waiting',
+      '2026-09-21T08:00:00+08:00',
+      '冠心病用药答疑',
+      15,
+    );
+    encounter.run(
+      'ENC-013',
+      'PAT-005',
+      DEMO_DOCTOR_ID,
+      'video',
+      'waiting',
+      '2026-09-14T09:50:00+08:00',
+      '糖尿病随访视频问诊',
+      20,
+    );
+    encounter.run(
+      'ENC-014',
+      'PAT-007',
+      DEMO_DOCTOR_ID,
+      'text',
+      'completed',
+      '2026-09-06T13:30:00+08:00',
+      '康复训练反馈',
       15,
     );
     const record = db.prepare(
