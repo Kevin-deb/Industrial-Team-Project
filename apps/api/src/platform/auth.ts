@@ -1,5 +1,12 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { createHash, randomBytes, randomInt, randomUUID, scryptSync, timingSafeEqual } from 'node:crypto';
+import {
+  createHash,
+  randomBytes,
+  randomInt,
+  randomUUID,
+  scryptSync,
+  timingSafeEqual,
+} from 'node:crypto';
 
 export type AuthErrorCode =
   | 'INVALID_CREDENTIALS'
@@ -85,7 +92,14 @@ export class SqliteAuthRepository {
       .prepare(
         'INSERT INTO email_challenges(id,user_id,code_hash,expires_at,created_at,purpose) VALUES(?,?,?,?,?,?)',
       )
-      .run(input.id, input.userId, input.codeHash, input.expiresAt, input.createdAt, input.purpose ?? 'login');
+      .run(
+        input.id,
+        input.userId,
+        input.codeHash,
+        input.expiresAt,
+        input.createdAt,
+        input.purpose ?? 'login',
+      );
   }
 
   findUserById(id: string): Row | undefined {
@@ -117,14 +131,22 @@ export class SqliteAuthRepository {
   }
 
   markChallengeConsumed(id: string, consumedAt: string) {
-    this.db.prepare('UPDATE email_challenges SET consumed_at=? WHERE id=? AND consumed_at IS NULL').run(consumedAt, id);
+    this.db
+      .prepare('UPDATE email_challenges SET consumed_at=? WHERE id=? AND consumed_at IS NULL')
+      .run(consumedAt, id);
   }
 
   updatePassword(userId: string, passwordHash: string, at: string) {
     this.db.exec('BEGIN IMMEDIATE');
     try {
-      this.db.prepare('UPDATE users SET password_hash=?,failed_login_count=0,locked_until=NULL,updated_at=? WHERE id=?').run(passwordHash, at, userId);
-      this.db.prepare('UPDATE user_sessions SET revoked_at=? WHERE user_id=? AND revoked_at IS NULL').run(at, userId);
+      this.db
+        .prepare(
+          'UPDATE users SET password_hash=?,failed_login_count=0,locked_until=NULL,updated_at=? WHERE id=?',
+        )
+        .run(passwordHash, at, userId);
+      this.db
+        .prepare('UPDATE user_sessions SET revoked_at=? WHERE user_id=? AND revoked_at IS NULL')
+        .run(at, userId);
       this.db.exec('COMMIT');
     } catch (error) {
       this.db.exec('ROLLBACK');
@@ -162,8 +184,8 @@ export class SqliteAuthRepository {
         .run(photoId, input.userId, input.photoObjectKey, input.captureMethod, input.createdAt);
       this.db
         .prepare(
-          `INSERT INTO user_sessions(id,user_id,token_hash,created_at,last_used_at,expires_at,photo_check_id)
-           VALUES(?,?,?,?,?,?,?)`,
+          `INSERT INTO user_sessions(id,user_id,token_hash,auth_method,created_at,last_used_at,expires_at,photo_check_id)
+           VALUES(?,?,?,'face',?,?,?,?)`,
         )
         .run(
           sessionId,
@@ -174,13 +196,41 @@ export class SqliteAuthRepository {
           input.expiresAt,
           photoId,
         );
-      this.db.prepare('UPDATE email_challenges SET photo_ticket_hash=NULL WHERE id=?').run(input.challengeId);
+      this.db
+        .prepare('UPDATE email_challenges SET photo_ticket_hash=NULL WHERE id=?')
+        .run(input.challengeId);
       this.db.exec('COMMIT');
       return sessionId;
     } catch (error) {
       this.db.exec('ROLLBACK');
       throw error;
     }
+  }
+
+  createSession(input: {
+    userId: string;
+    tokenHash: string;
+    authMethod: 'password' | 'email';
+    createdAt: string;
+    expiresAt: string;
+  }): string {
+    const sessionId = randomUUID();
+    this.db
+      .prepare(
+        `INSERT INTO user_sessions(
+          id,user_id,token_hash,auth_method,created_at,last_used_at,expires_at,photo_check_id
+        ) VALUES(?,?,?,?,?,?,?,NULL)`,
+      )
+      .run(
+        sessionId,
+        input.userId,
+        input.tokenHash,
+        input.authMethod,
+        input.createdAt,
+        input.createdAt,
+        input.expiresAt,
+      );
+    return sessionId;
   }
 
   authenticate(hash: string, now: string): Row | undefined {
@@ -211,7 +261,12 @@ export class AuthService {
   private readonly now: () => string;
   private readonly randomToken: () => string;
   private readonly randomCode: () => string;
-  private readonly audit?: (event: { actorId: string; action: string; outcome: 'success' | 'denied'; targetId: string }) => void;
+  private readonly audit?: (event: {
+    actorId: string;
+    action: string;
+    outcome: 'success' | 'denied';
+    targetId: string;
+  }) => void;
 
   constructor(
     private readonly repository: SqliteAuthRepository,
@@ -220,13 +275,77 @@ export class AuthService {
       now?: () => string;
       randomToken?: () => string;
       randomCode?: () => string;
-      audit?: (event: { actorId: string; action: string; outcome: 'success' | 'denied'; targetId: string }) => void;
+      audit?: (event: {
+        actorId: string;
+        action: string;
+        outcome: 'success' | 'denied';
+        targetId: string;
+      }) => void;
     } = {},
   ) {
     this.now = options.now ?? (() => new Date().toISOString());
     this.randomToken = options.randomToken ?? (() => randomBytes(32).toString('base64url'));
-    this.randomCode = options.randomCode ?? (() => String(randomInt(0, 1_000_000)).padStart(6, '0'));
+    this.randomCode =
+      options.randomCode ?? (() => String(randomInt(0, 1_000_000)).padStart(6, '0'));
     this.audit = options.audit;
+  }
+
+  loginWithPassword(input: { account: string; password: string }) {
+    const at = this.now();
+    const user = this.requireActiveUser(input.account, at);
+    if (!verifySecret(input.password, String(user.password_hash))) {
+      const count = Number(user.failed_login_count) + 1;
+      this.repository.updateLoginFailure(
+        String(user.id),
+        count,
+        count >= 5 ? addMinutes(at, 15) : undefined,
+      );
+      this.audit?.({
+        actorId: String(user.identity_id),
+        action: 'auth.login.password',
+        outcome: 'denied',
+        targetId: String(user.id),
+      });
+      throw new AuthError('INVALID_CREDENTIALS');
+    }
+    this.repository.clearLoginFailures(String(user.id), at);
+    return this.createDirectSession(user, 'password', at);
+  }
+
+  async beginEmailLogin(input: { account: string }) {
+    const at = this.now();
+    const user = this.requireActiveUser(input.account, at);
+    const challengeId = this.randomToken();
+    const code = this.randomCode();
+    const expiresAt = addMinutes(at, 10);
+    this.repository.createChallenge({
+      id: challengeId,
+      userId: String(user.id),
+      codeHash: hashSecret(code),
+      expiresAt,
+      createdAt: at,
+      purpose: 'login:email',
+    });
+    await this.email.sendVerificationCode({ email: String(user.email), code, expiresAt });
+    const [local, domain] = String(user.email).split('@');
+    return { challengeId, emailHint: `${local[0]}***@${domain}`, expiresAt };
+  }
+
+  completeEmailLogin(input: { challengeId: string; code: string }) {
+    const at = this.now();
+    const challenge = this.repository.findChallenge(input.challengeId);
+    if (!challenge || challenge.purpose !== 'login:email')
+      throw new AuthError('INVALID_EMAIL_CODE');
+    if (challenge.consumed_at) throw new AuthError('EMAIL_CODE_USED');
+    if (String(challenge.expires_at) <= at) throw new AuthError('EMAIL_CODE_EXPIRED');
+    if (Number(challenge.attempts) >= 5 || !verifySecret(input.code, String(challenge.code_hash))) {
+      this.repository.incrementChallengeAttempt(input.challengeId);
+      throw new AuthError('INVALID_EMAIL_CODE');
+    }
+    this.repository.markChallengeConsumed(input.challengeId, at);
+    const user = this.repository.findUserById(String(challenge.user_id));
+    if (!user) throw new AuthError('INVALID_CREDENTIALS');
+    return this.createDirectSession(user, 'email', at);
   }
 
   async beginLogin(input: { account: string; password: string }) {
@@ -248,7 +367,12 @@ export class AuthService {
           count,
           count >= 5 ? addMinutes(at, 15) : undefined,
         );
-        this.audit?.({ actorId: String(user.identity_id), action: 'auth.login', outcome: 'denied', targetId: String(user.id) });
+        this.audit?.({
+          actorId: String(user.identity_id),
+          action: 'auth.login',
+          outcome: 'denied',
+          targetId: String(user.id),
+        });
       }
       throw new AuthError('INVALID_CREDENTIALS');
     }
@@ -264,7 +388,12 @@ export class AuthService {
       createdAt: at,
     });
     await this.email.sendVerificationCode({ email: String(user.email), code, expiresAt });
-    this.audit?.({ actorId: String(user.identity_id), action: 'auth.email.challenge', outcome: 'success', targetId: String(user.id) });
+    this.audit?.({
+      actorId: String(user.identity_id),
+      action: 'auth.email.challenge',
+      outcome: 'success',
+      targetId: String(user.id),
+    });
     const [local, domain] = String(user.email).split('@');
     return { challengeId, emailHint: `${local[0]}***@${domain}`, expiresAt };
   }
@@ -352,17 +481,26 @@ export class AuthService {
     if (String(challenge.expires_at) <= at) throw new AuthError('EMAIL_CODE_EXPIRED');
     const method = String(challenge.purpose).split(':')[1];
     if (method === 'email') {
-      if (Number(challenge.attempts) >= 5 || !verifySecret(input.code ?? '', String(challenge.code_hash))) {
+      if (
+        Number(challenge.attempts) >= 5 ||
+        !verifySecret(input.code ?? '', String(challenge.code_hash))
+      ) {
         this.repository.incrementChallengeAttempt(input.challengeId);
         throw new AuthError('INVALID_EMAIL_CODE');
       }
     } else if (!input.photoAccepted) throw new AuthError('PHOTO_CHECK_REQUIRED');
     validateNewPassword(input.newPassword);
     const user = this.repository.findUserById(String(challenge.user_id));
-    if (!user || verifySecret(input.newPassword, String(user.password_hash))) throw new AuthError('WEAK_PASSWORD');
+    if (!user || verifySecret(input.newPassword, String(user.password_hash)))
+      throw new AuthError('WEAK_PASSWORD');
     this.repository.markChallengeConsumed(input.challengeId, at);
     this.repository.updatePassword(String(challenge.user_id), hashSecret(input.newPassword), at);
-    this.audit?.({ actorId: String(user.identity_id), action: `auth.${input.purpose}`, outcome: 'success', targetId: String(user.id) });
+    this.audit?.({
+      actorId: String(user.identity_id),
+      action: `auth.${input.purpose}`,
+      outcome: 'success',
+      targetId: String(user.id),
+    });
     return { changed: true as const, sessionsRevoked: true as const };
   }
 
@@ -405,7 +543,12 @@ export class AuthService {
       createdAt: at,
       expiresAt,
     });
-    this.audit?.({ actorId: String(ticket.identity_id), action: 'auth.login', outcome: 'success', targetId: sessionId });
+    this.audit?.({
+      actorId: String(ticket.identity_id),
+      action: 'auth.login',
+      outcome: 'success',
+      targetId: sessionId,
+    });
     return { token, sessionId, expiresAt, identityId: String(ticket.identity_id) };
   }
 
@@ -427,8 +570,47 @@ export class AuthService {
     const session = this.authenticate(token);
     const revoked = this.repository.revoke(tokenHash(token), this.now());
     if (revoked && session)
-      this.audit?.({ actorId: session.identityId, action: 'auth.logout', outcome: 'success', targetId: session.sessionId });
+      this.audit?.({
+        actorId: session.identityId,
+        action: 'auth.logout',
+        outcome: 'success',
+        targetId: session.sessionId,
+      });
     return revoked;
+  }
+
+  private requireActiveUser(account: string, at: string): Row {
+    const user = this.repository.findUser(account);
+    if (
+      !user ||
+      user.status !== 'active' ||
+      Number(user.doctor_enabled) !== 1 ||
+      user.personnel_status !== 'verified' ||
+      user.credential_status !== 'verified' ||
+      (user.locked_until && String(user.locked_until) > at)
+    ) {
+      throw new AuthError('INVALID_CREDENTIALS');
+    }
+    return user;
+  }
+
+  private createDirectSession(user: Row, method: 'password' | 'email', at: string) {
+    const token = this.randomToken();
+    const expiresAt = addHours(at, 12);
+    const sessionId = this.repository.createSession({
+      userId: String(user.id),
+      tokenHash: tokenHash(token),
+      authMethod: method,
+      createdAt: at,
+      expiresAt,
+    });
+    this.audit?.({
+      actorId: String(user.identity_id),
+      action: `auth.login.${method}`,
+      outcome: 'success',
+      targetId: sessionId,
+    });
+    return { token, sessionId, expiresAt, identityId: String(user.identity_id) };
   }
 }
 

@@ -144,7 +144,7 @@ test('reply reactions persist counts and notify the reply author without duplica
 test('social migrations remain clinically isolated and fixtures are idempotent', () => {
   const db = openDatabase(':memory:');
   try {
-    assert.equal(db.prepare('SELECT COUNT(*) count FROM schema_migrations').get()!.count, 19);
+    assert.equal(db.prepare('SELECT COUNT(*) count FROM schema_migrations').get()!.count, 20);
     const tables = db
       .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'social_%'")
       .all();

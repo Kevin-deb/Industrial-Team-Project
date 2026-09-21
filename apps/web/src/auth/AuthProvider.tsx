@@ -1,11 +1,23 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
 import type { DoctorSession } from '@doctor/contracts';
 import { requestApi, setSessionToken, sessionToken } from '../shared/api';
 import { LoginPage } from './LoginPage';
 
 type BeginResult = { challengeId: string; emailHint: string; expiresAt: string; demoCode?: string };
-type VerifyResult = { photoTicket: string; expiresAt: string; demoOnly: true };
-type PasswordChallenge = { challengeId: string; method: 'email' | 'photo'; emailHint: string; demoCode?: string };
+type PasswordChallenge = {
+  challengeId: string;
+  method: 'email' | 'photo';
+  emailHint: string;
+  demoCode?: string;
+};
 
 interface AuthContextValue {
   session: DoctorSession;
@@ -47,8 +59,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('carelink:auth-required', expired);
   }, [clearSession, loadSession]);
 
-  const beginLogin = useCallback(async (input: { account: string; password: string }) => {
-    const started = await requestApi<BeginResult>('/auth/login', {
+  const acceptSession = useCallback(async (token: string) => {
+    setSessionToken(token);
+    await window.carelinkRealtime?.setSessionToken?.(token);
+    const current = await requestApi<DoctorSession>('/session');
+    setSession(current.data);
+  }, []);
+
+  const beginLogin = useCallback(
+    async (input: { account: string; password: string }) => {
+      const completed = await requestApi<{ token: string }>('/auth/password-login', {
+        method: 'POST',
+        body: JSON.stringify(input),
+      });
+      await acceptSession(completed.data.token);
+    },
+    [acceptSession],
+  );
+
+  const beginEmailLogin = useCallback(async (input: { account: string }) => {
+    const started = await requestApi<BeginResult>('/auth/email-login/start', {
       method: 'POST',
       body: JSON.stringify(input),
     });
@@ -62,40 +92,64 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const verifyEmail = useCallback(async (input: { challengeId: string; code: string }) => {
-    return (
-      await requestApi<VerifyResult>('/auth/email/verify', {
+  const verifyEmail = useCallback(
+    async (input: { challengeId: string; code: string }) => {
+      const completed = await requestApi<{ token: string }>('/auth/email-login/complete', {
         method: 'POST',
         body: JSON.stringify(input),
-      })
-    ).data;
-  }, []);
+      });
+      await acceptSession(completed.data.token);
+    },
+    [acceptSession],
+  );
 
   const beginPhotoLogin = useCallback(async (input: { account: string }) => {
     return (
-      await requestApi<{ photoTicket: string; expiresAt: string; demoOnly: true }>('/auth/photo-login/start', {
-        method: 'POST',
-        body: JSON.stringify(input),
-      })
+      await requestApi<{ photoTicket: string; expiresAt: string; demoOnly: true }>(
+        '/auth/photo-login/start',
+        {
+          method: 'POST',
+          body: JSON.stringify(input),
+        },
+      )
     ).data;
   }, []);
 
-  const beginRecovery = useCallback(async (input: { account: string; method: 'email' | 'photo' }) => {
-    const started = await requestApi<PasswordChallenge>('/auth/password/recover-password/start', {
-      method: 'POST', body: JSON.stringify(input),
-    });
-    if (input.method === 'email') {
-      try {
-        const demo = await requestApi<{ code: string }>('/auth/demo-email/' + encodeURIComponent(started.data.challengeId));
-        return { ...started.data, demoCode: demo.data.code };
-      } catch { /* SMTP delivery has no local code. */ }
-    }
-    return started.data;
-  }, []);
+  const beginRecovery = useCallback(
+    async (input: { account: string; method: 'email' | 'photo' }) => {
+      const started = await requestApi<PasswordChallenge>('/auth/password/recover-password/start', {
+        method: 'POST',
+        body: JSON.stringify(input),
+      });
+      if (input.method === 'email') {
+        try {
+          const demo = await requestApi<{ code: string }>(
+            '/auth/demo-email/' + encodeURIComponent(started.data.challengeId),
+          );
+          return { ...started.data, demoCode: demo.data.code };
+        } catch {
+          /* SMTP delivery has no local code. */
+        }
+      }
+      return started.data;
+    },
+    [],
+  );
 
-  const completeRecovery = useCallback(async (input: { challengeId: string; code?: string; photoDataUrl?: string; newPassword: string }) => {
-    await requestApi('/auth/password/recover-password/complete', { method: 'POST', body: JSON.stringify(input) });
-  }, []);
+  const completeRecovery = useCallback(
+    async (input: {
+      challengeId: string;
+      code?: string;
+      photoDataUrl?: string;
+      newPassword: string;
+    }) => {
+      await requestApi('/auth/password/recover-password/complete', {
+        method: 'POST',
+        body: JSON.stringify(input),
+      });
+    },
+    [],
+  );
 
   const completePhotoCheck = useCallback(
     async (input: { ticket: string; captureMethod: 'camera' | 'upload'; photoDataUrl: string }) => {
@@ -103,12 +157,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         method: 'POST',
         body: JSON.stringify(input),
       });
-      setSessionToken(completed.data.token);
-      await window.carelinkRealtime?.setSessionToken?.(completed.data.token);
-      const current = await requestApi<DoctorSession>('/session');
-      setSession(current.data);
+      await acceptSession(completed.data.token);
     },
-    [],
+    [acceptSession],
   );
 
   const logout = useCallback(async () => {
@@ -125,6 +176,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return (
       <LoginPage
         beginLogin={beginLogin}
+        beginEmailLogin={beginEmailLogin}
         beginPhotoLogin={beginPhotoLogin}
         verifyEmail={verifyEmail}
         completePhotoCheck={completePhotoCheck}

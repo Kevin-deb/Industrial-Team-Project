@@ -26,6 +26,11 @@ export const shellMessages: Record<string, string> = {
   验证码已发送至: 'A verification code was sent to',
   本地演示邮件验证码: 'Local demo email code',
   邮箱验证码: 'Email verification code',
+  邮箱验证码登录: 'Email code',
+  验证码将发送至账号绑定的工作邮箱:
+    'A verification code will be sent to the work email linked to this account',
+  发送验证码: 'Send code',
+  登录: 'Sign in',
   验证邮箱: 'Verify email',
   演示拍照核验: 'Demo photo check',
   '本步骤仅采集演示照片，不执行真实人脸识别或活体检测。':
@@ -39,11 +44,12 @@ export const shellMessages: Record<string, string> = {
   完成演示核验: 'Complete demo check',
   返回登录方式: 'Back to sign-in methods',
   '验证失败，请重试。': 'Verification failed. Please try again.',
-  所有账号与患者资料均为合成演示数据: 'All accounts and patient records are synthetic demonstration data',
+  所有账号与患者资料均为合成演示数据:
+    'All accounts and patient records are synthetic demonstration data',
   退出登录: 'Sign out',
   '忘记密码？': 'Forgot password?',
   找回密码: 'Recover password',
-  '通过工作邮箱验证码或演示拍照重置密码': 'Reset with a work-email code or demonstration photo',
+  通过工作邮箱验证码或演示拍照重置密码: 'Reset with a work-email code or demonstration photo',
   验证方式: 'Verification method',
   工作邮箱验证码: 'Work-email code',
   照片已选择: 'Photo selected',

@@ -38,11 +38,42 @@ function replyAuthError(
     EMAIL_CODE_USED: [409, '邮箱验证码已使用。'],
     PHOTO_CHECK_REQUIRED: [401, '请先完成邮箱验证和演示拍照核验。'],
     CURRENT_PASSWORD_INVALID: [401, '旧密码不正确。'],
-    WEAK_PASSWORD: [422, '新密码至少 10 位，并包含大小写字母、数字和特殊字符，且不能使用常见弱密码。'],
+    WEAK_PASSWORD: [
+      422,
+      '新密码至少 10 位，并包含大小写字母、数字和特殊字符，且不能使用常见弱密码。',
+    ],
   };
   const [status, message] = details[error.code] ?? [401, '身份验证失败。'];
   return fail(request, reply, status, error.code, message);
 }
+
+const accountSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['account'],
+  properties: {
+    account: { type: 'string', minLength: 3, maxLength: 160 },
+  },
+} as const;
+
+const credentialSchema = {
+  ...accountSchema,
+  required: ['account', 'password'],
+  properties: {
+    ...accountSchema.properties,
+    password: { type: 'string', minLength: 6, maxLength: 256 },
+  },
+} as const;
+
+const emailCodeSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['challengeId', 'code'],
+  properties: {
+    challengeId: { type: 'string', minLength: 1, maxLength: 256 },
+    code: { type: 'string', pattern: '^\\d{6}$' },
+  },
+} as const;
 
 export function registerAuthRoutes(
   app: FastifyInstance,
@@ -51,6 +82,45 @@ export function registerAuthRoutes(
   envelope: Envelope,
   fail: Failure,
 ) {
+  app.post(
+    '/api/v1/auth/password-login',
+    { schema: { body: credentialSchema } },
+    async (request, reply) => {
+      try {
+        const data = auth.loginWithPassword(request.body as { account: string; password: string });
+        return reply.code(201).send(envelope(request, data));
+      } catch (error) {
+        return replyAuthError(error, request, reply, fail);
+      }
+    },
+  );
+
+  app.post(
+    '/api/v1/auth/email-login/start',
+    { schema: { body: accountSchema } },
+    async (request, reply) => {
+      try {
+        const data = await auth.beginEmailLogin(request.body as { account: string });
+        return reply.code(202).send(envelope(request, data));
+      } catch (error) {
+        return replyAuthError(error, request, reply, fail);
+      }
+    },
+  );
+
+  app.post(
+    '/api/v1/auth/email-login/complete',
+    { schema: { body: emailCodeSchema } },
+    async (request, reply) => {
+      try {
+        const data = auth.completeEmailLogin(request.body as { challengeId: string; code: string });
+        return reply.code(201).send(envelope(request, data));
+      } catch (error) {
+        return replyAuthError(error, request, reply, fail);
+      }
+    },
+  );
+
   app.post(
     '/api/v1/auth/login',
     {
@@ -77,10 +147,16 @@ export function registerAuthRoutes(
   );
 
   app.get('/api/v1/auth/demo-email/:challengeId', async (request, reply) => {
-    const account = auth.challengeEmail(String((request.params as { challengeId: string }).challengeId));
+    const account = auth.challengeEmail(
+      String((request.params as { challengeId: string }).challengeId),
+    );
     const message = account ? outbox.find(account) : undefined;
     if (!message) return fail(request, reply, 404, 'NOT_FOUND', '未找到演示邮件。');
-    return envelope(request, { code: message.code, emailHint: maskEmail(message.email), expiresAt: message.expiresAt });
+    return envelope(request, {
+      code: message.code,
+      emailHint: maskEmail(message.email),
+      expiresAt: message.expiresAt,
+    });
   });
 
   app.post(
@@ -179,7 +255,11 @@ export function registerAuthRoutes(
   for (const purpose of ['change-password', 'recover-password'] as const) {
     app.post(`/api/v1/auth/password/${purpose}/start`, async (request, reply) => {
       try {
-        const body = request.body as { account?: string; currentPassword?: string; method: 'email' | 'photo' };
+        const body = request.body as {
+          account?: string;
+          currentPassword?: string;
+          method: 'email' | 'photo';
+        };
         const data = await auth.beginPasswordOperation({
           ...body,
           purpose,
@@ -192,9 +272,17 @@ export function registerAuthRoutes(
     });
     app.post(`/api/v1/auth/password/${purpose}/complete`, async (request, reply) => {
       try {
-        const body = request.body as { challengeId: string; code?: string; photoDataUrl?: string; newPassword: string };
+        const body = request.body as {
+          challengeId: string;
+          code?: string;
+          photoDataUrl?: string;
+          newPassword: string;
+        };
         const photoAccepted = body.photoDataUrl ? validPhoto(body.photoDataUrl) : false;
-        return envelope(request, auth.completePasswordOperation({ ...body, purpose, photoAccepted }));
+        return envelope(
+          request,
+          auth.completePasswordOperation({ ...body, purpose, photoAccepted }),
+        );
       } catch (error) {
         return replyAuthError(error, request, reply, fail);
       }

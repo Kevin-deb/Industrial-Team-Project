@@ -19,6 +19,47 @@ test('passwords, email codes and session tokens are stored only as salted hashes
   assert.equal(verifySecret('wrong', encoded), false);
 });
 
+test('password, email code and face are independent sign-in methods', async () => {
+  const db = openDatabase(':memory:');
+  const delivered: Array<{ email: string; code: string }> = [];
+  const auth = new AuthService(
+    new SqliteAuthRepository(db),
+    {
+      async sendVerificationCode(message) {
+        delivered.push({ email: message.email, code: message.code });
+      },
+    },
+    {
+      now,
+      randomToken: (() => {
+        const values = ['password-session', 'email-challenge', 'email-session'];
+        return () => values.shift()!;
+      })(),
+      randomCode: () => '123456',
+    },
+  );
+  try {
+    const password = auth.loginWithPassword({ account: 'lin.zhiyuan', password: '123456' });
+    assert.equal(auth.authenticate(password.token)?.identityId, 'doctor-demo-001');
+
+    const challenge = await auth.beginEmailLogin({ account: 'lin.zhiyuan' });
+    assert.deepEqual(delivered, [{ email: 'lin.zhiyuan@carelink.demo', code: '123456' }]);
+    const email = auth.completeEmailLogin({ challengeId: challenge.challengeId, code: '123456' });
+    assert.equal(auth.authenticate(email.token)?.identityId, 'doctor-demo-001');
+    const methods = db
+      .prepare('SELECT auth_method,photo_check_id FROM user_sessions')
+      .all()
+      .map((row) => ({ ...(row as { auth_method: string; photo_check_id: string | null }) }))
+      .sort((left, right) => left.auth_method.localeCompare(right.auth_method));
+    assert.deepEqual(methods, [
+      { auth_method: 'email', photo_check_id: null },
+      { auth_method: 'password', photo_check_id: null },
+    ]);
+  } finally {
+    db.close();
+  }
+});
+
 test('email challenge is required, single use, and photo check gates the formal session', async () => {
   const db = openDatabase(':memory:');
   const delivered: Array<{ email: string; code: string }> = [];
@@ -67,7 +108,10 @@ test('email challenge is required, single use, and photo check gates the formal 
     });
     assert.equal(session.token, 'session-secret');
     assert.equal(auth.authenticate(session.token)?.identityId, 'doctor-demo-001');
-    assert.equal(db.prepare('SELECT token_hash FROM user_sessions').get()!.token_hash === session.token, false);
+    assert.equal(
+      db.prepare('SELECT token_hash FROM user_sessions').get()!.token_hash === session.token,
+      false,
+    );
     assert.equal(db.prepare('SELECT demo_only FROM identity_photo_checks').get()!.demo_only, 1);
     assert.equal(db.prepare('SELECT COUNT(*) count FROM user_sessions').get()!.count, 1);
   } finally {

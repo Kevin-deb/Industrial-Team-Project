@@ -1,13 +1,8 @@
 /** Public platform boundary. Other domains must import this entry point. */
 export { platformMigration } from './migration.js';
 export { authMigration, demoInitialPasswordMigration } from './auth-migration.js';
-export {
-  AuthError,
-  AuthService,
-  SqliteAuthRepository,
-  hashSecret,
-  verifySecret,
-} from './auth.js';
+export { sessionAuthMethodMigration } from './session-auth-method-migration.js';
+export { AuthError, AuthService, SqliteAuthRepository, hashSecret, verifySecret } from './auth.js';
 export type { EmailDeliveryPort, AuthErrorCode } from './auth.js';
 export { bearerToken, DemoEmailOutbox, registerAuthRoutes } from './auth-routes.js';
 export { SmtpEmailDelivery, smtpConfigured } from './smtp-email.js';
