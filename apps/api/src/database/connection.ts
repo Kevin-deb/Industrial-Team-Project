@@ -16,7 +16,7 @@ import {
   socialCommentReactionsMigration,
   socialViewsMigration,
 } from '../social/index.js';
-import { seedDemo } from './seed.js';
+import { seedAuthFoundation, seedDemo } from './seed.js';
 import { eModuleHardeningMigration } from './e-module-hardening-migration.js';
 
 export const migrations = [
@@ -96,6 +96,7 @@ export function openDatabase(path: string): DatabaseSync {
     seedDemo(database);
     seedHealthDemo(database);
     seedSocialDemo(database);
+    seedAuthFoundation(database);
     return database;
   } catch (error) {
     database.close();
