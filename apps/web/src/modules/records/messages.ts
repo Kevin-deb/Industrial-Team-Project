@@ -103,6 +103,14 @@ export const recordsMessages: Record<string, string> = {
     'Planned status transitions are shown below. Only read-only metadata is currently available.',
   '当前本地演示支持提交、退回、批准、归档和修订留痕。':
     'This local demo can submit, return, approve, archive, and create a correction draft.',
+  '本地演示已支持病历提交、审核、归档、修订和确认式开立医嘱。电子处方、正式签名与临床规则认证仍待启用。':
+    'This local demo can submit, review, archive, correct records, and issue confirmed orders. Electronic prescriptions, production signing, and clinical-rule certification remain pending.',
+  结构化医嘱: 'Structured orders',
+  '打开病历即可按模板确认开立、修改和停止医嘱。电子处方尚未上线。':
+    'Open a record to confirm, update, and stop template-based orders. Electronic prescriptions are not available yet.',
+  打开病历查看: 'Open a record',
+  本地演示: 'Local demo',
+  审核与归档: 'Review & archive',
   创建草稿: 'Create draft',
   医生编辑: 'Doctor edits',
   提交审核: 'Submit for review',

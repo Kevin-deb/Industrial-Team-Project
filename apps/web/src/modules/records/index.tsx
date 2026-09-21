@@ -13,7 +13,7 @@ import {
 import type { MedicalRecord, MedicalRecordTemplateDefinition } from '@doctor/contracts';
 import { useApi } from '../../shared/api';
 import { Badge, Button, Card, EmptyState, LoadingState, PageHeader } from '../../shared/ui';
-import { FilterTabs, LinkAction, Metric, PlannedDialog, ReadOnlyNote, SectionTitle } from '../ui';
+import { FilterTabs, LinkAction, Metric, ReadOnlyNote, SectionTitle } from '../ui';
 import { RecordEditor } from './RecordEditor';
 
 const labels = { draft: '草稿', 'pending-review': '待审核', archived: '已归档' };
@@ -28,9 +28,7 @@ export function RecordsPage() {
   const [creating, setCreating] = useState(false);
   const [template, setTemplate] = useState('outpatient');
   const [tab, setTab] = useState('records');
-  const [planned, setPlanned] = useState<string | null>(null);
   const close = useCallback(() => setSelectedId(null), []);
-  const closePlanned = useCallback(() => setPlanned(null), []);
   const records = useMemo(
     () =>
       (data ?? []).filter(
@@ -242,7 +240,7 @@ export function RecordsPage() {
                   <ShieldCheck size={18} />
                   <span>
                     {t(
-                      '处方、医嘱、检查申请、历史版本和签名归档均预留独立数据模型及服务接口。正式诊疗操作需在权限、审计与临床规则验证后启用。',
+                      '本地演示已支持病历提交、审核、归档、修订和确认式开立医嘱。电子处方、正式签名与临床规则认证仍待启用。',
                     )}
                   </span>
                 </div>
@@ -253,8 +251,8 @@ export function RecordsPage() {
             {[
               {
                 icon: ClipboardCheck,
-                title: '电子处方与医嘱',
-                description: '处方内容、用药记录、审核状态与医嘱执行进度。',
+                title: '结构化医嘱',
+                description: '打开病历即可按模板确认开立、修改和停止医嘱。电子处方尚未上线。',
               },
               {
                 icon: Layers3,
@@ -263,7 +261,7 @@ export function RecordsPage() {
               },
               {
                 icon: ShieldCheck,
-                title: '签名与归档',
+                title: '审核与归档',
                 description: '本地演示已支持审核、归档和修订；正式签名与临床规则仍待启用。',
               },
             ].map((item) => (
@@ -272,11 +270,13 @@ export function RecordsPage() {
                   <span className="feature-symbol">
                     <item.icon size={19} />
                   </span>
-                  <Badge tone="slate">{t('尚未上线')}</Badge>
+                  <Badge tone="teal">{t('本地演示')}</Badge>
                 </div>
                 <h3>{t(item.title)}</h3>
                 <p>{t(item.description)}</p>
-                <LinkAction onClick={() => setPlanned(item.title)}>{t('查看功能规划')}</LinkAction>
+                <LinkAction onClick={() => setSelectedId(data?.[0]?.id ?? null)}>
+                  {t('打开病历查看')}
+                </LinkAction>
               </Card>
             ))}
           </div>
@@ -285,16 +285,6 @@ export function RecordsPage() {
       )}
       {selectedId && <RecordEditor recordId={selectedId} onClose={close} onSaved={reload} />}
       {creating && <RecordEditor onClose={() => setCreating(false)} onSaved={reload} />}
-      {planned && (
-        <PlannedDialog title={planned} iteration="Iteration 2" onClose={closePlanned}>
-          <p>
-            {t(
-              'Iteration 1 建立草稿基础，Iteration 2 完成结构化病历、医嘱、审核与归档。此功能将基于统一患者编号与病历版本模型开发，支持权限校验、草稿保存、内容校验、审核和操作留痕。',
-            )}
-          </p>
-          <p>{t('当前框架已预留病历、处方、医嘱及修订记录的后端边界，页面展示设计流程。')}</p>
-        </PlannedDialog>
-      )}
     </div>
   );
 }
