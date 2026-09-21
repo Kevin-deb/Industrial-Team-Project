@@ -6,7 +6,6 @@ import {
   ArrowUpRight,
   Bell,
   BookOpen,
-  CalendarDays,
   ChevronDown,
   ChevronRight,
   CircleHelp,
@@ -25,7 +24,7 @@ import {
   Video,
 } from 'lucide-react';
 import { useAuth } from './auth/AuthProvider';
-import { Badge, Button, Modal } from './shared/ui';
+import { Button, Modal } from './shared/ui';
 import { DashboardPage } from './dashboard/DashboardPage';
 import { useCommunityPreference } from './modules/preferences';
 import {
@@ -38,6 +37,11 @@ import {
   RecordsPage,
   SettingsPage,
 } from './modules';
+import {
+  GlobalSocialLiveUpdates,
+  UnreadBadge,
+  useSocialUnread,
+} from './modules/community/unread';
 
 const navigation = [
   { path: '/', label: '工作台', en: 'Overview', icon: LayoutDashboard },
@@ -77,6 +81,7 @@ export function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [dialog, setDialog] = useState<'notifications' | 'help' | null>(null);
   const { enabled: communityEnabled } = useCommunityPreference();
+  const unread = useSocialUnread(communityEnabled);
   useEffect(() => {
     setSidebarOpen(false);
     window.scrollTo(0, 0);
@@ -90,6 +95,7 @@ export function App() {
       '页面');
   return (
     <div className="app-shell">
+      {communityEnabled && <GlobalSocialLiveUpdates />}
       <a className="skip-link" href="#main-content">
         {t('跳到主要内容')}
       </a>
@@ -140,6 +146,7 @@ export function App() {
             <NavLink to="/community" className="nav-item">
               <BookOpen size={19} />
               <span>{t('同行协作')}</span>
+              <UnreadBadge count={unread.totalUnread} />
             </NavLink>
           )}
           <NavLink to="/audit" className="nav-item">
@@ -229,11 +236,15 @@ export function App() {
             </button>
             <button
               className="icon-button notification-button"
-              aria-label={t('通知中心')}
+              aria-label={
+                unread.totalUnread
+                  ? `${t('通知中心')}，${unread.totalUnread} ${t('条未读')}`
+                  : t('通知中心')
+              }
               onClick={() => setDialog('notifications')}
             >
               <Bell size={20} />
-              <span />
+              <UnreadBadge count={unread.totalUnread} />
             </button>
             <div className="topbar-divider" />
             <button
@@ -293,28 +304,43 @@ export function App() {
           onClose={() => setDialog(null)}
         >
           {dialog === 'notifications' ? (
-            <>
-              <div className="notice-row">
-                <div className="notice-symbol">
-                  <Bell size={21} />
-                </div>
-                <div>
-                  <h3>{t('工作台框架已就绪')}</h3>
-                  <p>{t('现在可以浏览患者档案、问诊安排与健康趋势示例。')}</p>
-                  <Badge tone="teal">{t('本地演示通知')}</Badge>
-                </div>
-              </div>
-              <div className="notice-row">
-                <div className="notice-symbol amber">
-                  <CalendarDays size={21} />
-                </div>
-                <div>
-                  <h3>{t('消息推送将在后续迭代上线')}</h3>
-                  <p>{t('目前没有连接患者端或消息服务，也不会发送临床提醒。')}</p>
-                  <Badge tone="amber">{t('待上线 · 后续迭代')}</Badge>
-                </div>
-              </div>
-            </>
+            <div className="notification-center-list">
+              {unread.totalUnread === 0 && (
+                <p className="notification-empty">{t('目前没有未读社区消息')}</p>
+              )}
+              <button
+                aria-label={`${t('社区互动')}，${unread.interactionUnread} ${t('条未读')}`}
+                onClick={() => {
+                  setDialog(null);
+                  navigate('/community');
+                }}
+              >
+                <span className="notice-symbol">
+                  <Bell size={19} />
+                </span>
+                <span>
+                  <strong>{t('社区互动')}</strong>
+                  <small>{t('查看互动消息和举报处理进度')}</small>
+                </span>
+                <span>{`${unread.interactionUnread} ${t('条未读')}`}</span>
+              </button>
+              <button
+                aria-label={`${t('同行私信')}，${unread.directUnread} ${t('条未读')}`}
+                onClick={() => {
+                  setDialog(null);
+                  navigate('/community/messages');
+                }}
+              >
+                <span className="notice-symbol">
+                  <MessageSquareText size={19} />
+                </span>
+                <span>
+                  <strong>{t('同行私信')}</strong>
+                  <small>{t('查看同行私信')}</small>
+                </span>
+                <span>{`${unread.directUnread} ${t('条未读')}`}</span>
+              </button>
+            </div>
           ) : (
             <>
               <p className="modal-lead">

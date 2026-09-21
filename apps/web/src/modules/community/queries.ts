@@ -316,11 +316,12 @@ export const usePersonalPosts = (kind: 'posts' | 'likes' | 'bookmarks') =>
       queryFn: () => requestEApi<SocialPage<SocialPostSummary>>(`/social/me/${kind}`),
     }),
   );
-export const useNotifications = () =>
+export const useNotifications = (enabled = true) =>
   useLocalizedEQuery(
     useQuery({
       queryKey: socialKeys.notifications,
       queryFn: () => requestEApi<SocialNotification[]>('/social/me/notifications'),
+      enabled,
     }),
   );
 export function useReadNotification() {
@@ -334,11 +335,12 @@ export function useReadNotification() {
     onSuccess: async () => client.invalidateQueries({ queryKey: socialKeys.notifications }),
   });
 }
-export const useConversations = () =>
+export const useConversations = (enabled = true) =>
   useLocalizedEQuery(
     useQuery({
       queryKey: socialKeys.conversations,
       queryFn: () => requestEApi<SocialConversation[]>('/social/conversations'),
+      enabled,
     }),
   );
 export const usePeerSearch = (q: string) =>

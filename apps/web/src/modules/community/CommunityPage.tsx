@@ -1,8 +1,5 @@
 import { BookOpen, MessageCircle, Settings, UserRound } from 'lucide-react';
 import { NavLink, Route, Routes } from 'react-router-dom';
-import { useCallback } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import type { SocialRealtimeEvent } from '@doctor/contracts';
 import { useI18n } from '../../shared/i18n';
 import { CommunityPreferences } from './CommunityPreferences';
 import { DirectMessages } from './DirectMessages';
@@ -12,17 +9,23 @@ import { PersonalListPage } from './PersonalListPage';
 import { PostPage } from './PostPage';
 import { SpecialtyGroups } from './SpecialtyGroups';
 import './community.css';
-import { socialKeys, useSocialPreferences } from './queries';
-import { useSocialRealtime } from './realtime';
+import { useSocialPreferences } from './queries';
+import { UnreadBadge, useSocialUnread } from './unread';
 
 export function CommunityPage() {
   const { t } = useI18n();
   const preferences = useSocialPreferences();
+  const unread = useSocialUnread(preferences.data?.data.enabled ?? false);
   const links = [
-    { to: '/community', label: '社区首页', icon: BookOpen, end: true },
-    { to: '/community/groups', label: '专科圈子', icon: UserRound },
-    { to: '/community/messages', label: '同行私信', icon: MessageCircle },
-    { to: '/community/settings', label: '社区设置', icon: Settings },
+    { to: '/community', label: '社区首页', icon: BookOpen, end: true, unread: 0 },
+    { to: '/community/groups', label: '专科圈子', icon: UserRound, unread: 0 },
+    {
+      to: '/community/messages',
+      label: '同行私信',
+      icon: MessageCircle,
+      unread: unread.directUnread,
+    },
+    { to: '/community/settings', label: '社区设置', icon: Settings, unread: 0 },
   ] as const;
   if (!preferences.data) return <div className="community-loading">{t('正在加载设置…')}</div>;
   if (!preferences.data.data.enabled)
@@ -37,7 +40,6 @@ export function CommunityPage() {
     );
   return (
     <div className="community-workspace">
-      <CommunityLiveUpdates />
       <div className="community-sticky-header">
         <header className="community-page-heading">
           <h1>{t('同行社区')}</h1>
@@ -48,6 +50,7 @@ export function CommunityPage() {
             <NavLink key={item.to} to={item.to} end={'end' in item ? item.end : false}>
               <item.icon size={15} />
               {t(item.label)}
+              <UnreadBadge count={item.unread} />
             </NavLink>
           ))}
         </nav>
@@ -66,24 +69,4 @@ export function CommunityPage() {
       </Routes>
     </div>
   );
-}
-
-/** One subscription per enabled community workspace, shared across all its tabs. */
-function CommunityLiveUpdates() {
-  const client = useQueryClient();
-  const reconcile = useCallback(() => {
-    void client.invalidateQueries({ queryKey: socialKeys.notifications });
-    void client.invalidateQueries({ queryKey: socialKeys.conversations });
-    void client.invalidateQueries({ queryKey: ['social', 'messages'] });
-  }, [client]);
-  const receive = useCallback((event: SocialRealtimeEvent) => {
-    if (event.type === 'social.notifications.changed') {
-      void client.invalidateQueries({ queryKey: socialKeys.notifications });
-      return;
-    }
-    void client.invalidateQueries({ queryKey: socialKeys.conversations });
-    void client.invalidateQueries({ queryKey: socialKeys.messages(event.conversationId) });
-  }, [client]);
-  useSocialRealtime(receive, reconcile);
-  return null;
 }
