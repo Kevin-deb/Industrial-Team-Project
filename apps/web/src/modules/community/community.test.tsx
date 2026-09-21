@@ -329,7 +329,7 @@ describe('CommunityPage', () => {
     expect(screen.getByLabelText('私信内容')).toBeEnabled();
   });
 
-  it('clears unread count when a conversation is opened and keeps new sends at the bottom', async () => {
+  it('keeps an automatically displayed conversation unread until the recipient opens it', async () => {
     let unreadCount = 8;
     let readRequests = 0;
     const realtime = {
@@ -418,6 +418,9 @@ describe('CommunityPage', () => {
     );
 
     expect(await screen.findByRole('heading', { name: '周明' })).toBeInTheDocument();
+    expect(readRequests).toBe(0);
+    expect(screen.getAllByText('8')).toHaveLength(2);
+    fireEvent.click(screen.getByRole('button', { name: /周明.*原消息/ }));
     await waitFor(() =>
       expect(fetch).toHaveBeenCalledWith(
         '/api/v1/social/conversations/CONVERSATION-1/read',

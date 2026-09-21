@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { PropsWithChildren } from 'react';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { connectPatientCache } from '../../shared/patient-sync';
 
 export function createEQueryClient(): QueryClient {
@@ -19,9 +19,8 @@ export function createEQueryClient(): QueryClient {
   });
 }
 
-const appQueryClient = createEQueryClient();
-
 export function EQueryProvider({ children }: PropsWithChildren) {
-  useEffect(() => connectPatientCache(appQueryClient), []);
-  return <QueryClientProvider client={appQueryClient}>{children}</QueryClientProvider>;
+  const [client] = useState(createEQueryClient);
+  useEffect(() => connectPatientCache(client), [client]);
+  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }
