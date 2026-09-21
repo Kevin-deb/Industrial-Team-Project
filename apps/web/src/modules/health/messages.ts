@@ -74,8 +74,7 @@ export const healthMessages: Record<string, string> = {
   '{metric}每日平均': '{metric} daily average',
   单次测量: 'Individual reading',
   超出参考范围: 'Outside reference range',
-  '{title}，包含数值与演示参考范围':
-    '{title}, including readings and the demo reference range',
+  '{title}，包含数值与演示参考范围': '{title}, including readings and the demo reference range',
   '{metric} {date} 每日平均 {value} {unit}，{count} 次测量':
     '{metric}, {date}, daily average {value} {unit}, {count} readings',
   '{metric} {value} {unit}，测量时间 {measuredAt}，接收时间 {receivedAt}，来源 {source}{status}':
@@ -118,6 +117,21 @@ export const healthMessages: Record<string, string> = {
   当前筛选条件下没有趋势记录: 'No trend records match the current filters',
   接收时间: 'Received at',
   数据状态: 'Data status',
+  已录入: 'Recorded',
+  待责任医生确认: 'Awaiting responsible doctor confirmation',
+  已确认: 'Confirmed',
+  确认数据: 'Confirm data',
+  确认观测数据: 'Confirm observation data',
+  '核对患者或设备提交的数据；如有误，可在确认前修正。':
+    'Check data submitted by the patient or device. Correct it before confirmation if needed.',
+  确认数值: 'Confirmed value',
+  '确认备注（可选）': 'Confirmation note (optional)',
+  '例如：已与患者核对读数': 'For example: reading checked with the patient',
+  '确认后将永久记录确认医生、时间以及修改前后内容。':
+    'Confirmation permanently records the doctor, time, and before-and-after values.',
+  '由责任医生于 {time} 确认': 'Confirmed by the responsible doctor at {time}',
+  '确认失败，请稍后重试。': 'Confirmation failed. Please try again later.',
+  '正在确认…': 'Confirming…',
   合成演示: 'Synthetic demo',
   已复核: 'Reviewed',
   待复核: 'Awaiting review',

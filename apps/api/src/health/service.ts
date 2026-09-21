@@ -5,10 +5,12 @@ import type {
   CreateAssessmentInput,
   CreateCarePlanInput,
   CreateObservationInput,
+  ConfirmObservationInput,
   CreateReminderInput,
   HealthAssessment,
   HealthOverview,
   Observation,
+  ObservationConfirmation,
   ObservationQuery,
   ObservationTrendQuery,
   ObservationTrendResponse,
@@ -35,6 +37,7 @@ export class StaleVersion extends Error {}
 export class NotificationUnavailable extends Error {}
 export class ReminderDeliveryInProgress extends Error {}
 export class InvalidReminderState extends Error {}
+export class InvalidObservationState extends Error {}
 
 export class HealthService {
   constructor(
@@ -166,13 +169,68 @@ export class HealthService {
           ...(input.externalObservationId
             ? { externalObservationId: input.externalObservationId }
             : {}),
-          qualityStatus: 'unreviewed',
+          qualityStatus: input.source === 'manual-entry' ? 'recorded' : 'pending-confirmation',
+          ...(input.source === 'manual-entry' ? { recordedBy: context.actorId } : {}),
         };
         this.repository.createObservation(observation);
         return observation;
       },
       'observation',
     );
+  }
+
+  confirmObservation(
+    id: string,
+    input: ConfirmObservationInput,
+    context: RequestContext,
+  ): Observation {
+    const current = this.repository.findObservation(id);
+    if (!current) throw new HealthResourceNotFound();
+    this.requirePatient(current.patientId, context);
+    if (!this.patientAccess.isResponsibleDoctor?.(current.patientId, context)) {
+      this.recordAudit(context, 'health.observation.confirm', 'observation', id, 'denied');
+      throw new HealthResourceNotFound();
+    }
+    return this.execute(
+      'health.observation.confirm',
+      input.commandId,
+      { id, ...input },
+      context,
+      () => {
+        const latest = this.repository.findObservation(id);
+        if (!latest) throw new HealthResourceNotFound();
+        if (latest.qualityStatus !== 'pending-confirmation') {
+          throw new InvalidObservationState();
+        }
+        const updated: Observation = {
+          ...latest,
+          value: input.value ?? latest.value,
+          measuredAt: input.measuredAt ?? latest.measuredAt,
+          qualityStatus: 'confirmed',
+          confirmedBy: context.actorId,
+          confirmedAt: context.now,
+        };
+        const confirmation: ObservationConfirmation = {
+          id: `OBSC-${randomUUID()}`,
+          observationId: latest.id,
+          confirmedBy: context.actorId,
+          confirmedAt: context.now,
+          ...(input.note?.trim() ? { note: input.note.trim() } : {}),
+          before: observationSnapshot(latest),
+          after: observationSnapshot(updated),
+        };
+        this.repository.confirmObservation(updated, confirmation);
+        return updated;
+      },
+      'observation',
+    );
+  }
+
+  listObservationConfirmations(id: string, context: RequestContext): ObservationConfirmation[] {
+    const observation = this.repository.findObservation(id);
+    if (!observation) throw new HealthResourceNotFound();
+    this.requirePatient(observation.patientId, context);
+    return this.repository.listObservationConfirmations(id);
   }
 
   listPlans(patientId: string, context: RequestContext): CarePlanDetail[] {
@@ -488,6 +546,14 @@ function createPlanVersion(plan: CarePlanDetail, actorId: string): CarePlanVersi
     snapshot,
     authoredBy: actorId,
     createdAt: plan.updatedAt,
+  };
+}
+
+function observationSnapshot(observation: Observation): ObservationConfirmation['before'] {
+  return {
+    value: observation.value,
+    measuredAt: observation.measuredAt,
+    qualityStatus: observation.qualityStatus,
   };
 }
 

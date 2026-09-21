@@ -19,6 +19,21 @@ import { createApp } from '../src/app.js';
 test('health migrations and fixtures are additive and idempotent', () => {
   const db = openDatabase(':memory:');
   try {
+    const access = new SqlitePatientAccess(db);
+    assert.equal(
+      access.isResponsibleDoctor('PAT-001', {
+        actorId: DEMO_DOCTOR_ID,
+        now: '2026-09-13T09:00:00+08:00',
+      }),
+      true,
+    );
+    assert.equal(
+      access.isResponsibleDoctor('PAT-001', {
+        actorId: 'doctor-demo-002',
+        now: '2026-09-13T09:00:00+08:00',
+      }),
+      false,
+    );
     assert.equal(
       db.prepare('SELECT COUNT(*) count FROM schema_migrations WHERE version=7').get()!.count,
       1,
@@ -78,6 +93,8 @@ test('health HTTP routes persist writes, replay commands and reject stale or inv
       payload: observationInput,
     });
     assert.equal(created.statusCode, 201, created.body);
+    assert.equal(created.json().data.qualityStatus, 'recorded');
+    assert.equal(created.json().data.recordedBy, DEMO_DOCTOR_ID);
     const replay = await app.inject({
       method: 'POST',
       url: '/api/v1/health/observations',
@@ -97,6 +114,48 @@ test('health HTTP routes persist writes, replay commands and reject stale or inv
     assert.ok(
       list.json().data.items.some((item: { id: string }) => item.id === created.json().data.id),
     );
+
+    const deviceCreated = await app.inject({
+      method: 'POST',
+      url: '/api/v1/health/observations',
+      payload: {
+        ...observationInput,
+        commandId: 'cmd-obs-device-1',
+        value: 148,
+        measuredAt: '2026-09-13T08:30:00+08:00',
+        source: 'device-simulator',
+        sourceLabel: '患者家用血压计',
+        externalObservationId: 'device-reading-001',
+      },
+    });
+    assert.equal(deviceCreated.statusCode, 201, deviceCreated.body);
+    assert.equal(deviceCreated.json().data.qualityStatus, 'pending-confirmation');
+
+    const confirmed = await app.inject({
+      method: 'POST',
+      url: `/api/v1/health/observations/${deviceCreated.json().data.id}/confirm`,
+      payload: {
+        commandId: 'cmd-obs-confirm-1',
+        value: 142,
+        measuredAt: '2026-09-13T08:31:00+08:00',
+        note: '与患者核对后更正录入值',
+      },
+    });
+    assert.equal(confirmed.statusCode, 200, confirmed.body);
+    assert.equal(confirmed.json().data.value, 142);
+    assert.equal(confirmed.json().data.qualityStatus, 'confirmed');
+    assert.equal(confirmed.json().data.confirmedBy, DEMO_DOCTOR_ID);
+    assert.equal(confirmed.json().data.confirmedAt, '2026-09-13T09:15:00+08:00');
+
+    const history = await app.inject({
+      method: 'GET',
+      url: `/api/v1/health/observations/${deviceCreated.json().data.id}/confirmations`,
+    });
+    assert.equal(history.statusCode, 200, history.body);
+    assert.equal(history.json().data.length, 1);
+    assert.equal(history.json().data[0].before.value, 148);
+    assert.equal(history.json().data[0].after.value, 142);
+    assert.equal(history.json().data[0].confirmedBy, DEMO_DOCTOR_ID);
 
     const invalidUnit = await app.inject({
       method: 'POST',

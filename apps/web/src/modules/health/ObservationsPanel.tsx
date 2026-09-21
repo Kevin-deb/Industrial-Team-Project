@@ -1,12 +1,18 @@
 import { Plus, RefreshCw, X } from 'lucide-react';
 import { useMemo, useState, type FormEvent } from 'react';
-import type { CreateObservationInput, HealthMetric } from '@doctor/contracts';
+import type {
+  ConfirmObservationInput,
+  CreateObservationInput,
+  HealthMetric,
+  Observation,
+} from '@doctor/contracts';
 import { useI18n } from '../../shared/i18n';
 import { Button } from '../../shared/ui';
 import { EApiError } from '../e-shared';
 import { ObservationTrendPanel } from './ObservationTrendPanel';
 import {
   useCreateObservation,
+  useConfirmObservation,
   useObservations,
   useObservationTrends,
   type ObservationFilters,
@@ -27,6 +33,7 @@ export function ObservationsPanel({ patientId }: { patientId: string }) {
   const [page, setPage] = useState(1);
   const [adding, setAdding] = useState(false);
   const [view, setView] = useState<'records' | 'trends'>('records');
+  const [confirming, setConfirming] = useState<Observation | null>(null);
   const filters = useMemo<ObservationFilters>(
     () => ({
       ...(metric ? { metric } : {}),
@@ -39,6 +46,7 @@ export function ObservationsPanel({ patientId }: { patientId: string }) {
   const query = useObservations(patientId, filters);
   const trends = useObservationTrends(patientId, filters, view === 'trends');
   const create = useCreateObservation(patientId);
+  const confirm = useConfirmObservation(patientId);
   const items = query.data?.data.items ?? [];
   return (
     <section className="health-panel" aria-labelledby="observations-title">
@@ -173,7 +181,28 @@ export function ObservationsPanel({ patientId }: { patientId: string }) {
                   <td>
                     <span className="health-source">{item.sourceLabel}</span>
                   </td>
-                  <td>{t(qualityText(item.qualityStatus))}</td>
+                  <td>
+                    <div className="health-observation-status">
+                      <span className={`health-status ${item.qualityStatus}`}>
+                        {t(qualityText(item.qualityStatus))}
+                      </span>
+                      {item.qualityStatus === 'pending-confirmation' && (
+                        <button type="button" onClick={() => setConfirming(item)}>
+                          {t('确认数据')}
+                        </button>
+                      )}
+                      {item.qualityStatus === 'confirmed' && item.confirmedAt && (
+                        <small>
+                          {t('由责任医生于 {time} 确认', {
+                            time: formatDate(item.confirmedAt, {
+                              dateStyle: 'short',
+                              timeStyle: 'short',
+                            }),
+                          })}
+                        </small>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -226,18 +255,133 @@ export function ObservationsPanel({ patientId }: { patientId: string }) {
           }}
         />
       )}
+      {confirming && (
+        <ObservationConfirmationDialog
+          observation={confirming}
+          busy={confirm.isPending}
+          error={confirm.error}
+          onClose={() => setConfirming(null)}
+          onSubmit={async (input) => {
+            await confirm.mutateAsync({ id: confirming.id, input });
+            setConfirming(null);
+          }}
+        />
+      )}
     </section>
   );
 }
 
-function qualityText(status: 'demo' | 'unreviewed' | 'reviewed') {
-  return status === 'demo' ? '合成演示' : status === 'reviewed' ? '已复核' : '待复核';
+function qualityText(status: Observation['qualityStatus']) {
+  if (status === 'demo') return '合成演示';
+  if (status === 'recorded') return '已录入';
+  if (status === 'confirmed') return '已确认';
+  return '待责任医生确认';
 }
 
 function formatObservationValue(metric: HealthMetric, value: number) {
   return metric === 'glucose'
     ? Number(value.toFixed(1)).toString()
     : Number(value.toFixed(0)).toString();
+}
+
+function ObservationConfirmationDialog({
+  observation,
+  busy,
+  error,
+  onClose,
+  onSubmit,
+}: {
+  observation: Observation;
+  busy: boolean;
+  error: Error | null;
+  onClose: () => void;
+  onSubmit: (input: ConfirmObservationInput) => Promise<void>;
+}) {
+  const { t } = useI18n();
+  const [value, setValue] = useState(String(observation.value));
+  const [measuredAt, setMeasuredAt] = useState(observation.measuredAt.slice(0, 16));
+  const [note, setNote] = useState('');
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    await onSubmit({
+      commandId: globalThis.crypto?.randomUUID?.() ?? `cmd-${Date.now()}`,
+      value: Number(value),
+      measuredAt: `${measuredAt}:00+08:00`,
+      ...(note.trim() ? { note: note.trim() } : {}),
+    }).catch(() => undefined);
+  }
+  return (
+    <div className="health-dialog-backdrop" role="presentation">
+      <section
+        className="health-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="observation-confirm-title"
+      >
+        <header>
+          <div>
+            <h2 id="observation-confirm-title">{t('确认观测数据')}</h2>
+            <p>{t('核对患者或设备提交的数据；如有误，可在确认前修正。')}</p>
+          </div>
+          <button type="button" onClick={onClose} aria-label={t('关闭')}>
+            <X size={18} />
+          </button>
+        </header>
+        <form onSubmit={submit}>
+          <label>
+            {t('确认数值')}
+            <div className="health-value-input">
+              <input
+                type="number"
+                min="0"
+                max="1000"
+                step="0.1"
+                required
+                value={value}
+                onChange={(event) => setValue(event.target.value)}
+              />
+              <span>{observation.unit}</span>
+            </div>
+          </label>
+          <label>
+            {t('测量时间')}
+            <input
+              type="datetime-local"
+              required
+              value={measuredAt}
+              onChange={(event) => setMeasuredAt(event.target.value)}
+            />
+          </label>
+          <label>
+            {t('确认备注（可选）')}
+            <textarea
+              rows={3}
+              maxLength={500}
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              placeholder={t('例如：已与患者核对读数')}
+            />
+          </label>
+          <p className="health-form-note">
+            {t('确认后将永久记录确认医生、时间以及修改前后内容。')}
+          </p>
+          {error && (
+            <div className="health-inline-error">
+              {error instanceof EApiError ? error.message : t('确认失败，请稍后重试。')}
+            </div>
+          )}
+          <footer>
+            <Button variant="secondary" onClick={onClose}>
+              {t('取消')}
+            </Button>
+            <Button type="submit" disabled={busy}>
+              {busy ? t('正在确认…') : t('确认数据')}
+            </Button>
+          </footer>
+        </form>
+      </section>
+    </div>
+  );
 }
 
 function ObservationForm({

@@ -72,10 +72,35 @@ describe('HealthPage', () => {
                 sourceLabel: '模拟患者上传 · 合成数据',
                 qualityStatus: 'demo',
               },
+              {
+                id: 'OBS-DEVICE-001',
+                patientId: 'PAT-001',
+                metric: 'systolic',
+                value: 148,
+                unit: 'mmHg',
+                measuredAt: '2026-09-10T08:00:00+08:00',
+                receivedAt: '2026-09-10T08:01:00+08:00',
+                source: 'device-simulator',
+                sourceLabel: '患者家用血压计',
+                qualityStatus: 'pending-confirmation',
+              },
+              {
+                id: 'OBS-MANUAL-001',
+                patientId: 'PAT-001',
+                metric: 'heart-rate',
+                value: 72,
+                unit: 'bpm',
+                measuredAt: '2026-09-10T09:00:00+08:00',
+                receivedAt: '2026-09-10T09:01:00+08:00',
+                source: 'manual-entry',
+                sourceLabel: '医生手工录入',
+                qualityStatus: 'recorded',
+                recordedBy: 'doctor-demo-001',
+              },
             ],
             page: 1,
             pageSize: 30,
-            total: 1,
+            total: 3,
           });
         return response([]);
       }),
@@ -138,6 +163,26 @@ describe('HealthPage', () => {
     expect(screen.getByRole('button', { name: '新增提醒' })).toBeInTheDocument();
   });
 
+  it('lets the responsible doctor confirm pending device data while manual data stays recorded', async () => {
+    renderWithEProviders(
+      <I18nProvider>
+        <MemoryRouter>
+          <HealthPage />
+        </MemoryRouter>
+      </I18nProvider>,
+    );
+    await act(() => vi.advanceTimersByTimeAsync(0));
+    fireEvent.focus(screen.getByRole('searchbox', { name: '搜索健康管理患者' }));
+    fireEvent.click(screen.getByRole('button', { name: /陈建国.*PAT-001/ }));
+    await act(() => vi.advanceTimersByTimeAsync(10));
+
+    expect(screen.getByText('已录入')).toBeInTheDocument();
+    expect(screen.getByText('待责任医生确认')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '确认数据' }));
+    expect(screen.getByRole('dialog', { name: '确认观测数据' })).toBeInTheDocument();
+    expect(screen.getByDisplayValue('148')).toBeInTheDocument();
+  });
+
   it('switches locally to complete age-referenced trend summaries without losing filters', async () => {
     renderWithEProviders(
       <I18nProvider>
@@ -192,11 +237,11 @@ describe('HealthPage', () => {
     expect(screen.getAllByText('单次测量').length).toBeGreaterThan(0);
     expect(screen.getAllByText('超出参考范围').length).toBeGreaterThan(0);
 
-    const systolicTrend = document.querySelector(
-      '.health-chart-series.systolic polyline',
-    );
+    const systolicTrend = document.querySelector('.health-chart-series.systolic polyline');
     expect(systolicTrend?.getAttribute('points')?.trim().split(/\s+/)).toHaveLength(3);
-    expect(document.querySelectorAll('.health-chart-series.systolic .health-chart-point')).toHaveLength(4);
+    expect(
+      document.querySelectorAll('.health-chart-series.systolic .health-chart-point'),
+    ).toHaveLength(4);
 
     const dailyAverage = screen.getByRole('button', {
       name: /收缩压.*9月3日.*每日平均 135.5 mmHg.*2 次测量/,
@@ -254,8 +299,9 @@ describe('HealthPage', () => {
     expect(screen.getByText('Diastolic daily average')).toBeInTheDocument();
     expect(screen.getAllByText('Individual reading').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Outside reference range').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('CareLink demo reference configuration (not clinical guidance)').length)
-      .toBeGreaterThan(0);
+    expect(
+      screen.getAllByText('CareLink demo reference configuration (not clinical guidance)').length,
+    ).toBeGreaterThan(0);
 
     const dailyAverage = screen.getByRole('button', {
       name: /Systolic.*3 Sept 2026.*daily average 135.5 mmHg.*2 readings/,
@@ -263,7 +309,9 @@ describe('HealthPage', () => {
     fireEvent.mouseEnter(dailyAverage);
     expect(screen.getByRole('tooltip')).toHaveTextContent('Systolic daily average');
     expect(screen.getByRole('tooltip')).toHaveTextContent('2 readings');
-    expect(screen.getByRole('tooltip')).toHaveTextContent('Arithmetic mean of all readings that day');
+    expect(screen.getByRole('tooltip')).toHaveTextContent(
+      'Arithmetic mean of all readings that day',
+    );
     expect(screen.getByRole('tooltip')).toHaveTextContent(
       'Dots are individual readings; the line shows the daily average only',
     );

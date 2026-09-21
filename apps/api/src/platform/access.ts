@@ -6,6 +6,7 @@ export interface RequestContext {
 }
 export interface PatientAccessPort {
   canReadPatient(patientId: string, context: RequestContext): boolean;
+  isResponsibleDoctor?(patientId: string, context: RequestContext): boolean;
 }
 
 /** Internal SQL boundary. All callers use the fixed alias "p"; values are always bound. */
@@ -32,5 +33,10 @@ export class SqlitePatientAccess implements PatientAccessPort {
     return !!this.db
       .prepare('SELECT 1 FROM patients p WHERE p.id=:patientId AND ' + patientScopeSql)
       .get({ patientId, ...context });
+  }
+  isResponsibleDoctor(patientId: string, context: RequestContext): boolean {
+    return !!this.db
+      .prepare('SELECT 1 FROM patients WHERE id=? AND assigned_doctor_id=?')
+      .get(patientId, context.actorId);
   }
 }

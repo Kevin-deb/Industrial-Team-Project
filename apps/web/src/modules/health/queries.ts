@@ -5,6 +5,7 @@ import type {
   CreateAssessmentInput,
   CreateCarePlanInput,
   CreateObservationInput,
+  ConfirmObservationInput,
   CreateReminderInput,
   HealthAssessment,
   HealthPatientSummary,
@@ -111,6 +112,24 @@ export function useCreateObservation(patientId: string) {
   return useMutation({
     mutationFn: (input: CreateObservationInput) =>
       requestEApi<Observation>('/health/observations', { method: 'POST', body: input }),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: healthKeys.overview(patientId) }),
+        queryClient.invalidateQueries({ queryKey: ['health', 'observations', patientId] }),
+        queryClient.invalidateQueries({ queryKey: ['health', 'observation-trends', patientId] }),
+      ]);
+    },
+  });
+}
+
+export function useConfirmObservation(patientId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: ConfirmObservationInput }) =>
+      requestEApi<Observation>(`/health/observations/${encodeURIComponent(id)}/confirm`, {
+        method: 'POST',
+        body: input,
+      }),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: healthKeys.overview(patientId) }),
