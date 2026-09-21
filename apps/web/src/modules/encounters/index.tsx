@@ -23,8 +23,14 @@ import {
   Video,
   X,
 } from 'lucide-react';
-import type { Encounter } from '@doctor/contracts';
-import { useApi } from '../../shared/api';
+import type {
+  Encounter,
+  EncounterAvailabilityWindow,
+  EncounterContext,
+  EncounterNotice,
+  EncounterMessage as ApiEncounterMessage,
+} from '@doctor/contracts';
+import { requestApi, useApi } from '../../shared/api';
 import { Badge, Button, EmptyState, LoadingState, PageHeader } from '../../shared/ui';
 import {
   DetailGrid,
@@ -83,23 +89,8 @@ type SavedEncounterRecord = {
   audioSaved: boolean;
   videoSaved: boolean;
 };
-type AvailabilityWindow = {
-  id: string;
-  date: string;
-  type: Encounter['type'];
-  start: string;
-  end: string;
-  capacity: number;
-  booked: number;
-};
-type NoticeLog = {
-  id: string;
-  encounterId: string;
-  patientName: string;
-  kind: '资料提醒' | '按时进入提醒' | '改期通知';
-  content: string;
-  status: '待患者确认' | '患者已接受' | '已发送';
-};
+type AvailabilityWindow = EncounterAvailabilityWindow;
+type NoticeLog = EncounterNotice;
 const extraDemoEncounters: Encounter[] = [
   {
     id: 'ENC-005',
@@ -394,17 +385,15 @@ const initialAvailabilityWindows: AvailabilityWindow[] = [
   },
 ];
 
-function clinicalBrief(encounter: Encounter) {
-  return (
-    clinicalBriefs[encounter.id] ?? {
-      chiefComplaint: encounter.reason,
-      presentIllness: '患者已提交在线问诊资料，详细病情需进入诊间后进一步核对。',
-      pastHistory: '暂无补充记录。',
-      surgicalHistory: '暂无补充记录。',
-      medicationHistory: '暂无补充记录。',
-      allergyHistory: '暂无补充记录。',
-    }
-  );
+function emptyClinicalBrief(encounter: Encounter): ClinicalBrief {
+  return {
+    chiefComplaint: encounter.reason,
+    presentIllness: '正在加载患者提交的问诊资料。',
+    pastHistory: '正在加载',
+    surgicalHistory: '正在加载',
+    medicationHistory: '正在加载',
+    allergyHistory: '正在加载',
+  };
 }
 
 function addMinutes(value: string, minutes: number) {
@@ -444,6 +433,29 @@ type RoomMessage = {
   imageUrl?: string;
   imageName?: string;
 };
+
+function roomMessageFromApi(
+  message: ApiEncounterMessage,
+  formatDate: (value: string, options?: Intl.DateTimeFormatOptions) => string,
+): RoomMessage {
+  return {
+    id: message.id,
+    sender: message.sender,
+    body: message.body,
+    imageUrl: message.imageUrl,
+    imageName: message.imageName,
+    time: formatDate(message.sentAt, { hour: '2-digit', minute: '2-digit' }),
+  };
+}
+
+function readImageAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
 
 function initialMessages(encounter: Encounter, brief: ClinicalBrief): RoomMessage[] {
   return [
@@ -512,6 +524,11 @@ function ClinicalSummary({ brief }: { brief: ClinicalBrief }) {
       </dl>
     </section>
   );
+}
+
+function EncounterDetailClinical({ encounter }: { encounter: Encounter }) {
+  const { data } = useApi<EncounterContext>(`/encounters/${encodeURIComponent(encounter.id)}/context`);
+  return <ClinicalSummary brief={data?.brief ?? emptyClinicalBrief(encounter)} />;
 }
 
 function PatientFolder({
@@ -621,11 +638,13 @@ function AppointmentManagementDialog({
   encounters: Encounter[];
   nowMs: number;
   onClose: () => void;
-  onRescheduleAccepted: (id: string, nextScheduledAt: string) => void;
+  onRescheduleAccepted: (id: string) => void;
 }) {
   const { t, formatDate } = useI18n();
+  const availability = useApi<AvailabilityWindow[]>('/encounter-availability');
+  const noticeData = useApi<NoticeLog[]>('/encounter-notices');
   const firstWaiting = encounters.find((item) => encounterDisplayStatus(item, nowMs) !== 'completed');
-  const [windows, setWindows] = useState(initialAvailabilityWindows);
+  const [windows, setWindows] = useState<AvailabilityWindow[]>([]);
   const [newWindow, setNewWindow] = useState({
     date: '2026-09-22',
     type: 'video' as Encounter['type'],
@@ -638,53 +657,45 @@ function AppointmentManagementDialog({
   const [nextTime, setNextTime] = useState('10:00');
   const [noticeText, setNoticeText] = useState('请患者在问诊前补充近期检查结果和当前用药。');
   const [noticeFeedback, setNoticeFeedback] = useState('');
-  const [notices, setNotices] = useState<NoticeLog[]>([
-    {
-      id: 'NOTICE-001',
-      encounterId: 'ENC-012',
-      patientName: '张淑兰',
-      kind: '按时进入提醒',
-      content: '已提醒患者在服务窗口内保持在线。',
-      status: '已发送',
-    },
-  ]);
+  const [notices, setNotices] = useState<NoticeLog[]>([]);
+  useEffect(() => {
+    setWindows(availability.data ?? []);
+  }, [availability.data]);
+  useEffect(() => {
+    setNotices(noticeData.data ?? []);
+  }, [noticeData.data]);
   const selectedEncounter = encounters.find((item) => item.id === selectedEncounterId);
   const addWindow = useCallback(() => {
-    setWindows((current) => [
-      {
-        id: `AW-${Date.now()}`,
-        date: newWindow.date,
-        type: newWindow.type,
-        start: newWindow.start,
-        end: newWindow.end,
-        capacity: newWindow.capacity,
-        booked: 0,
-      },
-      ...current,
-    ]);
+    void requestApi<AvailabilityWindow>('/encounter-availability', {
+      method: 'POST',
+      body: JSON.stringify(newWindow),
+    }).then((response) => {
+      setWindows((current) => [response.data, ...current]);
+      availability.reload();
+    });
   }, [newWindow]);
   const sendNotice = useCallback(
     (kind: NoticeLog['kind']) => {
       if (!selectedEncounter) return;
-      setNotices((current) => [
-        {
-          id: `NOTICE-${Date.now()}`,
+      const proposedScheduledAt = kind === '改期通知' ? `${nextDate}T${nextTime}:00+08:00` : undefined;
+      void requestApi<NoticeLog>('/encounter-notices', {
+        method: 'POST',
+        body: JSON.stringify({
           encounterId: selectedEncounter.id,
-          patientName: selectedEncounter.patientName,
           kind,
           content:
             kind === '改期通知'
               ? `建议改至 ${nextDate} ${nextTime}，等待患者确认。`
               : noticeText,
-          status: kind === '改期通知' ? '待患者确认' : '已发送',
-        },
-        ...current,
-      ]);
-      if (kind !== '改期通知') {
-        setNoticeFeedback('已通知患者');
-      }
+          proposedScheduledAt,
+        }),
+      }).then((response) => {
+        setNotices((current) => [response.data, ...current]);
+        noticeData.reload();
+        if (kind !== '改期通知') setNoticeFeedback('已通知患者');
+      });
     },
-    [nextDate, nextTime, noticeText, selectedEncounter],
+    [nextDate, nextTime, noticeData, noticeText, selectedEncounter],
   );
   useEffect(() => {
     if (!noticeFeedback) return undefined;
@@ -693,21 +704,17 @@ function AppointmentManagementDialog({
   }, [noticeFeedback]);
   const acceptReschedule = useCallback(
     (notice: NoticeLog) => {
-      const nextScheduledAt = `${nextDate}T${nextTime}:00+08:00`;
-      onRescheduleAccepted(notice.encounterId, nextScheduledAt);
-      setNotices((current) =>
-        current.map((item) =>
-          item.id === notice.id
-            ? {
-                ...item,
-                status: '患者已接受',
-                content: `${item.content} 平台已自动调整接诊时段。`,
-              }
-            : item,
-        ),
-      );
+      void requestApi<NoticeLog>(`/encounter-notices/${encodeURIComponent(notice.id)}/accept`, {
+        method: 'POST',
+      }).then((response) => {
+        setNotices((current) =>
+          current.map((item) => (item.id === notice.id ? response.data : item)),
+        );
+        onRescheduleAccepted(response.data.encounterId);
+        noticeData.reload();
+      });
     },
-    [nextDate, nextTime, onRescheduleAccepted],
+    [noticeData, onRescheduleAccepted],
   );
   const pendingCount = encounters.filter(
     (item) => encounterDisplayStatus(item, nowMs) === 'waiting',
@@ -823,15 +830,23 @@ function AppointmentManagementDialog({
                     type="number"
                     min={window.booked}
                     value={window.capacity}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      const capacity = Math.max(window.booked, Number(event.target.value) || 1);
                       setWindows((current) =>
                         current.map((item) =>
                           item.id === window.id
-                            ? { ...item, capacity: Math.max(window.booked, Number(event.target.value) || 1) }
+                            ? { ...item, capacity }
                             : item,
                         ),
-                      )
-                    }
+                      );
+                      void requestApi<AvailabilityWindow>(
+                        `/encounter-availability/${encodeURIComponent(window.id)}`,
+                        {
+                          method: 'PATCH',
+                          body: JSON.stringify({ capacity }),
+                        },
+                      ).then(() => availability.reload());
+                    }}
                   />
                 </label>
                 <Badge tone={window.booked >= window.capacity ? 'amber' : 'teal'}>
@@ -979,9 +994,10 @@ function EncounterRoom({
   onComplete: (id: string, record: SavedEncounterRecord) => void;
 }) {
   const { t, formatDate } = useI18n();
-  const brief = clinicalBrief(encounter);
+  const roomContext = useApi<EncounterContext>(`/encounters/${encodeURIComponent(encounter.id)}/context`);
+  const brief = roomContext.data?.brief ?? emptyClinicalBrief(encounter);
   const [draft, setDraft] = useState('');
-  const [messages, setMessages] = useState<RoomMessage[]>(() => initialMessages(encounter, brief));
+  const [messages, setMessages] = useState<RoomMessage[]>([]);
   const [callStarted, setCallStarted] = useState(false);
   const [folderOpen, setFolderOpen] = useState(true);
   const [recordsOpen, setRecordsOpen] = useState(false);
@@ -993,7 +1009,12 @@ function EncounterRoom({
   const isVideo = encounter.type === 'video';
   const isCompleted = encounter.status === 'completed';
   const displayStatus = encounterDisplayStatus(encounter);
-  const priorRecords = useMemo(() => historyRecords(encounter), [encounter]);
+  const priorRecords = roomContext.data?.historyRecords ?? [];
+  const roomSavedRecords = roomContext.data?.savedRecords ?? savedRecords;
+  useEffect(() => {
+    if (!roomContext.data) return;
+    setMessages(roomContext.data.messages.map((message) => roomMessageFromApi(message, formatDate)));
+  }, [formatDate, roomContext.data]);
   const playDoctorVideo = useCallback(
     (node: HTMLVideoElement | null = doctorVideoRef.current) => {
       if (!node || !doctorStream) return;
@@ -1063,54 +1084,61 @@ function EncounterRoom({
     if (isCompleted) return;
     const body = draft.trim();
     if (!body) return;
-    setMessages((current) => [
-      ...current,
-      {
-        id: `${encounter.id}-doctor-${current.length + 1}`,
-        sender: 'doctor',
-        body,
-        time: formatDate(new Date().toISOString(), { hour: '2-digit', minute: '2-digit' }),
-      },
-    ]);
-    setDraft('');
-  }, [draft, encounter.id, formatDate, isCompleted]);
+    void requestApi<ApiEncounterMessage>(`/encounters/${encodeURIComponent(encounter.id)}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ body }),
+    }).then((response) => {
+      setMessages((current) => [...current, roomMessageFromApi(response.data, formatDate)]);
+      setDraft('');
+      roomContext.reload();
+    });
+  }, [draft, encounter.id, formatDate, isCompleted, roomContext]);
   const sendImage = useCallback(
     (files: FileList | null) => {
       if (isCompleted) return;
       const file = files?.[0];
       if (!file) return;
-      setMessages((current) => [
-        ...current,
-        {
-          id: `${encounter.id}-doctor-image-${current.length + 1}`,
-          sender: 'doctor',
-          body: file.name,
-          imageUrl: URL.createObjectURL(file),
-          imageName: file.name,
-          time: formatDate(new Date().toISOString(), { hour: '2-digit', minute: '2-digit' }),
-        },
-      ]);
+      void readImageAsDataUrl(file)
+        .then((imageUrl) =>
+          requestApi<ApiEncounterMessage>(
+            `/encounters/${encodeURIComponent(encounter.id)}/messages`,
+            {
+              method: 'POST',
+              body: JSON.stringify({ body: file.name, imageUrl, imageName: file.name }),
+            },
+          ),
+        )
+        .then((response) => {
+          setMessages((current) => [...current, roomMessageFromApi(response.data, formatDate)]);
+          roomContext.reload();
+        });
     },
-    [encounter.id, formatDate, isCompleted],
+    [encounter.id, formatDate, isCompleted, roomContext],
   );
   const endEncounter = useCallback(() => {
     if (isCompleted) return;
     setCallStarted(false);
     stopCamera();
-    onComplete(encounter.id, {
-      id: `${encounter.id}-saved`,
-      title: '本次问诊记录',
-      savedAt: new Date().toISOString(),
-      mode: encounter.type,
-      messageCount: messages.filter((message) => message.sender !== 'system').length,
-      audioSaved: encounter.type === 'video',
-      videoSaved: encounter.type === 'video',
+    void requestApi<SavedEncounterRecord>(
+      `/encounters/${encodeURIComponent(encounter.id)}/complete`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          mode: encounter.type,
+          messageCount: messages.filter((message) => message.sender !== 'system').length,
+          audioSaved: encounter.type === 'video',
+          videoSaved: encounter.type === 'video',
+        }),
+      },
+    ).then((response) => {
+      onComplete(encounter.id, response.data);
+      roomContext.reload();
+      setRecordsOpen(true);
     });
-    setRecordsOpen(true);
-  }, [encounter.id, encounter.type, isCompleted, messages, onComplete, stopCamera]);
+  }, [encounter.id, encounter.type, isCompleted, messages, onComplete, roomContext, stopCamera]);
   const exportRecord = useCallback(() => {
     const record =
-      savedRecords[0] ??
+      roomSavedRecords[0] ??
       (isCompleted
         ? {
             id: `${encounter.id}-completed-export`,
@@ -1149,7 +1177,7 @@ function EncounterRoom({
     link.download = `${encounter.id}-consultation-record.txt`;
     link.click();
     URL.revokeObjectURL(url);
-  }, [brief, encounter, formatDate, isCompleted, messages, savedRecords]);
+  }, [brief, encounter, formatDate, isCompleted, messages, roomSavedRecords]);
   return (
     <div className="encounter-room-page">
       <header className="encounter-room-header">
@@ -1185,7 +1213,7 @@ function EncounterRoom({
             <Button
               variant="secondary"
               onClick={exportRecord}
-              disabled={!savedRecords.length && !isCompleted}
+              disabled={!roomSavedRecords.length && !isCompleted}
             >
               <Download size={14} />
               {t('导出记录')}
@@ -1213,7 +1241,7 @@ function EncounterRoom({
             onToggle={() => setFolderOpen((value) => !value)}
           />
           <SavedRecordsPanel
-            records={savedRecords}
+            records={roomSavedRecords}
             open={recordsOpen}
             onToggle={() => setRecordsOpen((value) => !value)}
             onExport={exportRecord}
@@ -1429,27 +1457,24 @@ export function EncountersPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [roomId, setRoomId] = useState<string | null>(null);
   const [statusOverrides, setStatusOverrides] = useState<Record<string, Encounter['status']>>({});
-  const [scheduleOverrides, setScheduleOverrides] = useState<Record<string, string>>({});
   const [savedRecordsByEncounter, setSavedRecordsByEncounter] = useState<
     Record<string, SavedEncounterRecord[]>
   >({});
   const encounterRows = useMemo(() => {
     const byId = new Map<string, Encounter>();
-    [...(data ?? []), ...extraDemoEncounters].forEach((item) => {
+    (data ?? []).forEach((item) => {
       if (!byId.has(item.id)) byId.set(item.id, item);
     });
     return Array.from(byId.values())
       .map((item) => ({
         ...item,
-        scheduledAt: scheduleOverrides[item.id] ?? item.scheduledAt,
         status: statusOverrides[item.id] ?? (item.status === 'scheduled' ? 'waiting' : item.status),
       }))
       .sort((left, right) => Date.parse(left.scheduledAt) - Date.parse(right.scheduledAt));
-  }, [data, scheduleOverrides, statusOverrides]);
+  }, [data, statusOverrides]);
   const nowMs = Date.now();
   const selected = encounterRows.find((item) => item.id === selectedId) ?? null;
   const activeRoom = encounterRows.find((item) => item.id === roomId) ?? null;
-  const selectedBrief = selected ? clinicalBrief(selected) : null;
   const [appointmentOpen, setAppointmentOpen] = useState(false);
   const close = useCallback(() => setSelectedId(null), []);
   const completeEncounter = useCallback((id: string, record: SavedEncounterRecord) => {
@@ -1459,11 +1484,12 @@ export function EncountersPage() {
       if (records.some((item) => item.id === record.id)) return current;
       return { ...current, [id]: [record, ...records] };
     });
-  }, []);
-  const applyReschedule = useCallback((id: string, nextScheduledAt: string) => {
-    setScheduleOverrides((current) => ({ ...current, [id]: nextScheduledAt }));
+    reload();
+  }, [reload]);
+  const applyReschedule = useCallback((id: string) => {
     setStatusOverrides((current) => ({ ...current, [id]: 'waiting' }));
-  }, []);
+    reload();
+  }, [reload]);
   const encounters = useMemo(
     () =>
       encounterRows.filter((item) => {
@@ -1690,7 +1716,7 @@ export function EncountersPage() {
               {t('进入诊间')}
             </Button>
           </div>
-          {selectedBrief && <ClinicalSummary brief={selectedBrief} />}
+          <EncounterDetailClinical encounter={selected} />
         </FeatureDialog>
       )}
       {appointmentOpen && (

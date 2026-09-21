@@ -14,7 +14,7 @@ import { plannedCommands } from '../src/platform/planned-commands.js';
 test('migrations create every domain and coherent synthetic clinical relationships', () => {
   const db = openDatabase(':memory:');
   try {
-    assert.equal(db.prepare('SELECT COUNT(*) count FROM schema_migrations').get()!.count, 24);
+    assert.equal(db.prepare('SELECT COUNT(*) count FROM schema_migrations').get()!.count, migrations.length);
     assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), []);
     assert.equal(db.prepare('SELECT COUNT(*) count FROM patients').get()!.count, 10);
     const archive = db
@@ -257,7 +257,7 @@ test('reopening the file database preserves data and does not reseed or rerun mi
     }
     const db = openDatabase(path);
     try {
-      assert.equal(db.prepare('SELECT COUNT(*) count FROM schema_migrations').get()!.count, 24);
+      assert.equal(db.prepare('SELECT COUNT(*) count FROM schema_migrations').get()!.count, migrations.length);
     } finally {
       db.close();
     }
@@ -327,7 +327,7 @@ test('startup refuses mismatched, incomplete and future database migration histo
     const mutations = [
       "UPDATE schema_migrations SET name='unexpected' WHERE version=2",
       'DELETE FROM schema_migrations WHERE version=2',
-      "INSERT INTO schema_migrations VALUES(25,'future','2026-09-10T00:00:00Z')",
+      `INSERT INTO schema_migrations VALUES(${migrations.length + 1},'future','2026-09-10T00:00:00Z')`,
     ];
     for (const [index, mutation] of mutations.entries()) {
       const path = join(folder, 'invalid-' + index + '.sqlite');
@@ -356,14 +356,14 @@ test('startup upgrades the legacy auth migration ordering without losing the dat
         .run(version, migration.name, '2026-09-21T00:00:00.000Z');
     };
     for (const migration of migrations.filter((item) => item.version <= 16)) apply(migration);
-    for (const migration of migrations.filter((item) => item.version >= 21))
+    for (const migration of migrations.filter((item) => item.version >= 21 && item.version <= 24))
       apply(migration, migration.version - 4);
     legacy.close();
 
     const upgraded = openDatabase(path);
     assert.equal(
       upgraded.prepare('SELECT COUNT(*) count FROM schema_migrations').get()!.count,
-      24,
+      migrations.length,
     );
     assert.deepEqual(
       upgraded

@@ -126,11 +126,64 @@ CREATE TABLE email_challenges (
       photo_ticket_expires_at TEXT,
       created_at TEXT NOT NULL
     );
+-- table: encounter_availability_windows
+CREATE TABLE encounter_availability_windows (
+      id TEXT PRIMARY KEY,
+      doctor_id TEXT NOT NULL REFERENCES identities(id),
+      window_date TEXT NOT NULL,
+      type TEXT NOT NULL CHECK(type IN ('text','video')),
+      start_time TEXT NOT NULL,
+      end_time TEXT NOT NULL,
+      capacity INTEGER NOT NULL CHECK(capacity>0),
+      booked INTEGER NOT NULL DEFAULT 0 CHECK(booked>=0)
+    );
+-- table: encounter_clinical_briefs
+CREATE TABLE encounter_clinical_briefs (
+      encounter_id TEXT PRIMARY KEY REFERENCES encounters(id),
+      chief_complaint TEXT NOT NULL,
+      present_illness TEXT NOT NULL,
+      past_history TEXT NOT NULL,
+      surgical_history TEXT NOT NULL,
+      medication_history TEXT NOT NULL,
+      allergy_history TEXT NOT NULL
+    );
+-- table: encounter_history_records
+CREATE TABLE encounter_history_records (
+      id TEXT PRIMARY KEY,
+      patient_id TEXT NOT NULL REFERENCES patients(id),
+      title TEXT NOT NULL,
+      record_date TEXT NOT NULL,
+      department TEXT NOT NULL,
+      diagnosis TEXT NOT NULL,
+      outcome TEXT NOT NULL
+    );
 -- table: encounter_messages
 CREATE TABLE encounter_messages (
       id TEXT PRIMARY KEY, encounter_id TEXT NOT NULL REFERENCES encounters(id), sender_identity_id TEXT REFERENCES identities(id),
-      sender_patient_id TEXT REFERENCES patients(id), body TEXT NOT NULL, sent_at TEXT NOT NULL,
+      sender_patient_id TEXT REFERENCES patients(id), body TEXT NOT NULL, sent_at TEXT NOT NULL, sender_role TEXT NOT NULL DEFAULT 'doctor'
+      CHECK(sender_role IN ('patient','doctor','system')), image_url TEXT, image_name TEXT,
       CHECK((sender_identity_id IS NOT NULL) != (sender_patient_id IS NOT NULL))
+    );
+-- table: encounter_notices
+CREATE TABLE encounter_notices (
+      id TEXT PRIMARY KEY,
+      encounter_id TEXT NOT NULL REFERENCES encounters(id),
+      kind TEXT NOT NULL CHECK(kind IN ('资料提醒','按时进入提醒','改期通知')),
+      content TEXT NOT NULL,
+      status TEXT NOT NULL CHECK(status IN ('待患者确认','患者已接受','已发送')),
+      proposed_scheduled_at TEXT,
+      created_at TEXT NOT NULL
+    );
+-- table: encounter_saved_records
+CREATE TABLE encounter_saved_records (
+      id TEXT PRIMARY KEY,
+      encounter_id TEXT NOT NULL REFERENCES encounters(id),
+      title TEXT NOT NULL,
+      saved_at TEXT NOT NULL,
+      mode TEXT NOT NULL CHECK(mode IN ('text','video')),
+      message_count INTEGER NOT NULL CHECK(message_count>=0),
+      audio_saved INTEGER NOT NULL CHECK(audio_saved IN (0,1)),
+      video_saved INTEGER NOT NULL CHECK(video_saved IN (0,1))
     );
 -- table: encounters
 CREATE TABLE encounters (
@@ -489,6 +542,14 @@ CREATE INDEX clinical_records_patient_updated ON medical_records(patient_id,upda
 CREATE INDEX clinical_records_status_updated ON medical_records(status,updated_at DESC);
 -- index: email_challenges_user_time
 CREATE INDEX email_challenges_user_time ON email_challenges(user_id,created_at DESC);
+-- index: encounter_availability_doctor_date
+CREATE INDEX encounter_availability_doctor_date ON encounter_availability_windows(doctor_id,window_date,start_time);
+-- index: encounter_history_patient_date
+CREATE INDEX encounter_history_patient_date ON encounter_history_records(patient_id,record_date DESC,id);
+-- index: encounter_notices_encounter_time
+CREATE INDEX encounter_notices_encounter_time ON encounter_notices(encounter_id,created_at DESC);
+-- index: encounter_saved_records_encounter
+CREATE INDEX encounter_saved_records_encounter ON encounter_saved_records(encounter_id,saved_at DESC);
 -- index: health_observation_confirmations_observation
 CREATE INDEX health_observation_confirmations_observation
       ON health_observation_confirmations(observation_id,confirmed_at,id);
@@ -543,4 +604,6 @@ INSERT INTO schema_migrations(version,name,applied_at) VALUES(21,'platform_authe
 INSERT INTO schema_migrations(version,name,applied_at) VALUES(22,'demo_clinician_initial_password_123456','2026-09-21T00:00:00.000Z');
 INSERT INTO schema_migrations(version,name,applied_at) VALUES(23,'health_observation_responsible_doctor_confirmation','2026-09-21T00:00:00.000Z');
 INSERT INTO schema_migrations(version,name,applied_at) VALUES(24,'independent_password_email_and_face_sessions','2026-09-21T00:00:00.000Z');
+INSERT INTO schema_migrations(version,name,applied_at) VALUES(25,'online_care_persistent_workspace','2026-09-21T00:00:00.000Z');
+INSERT INTO schema_migrations(version,name,applied_at) VALUES(26,'online_care_fixture_backfill','2026-09-21T00:00:00.000Z');
 COMMIT;

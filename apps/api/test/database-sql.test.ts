@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
-import { openDatabase } from '../src/database/connection.js';
+import { migrations, openDatabase } from '../src/database/connection.js';
 
 const databaseDir = fileURLToPath(new URL('../../../database/', import.meta.url));
 
@@ -30,7 +30,7 @@ test('standalone SQL recreates the application schema and synthetic baseline', (
   assert.deepEqual(schemaObjects(exported), schemaObjects(runtime));
   assert.equal(
     exported.prepare('SELECT COUNT(*) AS count FROM schema_migrations').get()?.count,
-    24,
+    migrations.length,
   );
   assert.equal(exported.prepare('SELECT COUNT(*) AS count FROM doctors').get()?.count, 5);
   assert.equal(exported.prepare('SELECT COUNT(*) AS count FROM patients').get()?.count, 10);

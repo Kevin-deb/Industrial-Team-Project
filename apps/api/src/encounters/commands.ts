@@ -20,22 +20,6 @@ export const encountersCommands: readonly PlannedCommand[] = [
   },
   {
     method: 'POST',
-    path: '/encounters/:id/messages',
-    domain: 'encounters',
-    capability: 'encounter-chat',
-    tables: ['encounter_messages', 'attachments'],
-    providers: ['objectStorage'],
-  },
-  {
-    method: 'POST',
-    path: '/encounters/:id/complete',
-    domain: 'encounters',
-    capability: 'encounter-chat',
-    tables: ['encounters', 'outbox_events'],
-    providers: [],
-  },
-  {
-    method: 'POST',
     path: '/encounters/:id/rtc-room',
     domain: 'encounters',
     capability: 'rtc',

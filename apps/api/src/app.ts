@@ -3,7 +3,7 @@ import fastifyStatic from '@fastify/static';
 import fastifyMultipart from '@fastify/multipart';
 import fastifyWebsocket from '@fastify/websocket';
 import type { DatabaseSync } from 'node:sqlite';
-import type { Dashboard } from '@doctor/contracts';
+import type { Dashboard, EncounterNotice } from '@doctor/contracts';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
@@ -271,6 +271,94 @@ export async function createApp(options: AppOptions = {}) {
   );
   registerPatientRoutes(app, { patients, platform, context });
   app.get('/api/v1/encounters', async (request) => envelope(request, encounters.list(context())));
+  app.get<{ Params: { id: string } }>('/api/v1/encounters/:id/context', async (request, reply) => {
+    const data = encounters.context(request.params.id, context());
+    if (!data) return fail(request, reply, 404, 'NOT_FOUND', '未找到该接诊。');
+    return envelope(request, data);
+  });
+  app.post<{
+    Params: { id: string };
+    Body: { body?: string; imageUrl?: string; imageName?: string };
+  }>('/api/v1/encounters/:id/messages', async (request, reply) => {
+    const body = String(request.body.body ?? '').trim();
+    const imageUrl = request.body.imageUrl;
+    const imageName = request.body.imageName;
+    if (!body && !imageUrl) return fail(request, reply, 400, 'INVALID_REQUEST', '消息内容不能为空。');
+    if (imageUrl && !isLocalUrl(imageUrl) && !String(imageUrl).startsWith('data:image/'))
+      return fail(request, reply, 400, 'INVALID_REQUEST', '图片地址无效。');
+    const message = encounters.addMessage(
+      request.params.id,
+      { body: body || String(imageName ?? '图片消息'), imageUrl, imageName },
+      context(),
+    );
+    if (!message) return fail(request, reply, 409, 'ENCOUNTER_LOCKED', '问诊已结束或不可访问。');
+    return envelope(request, message);
+  });
+  app.post<{
+    Params: { id: string };
+    Body: { mode?: 'text' | 'video'; messageCount?: number; audioSaved?: boolean; videoSaved?: boolean };
+  }>('/api/v1/encounters/:id/complete', async (request, reply) => {
+    const mode = request.body.mode === 'video' ? 'video' : 'text';
+    const record = encounters.complete(
+      request.params.id,
+      {
+        mode,
+        messageCount: Math.max(0, Number(request.body.messageCount ?? 0)),
+        audioSaved: Boolean(request.body.audioSaved),
+        videoSaved: Boolean(request.body.videoSaved),
+      },
+      context(),
+    );
+    if (!record) return fail(request, reply, 404, 'NOT_FOUND', '未找到该接诊。');
+    return envelope(request, record);
+  });
+  app.get('/api/v1/encounter-availability', async (request) =>
+    envelope(request, encounters.listAvailability(context())),
+  );
+  app.post<{
+    Body: { date?: string; type?: 'text' | 'video'; start?: string; end?: string; capacity?: number };
+  }>('/api/v1/encounter-availability', async (request, reply) => {
+    const { date, type, start, end } = request.body;
+    const capacity = Number(request.body.capacity ?? 0);
+    if (!date || !type || !start || !end || !Number.isInteger(capacity) || capacity < 1)
+      return fail(request, reply, 400, 'INVALID_REQUEST', '可接诊时段信息不完整。');
+    return envelope(request, encounters.createAvailability({ date, type, start, end, capacity }, context()));
+  });
+  app.patch<{ Params: { id: string }; Body: { capacity?: number } }>(
+    '/api/v1/encounter-availability/:id',
+    async (request, reply) => {
+      const capacity = Number(request.body.capacity ?? 0);
+      if (!Number.isInteger(capacity) || capacity < 1)
+        return fail(request, reply, 400, 'INVALID_REQUEST', '容量无效。');
+      const window = encounters.updateAvailabilityCapacity(request.params.id, capacity, context());
+      if (!window) return fail(request, reply, 404, 'NOT_FOUND', '未找到该时段或容量小于已预约数。');
+      return envelope(request, window);
+    },
+  );
+  app.get('/api/v1/encounter-notices', async (request) =>
+    envelope(request, encounters.listNotices(context())),
+  );
+  app.post<{
+    Body: {
+      encounterId?: string;
+      kind?: EncounterNotice['kind'];
+      content?: string;
+      proposedScheduledAt?: string;
+    };
+  }>('/api/v1/encounter-notices', async (request, reply) => {
+    const { encounterId, kind, proposedScheduledAt } = request.body;
+    const content = String(request.body.content ?? '').trim();
+    if (!encounterId || !kind || !content)
+      return fail(request, reply, 400, 'INVALID_REQUEST', '通知内容不完整。');
+    const notice = encounters.createNotice({ encounterId, kind, content, proposedScheduledAt }, context());
+    if (!notice) return fail(request, reply, 404, 'NOT_FOUND', '未找到该接诊或问诊已结束。');
+    return envelope(request, notice);
+  });
+  app.post<{ Params: { id: string } }>('/api/v1/encounter-notices/:id/accept', async (request, reply) => {
+    const notice = encounters.acceptNotice(request.params.id, context());
+    if (!notice) return fail(request, reply, 404, 'NOT_FOUND', '未找到待确认的改期通知。');
+    return envelope(request, notice);
+  });
   registerClinicalRoutes(app, { clinical, encounters, platform, context });
   app.get('/api/v1/consultations', async (request) =>
     envelope(request, encounters.listConsultations(context())),

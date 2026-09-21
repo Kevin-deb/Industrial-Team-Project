@@ -12,7 +12,11 @@ import {
   patientsArchiveMigration,
   patientsRegistrationMigration,
 } from '../patients/index.js';
-import { encountersMigration } from '../encounters/index.js';
+import {
+  encountersMigration,
+  onlineCareFixturesMigration,
+  onlineCarePersistenceMigration,
+} from '../encounters/index.js';
 import {
   clinicalEvolutionMigration,
   clinicalLifecycleMigration,
@@ -76,6 +80,8 @@ export const migrations = [
   demoInitialPasswordMigration,
   healthObservationConfirmationMigration,
   sessionAuthMethodMigration,
+  onlineCarePersistenceMigration,
+  onlineCareFixturesMigration,
 ];
 
 const legacyAuthOrder = [
