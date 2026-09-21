@@ -1,6 +1,6 @@
 /** Public platform boundary. Other domains must import this entry point. */
 export { platformMigration } from './migration.js';
-export { authMigration } from './auth-migration.js';
+export { authMigration, demoInitialPasswordMigration } from './auth-migration.js';
 export {
   AuthError,
   AuthService,

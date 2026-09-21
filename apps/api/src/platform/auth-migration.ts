@@ -65,3 +65,16 @@ export const authMigration = {
     CREATE INDEX user_sessions_user_active ON user_sessions(user_id,expires_at,revoked_at);
   `,
 };
+
+/** One-time demo credential migration. It does not run again after a user changes a password. */
+export const demoInitialPasswordMigration = {
+  version: 18,
+  name: 'demo_clinician_initial_password_123456',
+  sql: `
+    UPDATE users SET password_hash='scrypt$carelink-doctor-demo-001$d62bc96f011692cea59ab0cbe46116276bb6792ed8580eb64df83f2d6c368c05',updated_at='2026-09-21T00:00:00.000Z' WHERE identity_id='doctor-demo-001';
+    UPDATE users SET password_hash='scrypt$carelink-doctor-demo-002$d92680697b346308fe1764371077e2cdf44fc0011a369857e5f3cfb07798cbe9',updated_at='2026-09-21T00:00:00.000Z' WHERE identity_id='doctor-demo-002';
+    UPDATE users SET password_hash='scrypt$carelink-doctor-demo-003$d68b7ae8f638a13d406065f3098027d99e9507df7dcc3cf7e873a210a0f8d515',updated_at='2026-09-21T00:00:00.000Z' WHERE identity_id='doctor-demo-003';
+    UPDATE users SET password_hash='scrypt$carelink-doctor-demo-004$c4e21f3c7f44342e7ff03093c72660cadac6c0dc96e071db38f19bdcf9e07ea8',updated_at='2026-09-21T00:00:00.000Z' WHERE identity_id='doctor-demo-004';
+    UPDATE users SET password_hash='scrypt$carelink-doctor-demo-005$943f6aeb811e9b20a7ca7d3d87595dfe1c1fd29c44e69a5af957e10abc13bebf',updated_at='2026-09-21T00:00:00.000Z' WHERE identity_id='doctor-demo-005';
+  `,
+};
