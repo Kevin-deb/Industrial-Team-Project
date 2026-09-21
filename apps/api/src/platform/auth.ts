@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, randomInt, randomUUID, scryptSync, timingSafeEqual } from 'node:crypto';
 
 export type AuthErrorCode =
   | 'INVALID_CREDENTIALS'
@@ -87,6 +87,13 @@ export class SqliteAuthRepository {
 
   findChallenge(id: string): Row | undefined {
     return this.db.prepare('SELECT * FROM email_challenges WHERE id=?').get(id) as Row | undefined;
+  }
+
+  challengeEmail(id: string): string | undefined {
+    const row = this.db
+      .prepare('SELECT u.email FROM email_challenges c JOIN users u ON u.id=c.user_id WHERE c.id=?')
+      .get(id) as Row | undefined;
+    return row ? String(row.email) : undefined;
   }
 
   incrementChallengeAttempt(id: string) {
@@ -180,14 +187,16 @@ export class SqliteAuthRepository {
 export class AuthService {
   private readonly now: () => string;
   private readonly randomToken: () => string;
+  private readonly randomCode: () => string;
 
   constructor(
     private readonly repository: SqliteAuthRepository,
     private readonly email: EmailDeliveryPort,
-    options: { now?: () => string; randomToken?: () => string } = {},
+    options: { now?: () => string; randomToken?: () => string; randomCode?: () => string } = {},
   ) {
     this.now = options.now ?? (() => new Date().toISOString());
     this.randomToken = options.randomToken ?? (() => randomBytes(32).toString('base64url'));
+    this.randomCode = options.randomCode ?? (() => String(randomInt(0, 1_000_000)).padStart(6, '0'));
   }
 
   async beginLogin(input: { account: string; password: string }) {
@@ -214,7 +223,7 @@ export class AuthService {
     }
     this.repository.clearLoginFailures(String(user.id), at);
     const challengeId = this.randomToken();
-    const code = this.randomToken();
+    const code = this.randomCode();
     const expiresAt = addMinutes(at, 10);
     this.repository.createChallenge({
       id: challengeId,
@@ -242,6 +251,10 @@ export class AuthService {
     const expiresAt = addMinutes(at, 10);
     this.repository.consumeChallenge(input.challengeId, at, tokenHash(photoTicket), expiresAt);
     return { photoTicket, expiresAt, demoOnly: true as const };
+  }
+
+  challengeEmail(challengeId: string) {
+    return this.repository.challengeEmail(challengeId);
   }
 
   completePhotoCheck(input: {

@@ -30,9 +30,10 @@ test('email challenge is required, single use, and photo check gates the formal 
   const auth = new AuthService(new SqliteAuthRepository(db), delivery, {
     now,
     randomToken: (() => {
-      const values = ['challenge-secret', '123456', 'photo-ticket-secret', 'session-secret'];
+      const values = ['challenge-secret', 'photo-ticket-secret', 'session-secret'];
       return () => values.shift()!;
     })(),
+    randomCode: () => '123456',
   });
   try {
     await assert.rejects(
@@ -83,9 +84,10 @@ test('expired codes and revoked sessions cannot be replayed', async () => {
     {
       now: () => current,
       randomToken: (() => {
-        const values = ['challenge', '654321', 'ticket', 'token'];
+        const values = ['challenge', 'ticket', 'token'];
         return () => values.shift()!;
       })(),
+      randomCode: () => '654321',
     },
   );
   try {

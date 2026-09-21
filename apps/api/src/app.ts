@@ -6,6 +6,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import type { Dashboard } from '@doctor/contracts';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { dirname, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { openDatabase } from './database/connection.js';
@@ -14,7 +15,15 @@ import { SqlitePatientRepository, registerPatientRoutes } from './patients/index
 import { SqliteEncounterRepository } from './encounters/index.js';
 import { registerClinicalRoutes, SqliteClinicalRepository } from './clinical/index.js';
 import { HealthService, registerHealthRoutes, SqliteHealthRepository } from './health/index.js';
-import { SqlitePatientAccess, SqlitePlatformRepository } from './platform/index.js';
+import {
+  AuthService,
+  bearerToken,
+  DemoEmailOutbox,
+  registerAuthRoutes,
+  SqliteAuthRepository,
+  SqlitePatientAccess,
+  SqlitePlatformRepository,
+} from './platform/index.js';
 import { features } from './platform/index.js';
 import { registerPlannedCommands } from './platform/index.js';
 import {
@@ -107,11 +116,17 @@ export async function createApp(options: AppOptions = {}) {
     resolve(dirname(options.databasePath!), 'social-media');
   const socialRepository = new SqliteSocialRepository(db);
   const socialRealtime = options.socialRealtime ?? new SocialRealtimeHub();
-  const actorId = options.identity?.actorId ?? DEMO_DOCTOR_ID;
-  const context = () => ({
-    actorId,
-    now: options.now?.() ?? new Date().toISOString(),
-  });
+  const trustedTestActor = options.identity?.actorId ?? (!options.runtime ? DEMO_DOCTOR_ID : undefined);
+  const requestContext = new AsyncLocalStorage<{ actorId: string; now: string }>();
+  const context = () => {
+    const current = requestContext.getStore();
+    if (current) return current;
+    if (trustedTestActor)
+      return { actorId: trustedTestActor, now: options.now?.() ?? new Date().toISOString() };
+    throw new Error('Authenticated request context is unavailable.');
+  };
+  const demoEmail = new DemoEmailOutbox();
+  const auth = new AuthService(new SqliteAuthRepository(db), demoEmail, { now: options.now });
   const health = new HealthService(
     healthRepository,
     new SqlitePatientAccess(db),
@@ -162,14 +177,40 @@ export async function createApp(options: AppOptions = {}) {
     if (!options.database) db.close();
     if (ephemeralMediaRoot) rmSync(ephemeralMediaRoot, { recursive: true, force: true });
   });
-  app.addHook('onRequest', async (request, reply) => {
+  app.addHook('onRequest', (request, reply, done) => {
     reply.header('X-Content-Type-Options', 'nosniff').header('Referrer-Policy', 'no-referrer');
     if (request.url.startsWith('/api/')) reply.header('Cache-Control', 'no-store');
     if (!isLocalUrl('http://' + request.headers.host))
-      return fail(request, reply, 421, 'LOCAL_DEMO_ONLY', '此演示服务仅接受本机地址。');
+      return void fail(request, reply, 421, 'LOCAL_DEMO_ONLY', '此演示服务仅接受本机地址。');
     const origin = request.headers.origin;
     if (origin && !isLocalUrl(origin))
-      return fail(request, reply, 403, 'ORIGIN_NOT_ALLOWED', '此演示服务不接受外部网页请求。');
+      return void fail(request, reply, 403, 'ORIGIN_NOT_ALLOWED', '此演示服务不接受外部网页请求。');
+    if (!request.url.startsWith('/api/v1/')) return done();
+    const pathname = request.url.split('?')[0];
+    const isPublic =
+      pathname === '/api/v1/health' ||
+      pathname === '/api/v1/auth/login' ||
+      pathname === '/api/v1/auth/email/verify' ||
+      pathname === '/api/v1/auth/photo-check' ||
+      pathname.startsWith('/api/v1/auth/demo-email/');
+    if (trustedTestActor) {
+      return requestContext.run(
+        { actorId: trustedTestActor, now: options.now?.() ?? new Date().toISOString() },
+        done,
+      );
+    }
+    if (isPublic) return done();
+    const token = bearerToken(request.headers.authorization);
+    const session = token ? auth.authenticate(token) : undefined;
+    if (!session)
+      return void fail(request, reply, 401, 'AUTHENTICATION_REQUIRED', '请登录后继续。');
+    return requestContext.run(
+      {
+        actorId: session.identityId,
+        now: options.now?.() ?? new Date().toISOString(),
+      },
+      done,
+    );
   });
   app.setErrorHandler((error, request, reply) => {
     if (error && typeof error === 'object' && 'validation' in error)
@@ -201,6 +242,7 @@ export async function createApp(options: AppOptions = {}) {
       demoDate: DEMO_DATE,
     });
   });
+  registerAuthRoutes(app, auth, demoEmail, (request, data) => envelope(request, data), fail);
   app.get('/api/v1/session', async (request) =>
     envelope(request, {
       doctor: platform.doctor(context().actorId),

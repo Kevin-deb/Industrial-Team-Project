@@ -711,8 +711,8 @@ export function seedAuthFoundation(db: DatabaseSync): void {
     );
 
     const grants = [
-      ['grant-d2-p1', 'doctor-demo-002', 'PAT-001'],
       ['grant-d2-p4', 'doctor-demo-002', 'PAT-004'],
+      ['grant-d2-p5', 'doctor-demo-002', 'PAT-005'],
       ['grant-d3-p2', 'doctor-demo-003', 'PAT-002'],
       ['grant-d3-p5', 'doctor-demo-003', 'PAT-005'],
       ['grant-d4-p6', 'doctor-demo-004', 'PAT-006'],
