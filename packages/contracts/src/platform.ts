@@ -33,6 +33,15 @@ export interface Doctor {
   department: string;
   hospital: string;
   avatarInitials: string;
+  email?: string;
+  emailVerifiedAt?: string;
+  phone?: string;
+  licenseNumber?: string;
+  specialty?: string;
+  governmentIdMasked?: string;
+  credentialStatus?: 'pending' | 'verified' | 'rejected';
+  personnelStatus?: 'pending' | 'verified' | 'suspended';
+  roles?: string[];
 }
 
 export interface Session {

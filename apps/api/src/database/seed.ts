@@ -1,4 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
+import { hashSecret } from '../platform/auth.js';
 
 export const DEMO_DOCTOR_ID = 'doctor-demo-001';
 export const DEMO_DATE = '2026-09-10';
@@ -676,6 +677,113 @@ export function seedDemo(db: DatabaseSync): void {
     db.exec(
       "UPDATE patients SET allergy_status='recorded' WHERE json_array_length(allergies_json)>0",
     );
+    db.exec('COMMIT');
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
+}
+
+/** Additive login/profile fixtures run after social identities exist; safe for upgraded databases. */
+export function seedAuthFoundation(db: DatabaseSync): void {
+  const at = '2026-09-01T00:00:00.000Z';
+  const clinicians = [
+    ['doctor-demo-001', 'lin.zhiyuan', 'lin.zhiyuan@carelink.demo', 'DEMO-LIC-001', '全科医学', '13800000001', '1001'],
+    ['doctor-demo-002', 'zhou.ming', 'zhou.ming@carelink.demo', 'DEMO-LIC-002', '心血管内科', '13800000002', '1002'],
+    ['doctor-demo-003', 'xu.qing', 'xu.qing@carelink.demo', 'DEMO-LIC-003', '内分泌科', '13800000003', '1003'],
+    ['doctor-demo-004', 'liang.ruochuan', 'liang.ruochuan@carelink.demo', 'DEMO-LIC-004', '老年医学', '13800000004', '1004'],
+    ['doctor-demo-005', 'shen.anning', 'shen.anning@carelink.demo', 'DEMO-LIC-005', '呼吸与重症医学', '13800000005', '1005'],
+  ] as const;
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const doctor = db.prepare(
+      `INSERT OR IGNORE INTO doctors(identity_id,license_number,specialty,phone,government_id_type,government_id_masked,credential_status,personnel_status,created_at,updated_at)
+       VALUES(?,?,?,?,?,?,?,?,?,?)`,
+    );
+    const user = db.prepare(
+      `INSERT OR IGNORE INTO users(id,identity_id,username,email,email_verified_at,password_hash,created_at,updated_at)
+       VALUES(?,?,?,?,?,?,?,?)`,
+    );
+    for (const [identityId, username, email, license, specialty, phone, suffix] of clinicians) {
+      doctor.run(
+        identityId,
+        license,
+        specialty,
+        phone,
+        '居民身份证',
+        '**************' + suffix,
+        'verified',
+        'verified',
+        at,
+        at,
+      );
+      user.run(
+        'user-' + identityId,
+        identityId,
+        username,
+        email,
+        at,
+        hashSecret('123456', 'carelink-' + identityId),
+        at,
+        at,
+      );
+    }
+
+    db.prepare('INSERT OR IGNORE INTO roles VALUES(?,?)').run('expert', 'demo-expert');
+    db.prepare('INSERT OR IGNORE INTO roles VALUES(?,?)').run('admin', 'demo-admin');
+    for (const permission of ['patient:read', 'clinical:read', 'encounter:read', 'health:read', 'audit:self'])
+      db.prepare('INSERT OR IGNORE INTO role_permissions VALUES(?,?)').run('expert', permission);
+    db.prepare('INSERT OR IGNORE INTO role_permissions VALUES(?,?)').run('admin', 'accounts:manage');
+    for (const identityId of ['doctor-demo-002', 'doctor-demo-003', 'doctor-demo-004'])
+      db.prepare('INSERT OR IGNORE INTO identity_roles VALUES(?,?)').run(identityId, 'attending');
+    db.prepare('INSERT OR IGNORE INTO identity_roles VALUES(?,?)').run('doctor-demo-005', 'expert');
+    db.prepare('INSERT OR IGNORE INTO identity_roles VALUES(?,?)').run('doctor-demo-005', 'admin');
+
+    db.prepare(
+      `INSERT OR IGNORE INTO patients(
+        id,name,gender,age,phone,diagnosis,tags_json,status,last_visit,next_follow_up,assigned_doctor_id,allergies_json,medical_history_json,care_summary
+      ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    ).run(
+      'PAT-009',
+      '郭瑞芳',
+      '女',
+      69,
+      '136****0919',
+      '慢性心力衰竭',
+      JSON.stringify(['心血管', '重点随访']),
+      'attention',
+      '2026-09-09',
+      '2026-09-16',
+      'doctor-demo-003',
+      JSON.stringify([]),
+      JSON.stringify(['慢性心力衰竭病史 2 年']),
+      '跨专科协作与权限范围演示；本条为合成资料。',
+    );
+    db.prepare('INSERT OR IGNORE INTO patient_archive_versions VALUES(?,?,?,?,?,?,?)').run(
+      'archive-PAT-009',
+      'PAT-009',
+      1,
+      JSON.stringify({ diagnosis: '慢性心力衰竭', synthetic: true }),
+      'doctor-demo-003',
+      at,
+      'Synthetic demonstration baseline',
+    );
+
+    const grants = [
+      ['grant-d2-p9', 'doctor-demo-002', 'PAT-009'],
+      ['grant-d2-p5', 'doctor-demo-002', 'PAT-005'],
+      ['grant-d3-p2', 'doctor-demo-003', 'PAT-002'],
+      ['grant-d3-p5', 'doctor-demo-003', 'PAT-005'],
+      ['grant-d4-p6', 'doctor-demo-004', 'PAT-006'],
+      ['grant-d4-p7', 'doctor-demo-004', 'PAT-007'],
+      ['grant-d5-p3', 'doctor-demo-005', 'PAT-003'],
+      ['grant-d5-p8', 'doctor-demo-005', 'PAT-008'],
+    ] as const;
+    const grant = db.prepare(
+      `INSERT OR IGNORE INTO access_grants(id,identity_id,patient_id,scope,task_id,expires_at,revoked_at,created_at)
+       VALUES(?,?,?,'patient:read',NULL,NULL,NULL,?)`,
+    );
+    for (const [id, identityId, patientId] of grants) grant.run(id, identityId, patientId, at);
     db.exec('COMMIT');
   } catch (error) {
     db.exec('ROLLBACK');

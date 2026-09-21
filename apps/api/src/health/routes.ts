@@ -3,6 +3,7 @@ import type {
   CreateAssessmentInput,
   CreateCarePlanInput,
   CreateObservationInput,
+  ConfirmObservationInput,
   CreateReminderInput,
   HealthMetric,
   ObservationQuery,
@@ -17,6 +18,7 @@ import {
   NotificationUnavailable,
   ReminderDeliveryInProgress,
   InvalidReminderState,
+  InvalidObservationState,
   StaleVersion,
 } from './service.js';
 
@@ -203,7 +205,10 @@ export function registerHealthRoutes(
             value: { type: 'number', minimum: 0, maximum: 1000 },
             unit: { type: 'string', minLength: 1, maxLength: 20 },
             measuredAt: dateTime,
-            source: { type: 'string', enum: ['manual-entry', 'device-simulator'] },
+            source: {
+              type: 'string',
+              enum: ['manual-entry', 'device-simulator', 'patient-upload'],
+            },
             sourceLabel: { type: 'string', minLength: 1, maxLength: 80 },
             externalObservationId: { type: 'string', minLength: 1, maxLength: 120 },
           },
@@ -248,6 +253,50 @@ export function registerHealthRoutes(
         201,
       );
     },
+  );
+
+  app.post<{ Params: { id: string }; Body: ConfirmObservationInput }>(
+    '/api/v1/health/observations/:id/confirm',
+    {
+      schema: {
+        params: idParamsSchema,
+        body: {
+          type: 'object',
+          required: ['commandId'],
+          additionalProperties: false,
+          properties: {
+            commandId,
+            value: { type: 'number', minimum: 0, maximum: 1000 },
+            measuredAt: dateTime,
+            note: { type: 'string', maxLength: 500 },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      if (request.body.measuredAt && !isValidRfc3339(request.body.measuredAt)) {
+        return errorEnvelope(
+          request,
+          reply,
+          400,
+          'INVALID_REQUEST',
+          '测量时间无效。',
+          getContext().actorId,
+        );
+      }
+      return healthReply(request, reply, () =>
+        service.confirmObservation(request.params.id, request.body, getContext()),
+      );
+    },
+  );
+
+  app.get<{ Params: { id: string } }>(
+    '/api/v1/health/observations/:id/confirmations',
+    { schema: { params: idParamsSchema } },
+    async (request, reply) =>
+      healthReply(request, reply, () =>
+        service.listObservationConfirmations(request.params.id, getContext()),
+      ),
   );
 
   app.get<{ Querystring: { patientId: string } }>(
@@ -574,6 +623,16 @@ async function replyHealth<T>(
         409,
         'INVALID_REMINDER_STATE',
         '当前提醒状态不允许执行该操作。',
+        actorId,
+        startedAt,
+      );
+    if (error instanceof InvalidObservationState)
+      return errorEnvelope(
+        request,
+        reply,
+        409,
+        'INVALID_OBSERVATION_STATE',
+        '该观测记录当前不需要确认，或已经确认。',
         actorId,
         startedAt,
       );

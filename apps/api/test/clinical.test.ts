@@ -852,7 +852,7 @@ test('clinical materials reference approved record versions through C consultati
     });
     assert.equal(consultationWrite.statusCode, 501);
 
-    db.prepare("INSERT INTO identity_roles VALUES('doctor-demo-002','attending')").run();
+    db.prepare("INSERT OR IGNORE INTO identity_roles VALUES('doctor-demo-002','attending')").run();
     db.prepare(
       `INSERT INTO access_grants(id,identity_id,patient_id,scope,task_id,expires_at,created_at)
        VALUES(?,?,?,?,?,?,?)`,

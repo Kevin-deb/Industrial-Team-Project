@@ -1,5 +1,5 @@
 import { useI18n } from '../../shared/i18n';
-import { useCallback, useState } from 'react';
+import { useCallback, useState, type FormEvent } from 'react';
 import {
   Bell,
   Fingerprint,
@@ -7,13 +7,13 @@ import {
   MessageCircle,
   Settings2,
   ShieldCheck,
-  Smartphone,
   UserRound,
 } from 'lucide-react';
 import type { Session } from '@doctor/contracts';
-import { useApi } from '../../shared/api';
+import { requestApi, useApi } from '../../shared/api';
+import { useAuth } from '../../auth/AuthProvider';
 import { Badge, Card, LoadingState, PageHeader } from '../../shared/ui';
-import { LinkAction, PersonAvatar, PlannedDialog, ReadOnlyNote, SectionTitle } from '../ui';
+import { FeatureDialog, LinkAction, PersonAvatar, PlannedDialog, ReadOnlyNote, SectionTitle } from '../ui';
 import { useCommunityPreference } from '../preferences';
 
 const securityFeatures = [
@@ -21,29 +21,19 @@ const securityFeatures = [
     icon: Mail,
     title: '邮箱验证',
     description: '通过已绑定邮箱完成身份核验与账号恢复。',
-    planned:
-      '邮箱验证将使用独立身份服务发送验证邮件，支持验证码有效期、尝试限制与验证审计。当前未绑定邮箱，也不会发送邮件。',
-  },
-  {
-    icon: Smartphone,
-    title: '手机验证码',
-    description: '短信验证码与多因素验证的预留入口。',
-    planned:
-      '手机验证码将接入短信服务，启用重放防护、尝试频率限制及验证审计。此版本未连接短信服务，不会发送验证码。',
+    status: '已启用',
   },
   {
     icon: Fingerprint,
-    title: '人脸身份核验',
-    description: '在明确授权后启用可替代的身份核验方式。',
-    planned:
-      '人脸核验将在明确用户同意、提供替代验证方式及确定数据留存范围后接入。当前没有调用摄像头，也不会采集人脸信息。',
+    title: '演示拍照核验',
+    description: '登录时采集一张演示照片；不执行人脸匹配或活体检测。',
+    status: '演示功能',
   },
   {
     icon: ShieldCheck,
-    title: '多因素验证',
-    description: '结合身份、角色与访问范围保护医疗数据。',
-    planned:
-      '生产环境将增加多因素身份验证、会话管理、角色授权及设备撤销。演示模式使用固定虚构医生身份，不能替代生产身份验证。',
+    title: '会话与访问范围',
+    description: '密码、邮箱、拍照步骤和医生—患者授权共同控制访问。',
+    status: '已启用',
   },
 ] as const;
 
@@ -52,6 +42,7 @@ export function SettingsPage() {
   const { data, loading, error, reload } = useApi<Session>('/session');
   const { enabled, toggle, saveError } = useCommunityPreference();
   const [planned, setPlanned] = useState<{ title: string; description: string } | null>(null);
+  const [changePassword, setChangePassword] = useState(false);
   const close = useCallback(() => setPlanned(null), []);
   return (
     <div className="feature-page">
@@ -83,7 +74,14 @@ export function SettingsPage() {
                   { label: '所在科室', value: data.doctor.department },
                   { label: '医生职称', value: data.doctor.title },
                   { label: '医生编号', value: data.doctor.id },
-                  { label: '当前环境', value: '本地演示 · 固定虚构身份' },
+                  { label: '执业编号', value: data.doctor.licenseNumber ?? '—' },
+                  { label: '专业方向', value: data.doctor.specialty ?? '—' },
+                  { label: '工作邮箱', value: data.doctor.email ?? '—' },
+                  { label: '联系电话', value: data.doctor.phone ?? '—' },
+                  { label: '身份证件', value: data.doctor.governmentIdMasked ?? '—' },
+                  { label: '资质状态', value: data.doctor.credentialStatus === 'verified' ? '已核验' : '待核验' },
+                  { label: '人员状态', value: data.doctor.personnelStatus === 'verified' ? '医院人员已审核' : '待审核' },
+                  { label: '当前环境', value: '本地合成数据演示' },
                 ].map((item) => (
                   <div className="settings-field" key={item.label}>
                     <span>{t(item.label)}</span>
@@ -183,7 +181,7 @@ export function SettingsPage() {
             <Card className="feature-card-pad">
               <SectionTitle
                 title={t('账号与安全')}
-                subtitle={t('SECURITY · 正式身份验证尚未接入')}
+                subtitle={t('SECURITY · 本地验证与访问控制')}
               />
               {securityFeatures.map((item) => (
                 <div className="settings-feature" key={item.title}>
@@ -193,27 +191,23 @@ export function SettingsPage() {
                   <div>
                     <h3>{t(item.title)}</h3>
                     <p>{t(item.description)}</p>
-                    <LinkAction
-                      onClick={() => setPlanned({ title: item.title, description: item.planned })}
-                    >
-                      {t('了解接入计划')}
-                    </LinkAction>
                   </div>
-                  <Badge tone="slate">{t('待上线')}</Badge>
+                  <Badge tone={item.status === '已启用' ? 'teal' : 'amber'}>{t(item.status)}</Badge>
                 </div>
               ))}
               <div className="feature-notice">
                 <UserRound size={17} />
                 <span>
                   {t(
-                    '当前固定演示身份用于验证软件结构。邮箱、短信、人脸和生产权限体系均需要独立配置后上线。',
+                    '当前使用本地合成医生账号、一次性邮箱验证码和演示拍照核验。拍照不等于真实人脸识别。',
                   )}
                 </span>
               </div>
+              <LinkAction onClick={() => setChangePassword(true)}>{t('修改密码')}</LinkAction>
             </Card>
           </div>
           <ReadOnlyNote>
-            {t('语言与社区入口偏好可以实际保存；医生资料、身份验证和外部通知设置均为规划入口。')}
+            {t('医生身份、邮箱验证、会话与患者访问范围由本地数据库实际控制；外部邮件和真实生物识别供应商仍需后续接入。')}
           </ReadOnlyNote>
         </>
       )}
@@ -226,6 +220,39 @@ export function SettingsPage() {
           <p>{t(planned.description)}</p>
         </PlannedDialog>
       )}
+      {changePassword && <ChangePasswordDialog onClose={() => setChangePassword(false)} />}
     </div>
   );
+}
+
+function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
+  const { t } = useI18n();
+  const { logout } = useAuth();
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [method, setMethod] = useState<'email'|'photo'>('email');
+  const [challengeId, setChallengeId] = useState('');
+  const [code, setCode] = useState('');
+  const [photoDataUrl, setPhotoDataUrl] = useState('');
+  const [demoCode, setDemoCode] = useState('');
+  const [error, setError] = useState('');
+  async function submit(event: FormEvent) {
+    event.preventDefault(); setError('');
+    try {
+      if (!challengeId) {
+        const result = await requestApi<{challengeId:string}>('/auth/password/change-password/start', { method:'POST', body:JSON.stringify({currentPassword,method}) });
+        setChallengeId(result.data.challengeId);
+        if(method==='email') try { const mail=await requestApi<{code:string}>('/auth/demo-email/'+encodeURIComponent(result.data.challengeId));setDemoCode(mail.data.code); } catch { /* SMTP */ }
+      } else {
+        await requestApi('/auth/password/change-password/complete',{method:'POST',body:JSON.stringify({challengeId,code,photoDataUrl:photoDataUrl||undefined,newPassword})});
+        await logout();
+      }
+    } catch(reason) { setError(reason instanceof Error ? reason.message : t('验证失败，请重试。')); }
+  }
+  return <FeatureDialog title="修改密码" subtitle="旧密码 + 二次验证" onClose={onClose}>
+    <form className="auth-settings-form" onSubmit={(e)=>void submit(e)}>
+      {!challengeId ? <><label>{t('旧密码')}<input type="password" value={currentPassword} onChange={e=>setCurrentPassword(e.target.value)}/></label><label>{t('验证方式')}<select value={method} onChange={e=>setMethod(e.target.value as 'email'|'photo')}><option value="email">{t('工作邮箱验证码')}</option><option value="photo">{t('演示拍照核验')}</option></select></label></> : <>{demoCode&&<div className="demo-code">{t('本地演示邮件验证码')}：<b>{demoCode}</b></div>}{method==='email'?<label>{t('邮箱验证码')}<input value={code} onChange={e=>setCode(e.target.value.replace(/\D/g,''))}/></label>:<label className="photo-upload auth-recovery-upload">{photoDataUrl?t('照片已选择'):t('拍照或上传照片')}<input type="file" accept="image/png,image/jpeg" capture="user" onChange={e=>{const file=e.target.files?.[0];if(file){const reader=new FileReader();reader.onload=()=>setPhotoDataUrl(String(reader.result));reader.readAsDataURL(file);}}}/></label>}<label>{t('新密码')}<input type="password" value={newPassword} onChange={e=>setNewPassword(e.target.value)}/></label><small>{t('至少10位，包含大小写字母、数字和特殊字符')}</small></>}
+      {error&&<p role="alert" className="auth-error">{error}</p>}<button className="auth-primary">{challengeId?t('修改密码'):t('继续')}</button>
+    </form>
+  </FeatureDialog>;
 }

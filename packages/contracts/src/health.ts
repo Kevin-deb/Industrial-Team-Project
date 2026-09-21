@@ -6,7 +6,8 @@ export interface VersionedCommandInput extends CommandInput {
   expectedVersion: number;
 }
 
-export type ObservationSource = 'synthetic-demo' | 'manual-entry' | 'device-simulator';
+export type ObservationSource =
+  'synthetic-demo' | 'manual-entry' | 'device-simulator' | 'patient-upload';
 
 export type HealthMetric = 'systolic' | 'diastolic' | 'glucose' | 'heart-rate';
 
@@ -28,7 +29,10 @@ export interface Observation {
   source: ObservationSource;
   sourceLabel: string;
   externalObservationId?: string;
-  qualityStatus: 'demo' | 'unreviewed' | 'reviewed';
+  qualityStatus: 'demo' | 'recorded' | 'pending-confirmation' | 'confirmed';
+  recordedBy?: string;
+  confirmedBy?: string;
+  confirmedAt?: string;
 }
 
 /** Deliberately narrow B-to-E patient directory projection. */
@@ -112,9 +116,25 @@ export interface CreateObservationInput extends CommandInput {
   value: number;
   unit: string;
   measuredAt: string;
-  source: 'manual-entry' | 'device-simulator';
+  source: 'manual-entry' | 'device-simulator' | 'patient-upload';
   sourceLabel: string;
   externalObservationId?: string;
+}
+
+export interface ConfirmObservationInput extends CommandInput {
+  value?: number;
+  measuredAt?: string;
+  note?: string;
+}
+
+export interface ObservationConfirmation {
+  id: string;
+  observationId: string;
+  confirmedBy: string;
+  confirmedAt: string;
+  note?: string;
+  before: Pick<Observation, 'value' | 'measuredAt' | 'qualityStatus'>;
+  after: Pick<Observation, 'value' | 'measuredAt' | 'qualityStatus'>;
 }
 
 export interface HealthAlert {

@@ -6,6 +6,7 @@ import type {
   HealthAssessment,
   HealthOverview,
   Observation,
+  ObservationConfirmation,
   ObservationQuery,
   ObservationTrendQuery,
   Paginated,
@@ -38,6 +39,9 @@ export interface HealthRepository {
     externalObservationId: string,
   ): Observation | undefined;
   createObservation(record: Observation): void;
+  findObservation(id: string): Observation | undefined;
+  confirmObservation(record: Observation, confirmation: ObservationConfirmation): void;
+  listObservationConfirmations(observationId: string): ObservationConfirmation[];
   listPlans(patientId: string, context: RequestContext): CarePlanDetail[];
   findPlan(id: string, context: RequestContext): CarePlanDetail | undefined;
   createPlan(plan: CarePlanDetail, version: CarePlanVersion, doctorId: string): void;
@@ -213,8 +217,8 @@ export class SqliteHealthRepository implements HealthRepository {
     this.db
       .prepare(
         `INSERT INTO health_observations(
-      id,patient_id,metric,value,unit,measured_at,received_at,source,source_label,external_observation_id,quality_status
-    ) VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
+      id,patient_id,metric,value,unit,measured_at,received_at,source,source_label,external_observation_id,quality_status,recorded_by
+    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
       )
       .run(
         record.id,
@@ -228,7 +232,55 @@ export class SqliteHealthRepository implements HealthRepository {
         record.sourceLabel,
         record.externalObservationId ?? null,
         record.qualityStatus,
+        record.recordedBy ?? null,
       );
+  }
+
+  findObservation(id: string): Observation | undefined {
+    const row = this.db.prepare('SELECT * FROM health_observations WHERE id=?').get(id) as
+      Row | undefined;
+    return row ? mapObservation(row) : undefined;
+  }
+
+  confirmObservation(record: Observation, confirmation: ObservationConfirmation): void {
+    this.db
+      .prepare(
+        `UPDATE health_observations
+         SET value=?,measured_at=?,quality_status=?,confirmed_by=?,confirmed_at=? WHERE id=?`,
+      )
+      .run(
+        record.value,
+        record.measuredAt,
+        record.qualityStatus,
+        record.confirmedBy ?? null,
+        record.confirmedAt ?? null,
+        record.id,
+      );
+    this.db
+      .prepare(
+        `INSERT INTO health_observation_confirmations(
+          id,observation_id,confirmed_by,confirmed_at,note,before_json,after_json
+        ) VALUES(?,?,?,?,?,?,?)`,
+      )
+      .run(
+        confirmation.id,
+        confirmation.observationId,
+        confirmation.confirmedBy,
+        confirmation.confirmedAt,
+        confirmation.note ?? null,
+        JSON.stringify(confirmation.before),
+        JSON.stringify(confirmation.after),
+      );
+  }
+
+  listObservationConfirmations(observationId: string): ObservationConfirmation[] {
+    return this.db
+      .prepare(
+        `SELECT * FROM health_observation_confirmations
+         WHERE observation_id=? ORDER BY confirmed_at,id`,
+      )
+      .all(observationId)
+      .map((row) => mapObservationConfirmation(row as Row));
   }
 
   listPlans(patientId: string, _context: RequestContext): CarePlanDetail[] {
@@ -442,6 +494,21 @@ function mapObservation(row: Row): Observation {
       ? { externalObservationId: String(row.external_observation_id) }
       : {}),
     qualityStatus: row.quality_status as Observation['qualityStatus'],
+    ...(row.recorded_by ? { recordedBy: String(row.recorded_by) } : {}),
+    ...(row.confirmed_by ? { confirmedBy: String(row.confirmed_by) } : {}),
+    ...(row.confirmed_at ? { confirmedAt: String(row.confirmed_at) } : {}),
+  };
+}
+
+function mapObservationConfirmation(row: Row): ObservationConfirmation {
+  return {
+    id: String(row.id),
+    observationId: String(row.observation_id),
+    confirmedBy: String(row.confirmed_by),
+    confirmedAt: String(row.confirmed_at),
+    ...(row.note ? { note: String(row.note) } : {}),
+    before: JSON.parse(String(row.before_json)) as ObservationConfirmation['before'],
+    after: JSON.parse(String(row.after_json)) as ObservationConfirmation['after'],
   };
 }
 

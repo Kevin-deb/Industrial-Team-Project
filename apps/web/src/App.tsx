@@ -13,6 +13,7 @@ import {
   ClipboardList,
   HeartPulse,
   LayoutDashboard,
+  LogOut,
   Menu,
   MessageSquareText,
   PanelLeftClose,
@@ -23,8 +24,7 @@ import {
   Users,
   Video,
 } from 'lucide-react';
-import type { DoctorSession } from '@doctor/contracts';
-import { useApi } from './shared/api';
+import { useAuth } from './auth/AuthProvider';
 import { Badge, Button, Modal } from './shared/ui';
 import { DashboardPage } from './dashboard/DashboardPage';
 import { useCommunityPreference } from './modules/preferences';
@@ -72,7 +72,7 @@ export function App() {
 
   const location = useLocation();
   const navigate = useNavigate();
-  const { data: session } = useApi<DoctorSession>('/session');
+  const { session, logout } = useAuth();
   const [query, setQuery] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [dialog, setDialog] = useState<'notifications' | 'help' | null>(null);
@@ -245,6 +245,9 @@ export function App() {
                 {session?.doctor.avatarInitials ?? t('医')}
               </div>
               <ChevronDown size={14} />
+            </button>
+            <button className="icon-button" aria-label={t('退出登录')} title={t('退出登录')} onClick={() => void logout()}>
+              <LogOut size={18} />
             </button>
           </div>
         </header>

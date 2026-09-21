@@ -7,14 +7,55 @@ import { resolve } from 'node:path';
 import { createApp } from '../../api/src/app.js';
 import {
   CONTENT_SECURITY_POLICY,
-  canGrantAudioCapture,
+  canGrantMediaCapture,
   createProtocolHandler,
   isApplicationUrl,
 } from '../src/protocol.js';
 
+async function login(app: Awaited<ReturnType<typeof createApp>>) {
+  const start = await app.inject({
+    method: 'POST', url: '/api/v1/auth/login',
+    payload: { account: 'lin.zhiyuan', password: '123456' },
+  });
+  const challengeId = start.json().data.challengeId;
+  const code = (await app.inject('/api/v1/auth/demo-email/' + challengeId)).json().data.code;
+  const verified = await app.inject({
+    method: 'POST', url: '/api/v1/auth/email/verify', payload: { challengeId, code },
+  });
+  return (
+    await app.inject({
+      method: 'POST', url: '/api/v1/auth/photo-check',
+      payload: {
+        ticket: verified.json().data.photoTicket,
+        captureMethod: 'camera',
+        photoDataUrl: 'data:image/png;base64,iVBORw0KGgo=',
+      },
+    })
+  ).json().data.token as string;
+}
+
+test('private protocol forwards the authenticated session but never caller identity headers', async () => {
+  const root = mkdtempSync(resolve(tmpdir(), 'carelink-auth-protocol-'));
+  const app = await createApp({ runtime: 'desktop-demo' });
+  const handler = createProtocolHandler(app, root);
+  try {
+    const token = await login(app);
+    const response = await handler(
+      new Request('carelink://app/api/v1/session', {
+        headers: { authorization: `Bearer ${token}`, 'x-actor-id': 'doctor-demo-004' },
+      }),
+    );
+    assert.equal(response.status, 200, await response.clone().text());
+    assert.equal((await response.json()).data.doctor.id, 'doctor-demo-001');
+  } finally {
+    await app.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('desktop registration forwards the submission key and replays without duplicates', async () => {
   const root = mkdtempSync(resolve(tmpdir(), 'carelink-registration-protocol-'));
-  const app = await createApp({ runtime: 'desktop-demo' });
+  const app = await createApp({ runtime: 'desktop-demo', identity: { actorId: 'doctor-demo-001' } });
   const handler = createProtocolHandler(app, root);
   const key = randomUUID();
   const body = JSON.stringify({ name: 'Synthetic desktop registration', gender: '男', age: 40,
@@ -38,7 +79,7 @@ test('private application protocol serves offline UI routes and keeps API contra
   const root = mkdtempSync(resolve(tmpdir(), 'carelink-protocol-'));
   writeFileSync(resolve(root, 'index.html'), '<h1>CareLink</h1>');
   writeFileSync(resolve(root, 'app.js'), 'console.log("carelink")');
-  const app = await createApp({ runtime: 'desktop-demo' });
+  const app = await createApp({ runtime: 'desktop-demo', identity: { actorId: 'doctor-demo-001' } });
   const handler = createProtocolHandler(app, root);
   try {
     for (const path of ['/', '/patients', '/records']) {
@@ -66,7 +107,7 @@ test('private application protocol serves offline UI routes and keeps API contra
 
 test('private protocol rejects foreign origins, path escapes, oversized requests and asset mutations', async () => {
   const root = mkdtempSync(resolve(tmpdir(), 'carelink-security-'));
-  const app = await createApp({ runtime: 'desktop-demo' });
+  const app = await createApp({ runtime: 'desktop-demo', identity: { actorId: 'doctor-demo-001' } });
   const handler = createProtocolHandler(app, root);
   try {
     for (const value of [
@@ -112,7 +153,7 @@ test('private protocol rejects foreign origins, path escapes, oversized requests
 
 test('private protocol forwards medical-record concurrency preconditions', async () => {
   const root = mkdtempSync(resolve(tmpdir(), 'carelink-record-protocol-'));
-  const app = await createApp({ runtime: 'desktop-demo' });
+  const app = await createApp({ runtime: 'desktop-demo', identity: { actorId: 'doctor-demo-001' } });
   const handler = createProtocolHandler(app, root);
   const recordBody = {
     chiefComplaint: 'Synthetic protocol test',
@@ -161,7 +202,7 @@ test('production environment still refuses standalone demo but permits explicit 
   process.env.NODE_ENV = 'production';
   try {
     await assert.rejects(createApp(), /refuses NODE_ENV=production/);
-    const app = await createApp({ runtime: 'desktop-demo' });
+    const app = await createApp({ runtime: 'desktop-demo', identity: { actorId: 'doctor-demo-001' } });
     try {
       const result = await app.inject('/api/v1/health');
       assert.equal(result.json().data.mode, 'demo');
@@ -176,7 +217,7 @@ test('production environment still refuses standalone demo but permits explicit 
 
 test('desktop protocol carries social media bytes but keeps the generic one MiB request limit', async () => {
   const root = mkdtempSync(resolve(tmpdir(), 'carelink-media-protocol-'));
-  const app = await createApp({ runtime: 'desktop-demo', mediaRoot: resolve(root, 'media') });
+  const app = await createApp({ runtime: 'desktop-demo', identity: { actorId: 'doctor-demo-001' }, mediaRoot: resolve(root, 'media') });
   const handler = createProtocolHandler(app, root);
   try {
     const png = Buffer.concat([
@@ -222,12 +263,12 @@ test('desktop protocol carries social media bytes but keeps the generic one MiB 
   }
 });
 
-test('desktop allows microphone audio only for the bundled application origin', () => {
-  assert.equal(canGrantAudioCapture('media', 'carelink://app/', ['audio']), true);
-  assert.equal(canGrantAudioCapture('media', 'carelink://app/', ['video']), false);
-  assert.equal(canGrantAudioCapture('media', 'carelink://app/', ['audio', 'video']), false);
-  assert.equal(canGrantAudioCapture('media', 'https://example.com/', ['audio']), false);
-  assert.equal(canGrantAudioCapture('notifications', 'carelink://app/', ['audio']), false);
+test('desktop allows microphone and camera capture only for the bundled application origin', () => {
+  assert.equal(canGrantMediaCapture('media', 'carelink://app/', ['audio']), true);
+  assert.equal(canGrantMediaCapture('media', 'carelink://app/', ['video']), true);
+  assert.equal(canGrantMediaCapture('media', 'carelink://app/', ['audio', 'video']), true);
+  assert.equal(canGrantMediaCapture('media', 'https://example.com/', ['audio']), false);
+  assert.equal(canGrantMediaCapture('notifications', 'carelink://app/', ['audio']), false);
   assert.match(CONTENT_SECURITY_POLICY, /img-src 'self' data: blob:/);
   assert.match(CONTENT_SECURITY_POLICY, /media-src 'self' blob:/);
 });

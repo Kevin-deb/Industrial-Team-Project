@@ -6,13 +6,19 @@ All application routes start with `/api/v1`. In the installed desktop applicatio
 
 The private protocol accepts only the application origin and validates asset paths, request size and supported operations. Application-level errors keep the JSON envelope below. A transport-level rejection, such as an invalid protocol origin or oversized request, may return a safe plain-text error before Fastify runs; the renderer must handle a non-JSON failure gracefully.
 
-The current desktop header allowlist forwards `Accept`, `Content-Type`, `Accept-Language`, `Range`, the record concurrency header `If-Match`, and `Idempotency-Key`. `Range` supports local social-media playback, while E-module writes also carry version and idempotency values in typed request bodies. Do not assume a new HTTP header automatically passes through the desktop bridge.
+The current desktop header allowlist forwards `Accept`, `Content-Type`, `Accept-Language`, `Authorization`, `Range`, the record concurrency header `If-Match`, and `Idempotency-Key`. `Authorization: Bearer …` carries the opaque local session; actor headers are deliberately discarded. `Range` supports local social-media playback, while E-module writes also carry version and idempotency values in typed request bodies. Do not assume a new HTTP header automatically passes through the desktop bridge.
 
 ## Implemented API
 
 | Method and path                             | Owner                         | Response data                       | Current behavior                                                                                            |
 | ------------------------------------------- | ----------------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `GET /api/v1/session`                       | A                             | `Session`                           | Fixed demonstration doctor, mode, date and disclaimer; not an authentication handshake                      |
+| `POST /api/v1/auth/password-login`          | A                             | authenticated session               | Password is an independent login method with lockout and a revocable 12-hour session                         |
+| `POST /api/v1/auth/email-login/start`       | A                             | email challenge                     | Sends a single-use, expiring code to the verified account email                                              |
+| `POST /api/v1/auth/email-login/complete`    | A                             | authenticated session               | Email code is an independent login method and creates a revocable 12-hour session                            |
+| `/api/v1/auth/photo-login...`               | A                             | authenticated session               | Demo face/photo is an independent login method; no real matching or liveness detection is claimed            |
+| `POST /api/v1/auth/logout`                  | A                             | revocation result                   | Revokes the current Bearer session                                                                            |
+| `/api/v1/auth/password/...`                 | A                             | password challenge/result           | Change and recovery use email or demo-photo verification and revoke existing sessions                        |
+| `GET /api/v1/session`                       | A                             | `Session`                           | Returns the authenticated clinician, verified profile fields, roles, mode, date and disclaimer              |
 | `GET /api/v1/dashboard`                     | A, composing domain summaries | `Dashboard`                         | Synthetic workload counts, schedule, patient previews, health alerts and activity                           |
 | `GET /api/v1/patients`                      | B                             | `Patient[]`                         | Scoped search/filter/pagination; page metadata is outside `data`                                            |
 | `GET /api/v1/patients/:id`                  | B                             | `Patient`                           | Scoped synthetic patient detail; an unavailable patient is not disclosed                                    |

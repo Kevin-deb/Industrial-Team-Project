@@ -16,7 +16,16 @@ export interface PlatformRepository {
 export class SqlitePlatformRepository implements PlatformRepository {
   constructor(private readonly db: DatabaseSync) {}
   doctor(actorId: string): Doctor {
-    const r = this.db.prepare('SELECT * FROM identities WHERE id=?').get(actorId);
+    const r = this.db.prepare(
+      `SELECT i.*,u.email,u.email_verified_at,d.phone,d.license_number,d.specialty,
+        d.government_id_masked,d.credential_status,d.personnel_status,
+        group_concat(ir.role_id) roles
+       FROM identities i
+       LEFT JOIN users u ON u.identity_id=i.id
+       LEFT JOIN doctors d ON d.identity_id=i.id
+       LEFT JOIN identity_roles ir ON ir.identity_id=i.id
+       WHERE i.id=? GROUP BY i.id`,
+    ).get(actorId);
     if (!r) throw new Error('Demo identity unavailable');
     return {
       id: String(r.id),
@@ -25,6 +34,15 @@ export class SqlitePlatformRepository implements PlatformRepository {
       department: String(r.department),
       hospital: String(r.hospital),
       avatarInitials: String(r.avatar_initials),
+      ...(r.email ? { email: String(r.email) } : {}),
+      ...(r.email_verified_at ? { emailVerifiedAt: String(r.email_verified_at) } : {}),
+      ...(r.phone ? { phone: String(r.phone) } : {}),
+      ...(r.license_number ? { licenseNumber: String(r.license_number) } : {}),
+      ...(r.specialty ? { specialty: String(r.specialty) } : {}),
+      ...(r.government_id_masked ? { governmentIdMasked: String(r.government_id_masked) } : {}),
+      ...(r.credential_status ? { credentialStatus: r.credential_status as Doctor['credentialStatus'] } : {}),
+      ...(r.personnel_status ? { personnelStatus: r.personnel_status as Doctor['personnelStatus'] } : {}),
+      roles: r.roles ? String(r.roles).split(',') : [],
     };
   }
   ownAudit(actorId: string): AuditEvent[] {

@@ -1,4 +1,10 @@
-# Iteration 0 Desktop Delivery Status
+# CareLink Desktop Delivery Status
+
+## Local authentication foundation (21 September 2026)
+
+The current branch adds five verified synthetic clinician accounts, ten synthetic patients and explicit clinician-patient grants. Login requires a password, an expiring single-use work-email code and a demonstration camera/upload photo step. Session tokens are opaque, stored only as hashes, expire after 12 hours and are revoked on logout. Runtime API calls, desktop protocol requests and realtime subscriptions all derive the actor from the validated session; caller-supplied actor headers are ignored.
+
+Clinician profiles now include hospital, department, title, specialty, licence number, verified email, phone, masked government-ID reference, credential/personnel review status and role assignments. The photo step intentionally performs no face matching or liveness detection and retains a verification record rather than claiming production biometrics. Email delivery uses a local demo outbox. External SMTP, hospital directory/credential authority and biometric providers remain explicit integration boundaries.
 
 CareLink 0.2.0 targets an installable Windows doctor application with an immediate, persistent Chinese/English interface switch. It retains the Iteration 0 synthetic-data scope. The latest desktop/language instruction supersedes the earlier browser-delivery assumption; clinical write workflows remain future iterations.
 
@@ -12,12 +18,12 @@ CareLink 0.2.0 targets an installable Windows doctor application with an immedia
 | Workspace                 | Dashboard and eight domain pages: patients, encounters, records, expert consultations, health, audit, community preview and settings           |
 | Patient/clinical previews | Search, filters, read-only details, schedules, records/review summaries, health trends and care-plan examples using fictional data             |
 | Audit                     | Seed events and local patient-list/detail access events filtered to the synthetic doctor                                                       |
-| Preferences               | Language and community-entry visibility persist in the application profile; the actual social service and social notifications remain disabled |
+| Preferences               | Language and community-entry visibility persist in the application profile; E community data and realtime notifications run locally without external delivery |
 | Service boundary          | Eleven read routes and 39 explicit reserved commands; reserved commands return `501 FEATURE_NOT_IMPLEMENTED`, unknown paths return `404`       |
 | Persistence               | Six domain migrations, relational constraints and synthetic seeding; installed data at `%APPDATA%\CareLink Doctor\data\doctor.sqlite`          |
 | Team separation           | Owned renderer pages/catalogs, backend commands/repositories/migrations, shared DTOs and external-provider ports                               |
 
-The fixed demonstration date is 10 September 2026. Displayed patients, clinical values and workload examples are fictional. Local audit timestamps reflect demo requests. The fixed synthetic identity is not real authentication. A desktop package does not enable clinical writes or connect external providers.
+The fixed demonstration date is 10 September 2026. Displayed clinicians, patients, identity fields, clinical values and workload examples are fictional. Local audit timestamps reflect demo requests. Local authentication and scope enforcement are implemented, but they are not a production hospital identity proofing service. A desktop package does not connect external providers.
 
 ## Delivery artifacts
 
@@ -41,13 +47,13 @@ The English and Chinese architecture presentations have been revised to v3 under
 
 | Iteration   | Reserved functionality                                                                                                   |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------ |
-| 1           | Real identity/session integration, enforced clinical access, persistent patient edits, text encounters and record drafts |
+| 1           | Production identity-provider/email integration, persistent patient edits, text encounters and record drafts              |
 | 2           | Senior review/archive, independent orders, export jobs, care plans/assessments and reminders through a test provider     |
 | 3           | Images/media, policy-controlled recording, expert consultation, temporary access and confirmed reports                   |
 | 4           | Live data/notification providers, operational monitoring, backup/restore, performance and release hardening              |
 | 5, optional | Isolated professional groups, manually de-identified posts, interaction, reporting and server-side social opt-out        |
 
-Every new feature must preserve both interface languages. Tables and provider interfaces reserve future behavior without implementing it. No real identity, hospital/device, RTC, recording, storage or messaging provider is configured.
+Every new feature must preserve both interface languages. Tables and provider interfaces reserve future behavior without implementing it. No external hospital identity, email, biometric, device, RTC, recording, storage or messaging provider is configured.
 
 ## Verification status
 

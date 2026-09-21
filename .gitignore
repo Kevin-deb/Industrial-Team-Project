@@ -7,6 +7,7 @@ runtime/
 .env
 .env.*
 !.env.example
+*.local.sh
 test-results/
 playwright-report/
 coverage/
@@ -17,3 +18,4 @@ Thumbs.db
 !.vscode/extensions.json
 
 release/
+.worktrees/

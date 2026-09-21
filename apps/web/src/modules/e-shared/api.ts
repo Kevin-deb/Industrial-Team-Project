@@ -1,4 +1,5 @@
 import type { ApiError, ApiResponse } from '@doctor/contracts';
+import { sessionToken } from '../../shared/api';
 
 const FALLBACK_MESSAGE = 'Request failed. Please try again.';
 
@@ -39,6 +40,8 @@ export async function requestEApi<T>(
 ): Promise<ApiResponse<T>> {
   const headers = new Headers(options.headers);
   headers.set('Accept', 'application/json');
+  const token = sessionToken();
+  if (token) headers.set('Authorization', `Bearer ${token}`);
   const multipart = typeof FormData !== 'undefined' && options.body instanceof FormData;
   if (options.body !== undefined && !multipart) {
     headers.set('Content-Type', 'application/json');

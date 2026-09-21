@@ -13,9 +13,9 @@ import { plannedCommands } from '../src/platform/planned-commands.js';
 test('migrations create every domain and coherent synthetic clinical relationships', () => {
   const db = openDatabase(':memory:');
   try {
-    assert.equal(db.prepare('SELECT COUNT(*) count FROM schema_migrations').get()!.count, 20);
+    assert.equal(db.prepare('SELECT COUNT(*) count FROM schema_migrations').get()!.count, 24);
     assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), []);
-    assert.equal(db.prepare('SELECT COUNT(*) count FROM patients').get()!.count, 9);
+    assert.equal(db.prepare('SELECT COUNT(*) count FROM patients').get()!.count, 10);
     const archive = db
       .prepare(
         "SELECT r.author_id,v.version,rv.reviewer_id FROM medical_records r JOIN medical_record_versions v ON v.record_id=r.id JOIN record_reviews rv ON rv.record_id=r.id AND rv.record_version=v.version WHERE r.status='archived'",
@@ -63,7 +63,7 @@ test('read APIs use consistent envelopes and dashboard counts are derived from s
     const data = (await app.inject('/api/v1/dashboard')).json().data;
     assert.deepEqual(data.stats, {
       patients: 8,
-      pendingEncounters: 3,
+      pendingEncounters: 10,
       pendingReviews: 2,
       healthAlerts: 2,
     });
@@ -256,7 +256,7 @@ test('reopening the file database preserves data and does not reseed or rerun mi
     }
     const db = openDatabase(path);
     try {
-      assert.equal(db.prepare('SELECT COUNT(*) count FROM schema_migrations').get()!.count, 20);
+      assert.equal(db.prepare('SELECT COUNT(*) count FROM schema_migrations').get()!.count, 24);
     } finally {
       db.close();
     }
@@ -326,7 +326,7 @@ test('startup refuses mismatched, incomplete and future database migration histo
     const mutations = [
       "UPDATE schema_migrations SET name='unexpected' WHERE version=2",
       'DELETE FROM schema_migrations WHERE version=2',
-      "INSERT INTO schema_migrations VALUES(21,'future','2026-09-10T00:00:00Z')",
+      "INSERT INTO schema_migrations VALUES(25,'future','2026-09-10T00:00:00Z')",
     ];
     for (const [index, mutation] of mutations.entries()) {
       const path = join(folder, 'invalid-' + index + '.sqlite');

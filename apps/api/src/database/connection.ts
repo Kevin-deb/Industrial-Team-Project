@@ -3,6 +3,11 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { platformMigration } from '../platform/index.js';
 import {
+  authMigration,
+  demoInitialPasswordMigration,
+  sessionAuthMethodMigration,
+} from '../platform/index.js';
+import {
   patientsMigration,
   patientsArchiveMigration,
   patientsRegistrationMigration,
@@ -15,7 +20,12 @@ import {
   clinicalMigration,
   clinicalOrdersMigration,
 } from '../clinical/index.js';
-import { healthEvolutionMigration, healthMigration, seedHealthDemo } from '../health/index.js';
+import {
+  healthEvolutionMigration,
+  healthMigration,
+  healthObservationConfirmationMigration,
+  seedHealthDemo,
+} from '../health/index.js';
 import { socialMigration } from '../social/index.js';
 import {
   seedSocialDemo,
@@ -25,7 +35,7 @@ import {
   socialCommentReactionsMigration,
   socialViewsMigration,
 } from '../social/index.js';
-import { seedDemo } from './seed.js';
+import { seedAuthFoundation, seedDemo } from './seed.js';
 import { eModuleHardeningMigration } from './e-module-hardening-migration.js';
 
 export const migrations = [
@@ -62,6 +72,10 @@ export const migrations = [
   clinicalLifecycleMigration,
   clinicalOrdersMigration,
   clinicalMaterialsMigration,
+  authMigration,
+  demoInitialPasswordMigration,
+  healthObservationConfirmationMigration,
+  sessionAuthMethodMigration,
 ];
 
 /** Refuse a newer or inconsistent migration history instead of silently running incompatible code. */
@@ -108,6 +122,7 @@ export function openDatabase(path: string): DatabaseSync {
     seedDemo(database);
     seedHealthDemo(database);
     seedSocialDemo(database);
+    seedAuthFoundation(database);
     return database;
   } catch (error) {
     database.close();
