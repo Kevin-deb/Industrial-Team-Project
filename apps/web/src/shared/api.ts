@@ -3,6 +3,14 @@ import { useI18n, localizeDemoData } from './i18n';
 import type { ApiMeta } from '@doctor/contracts';
 import { notifyPatientWrite } from './patient-sync';
 
+const SESSION_TOKEN_KEY = 'carelink-session-token';
+export const sessionToken = () => {
+  try { return localStorage.getItem(SESSION_TOKEN_KEY); } catch { return null; }
+};
+export const setSessionToken = (token: string | null) => {
+  try { token ? localStorage.setItem(SESSION_TOKEN_KEY, token) : localStorage.removeItem(SESSION_TOKEN_KEY); } catch { /* session remains in memory-only environments */ }
+};
+
 export type { ApiMeta } from '@doctor/contracts';
 export class ApiRequestError extends Error {
   constructor(
@@ -24,10 +32,13 @@ export async function requestApi<T>(
     headers: {
       Accept: 'application/json',
       ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(sessionToken() ? { Authorization: `Bearer ${sessionToken()}` } : {}),
       ...init.headers,
     },
   });
   const body = await response.json().catch(() => null);
+  if (response.status === 401 && !path.startsWith('/auth/'))
+    window.dispatchEvent(new Event('carelink:auth-required'));
   if (!response.ok)
     throw new ApiRequestError(
       body?.error?.message || '服务暂时不可用',

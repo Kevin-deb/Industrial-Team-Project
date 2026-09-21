@@ -5,6 +5,7 @@ declare global {
   interface Window {
     carelinkRealtime?: {
       subscribe(listener: (event: SocialRealtimeEvent) => void): () => void;
+      setSessionToken?(token: string | null): Promise<{ subscribed: boolean }>;
     };
   }
 }
