@@ -1701,7 +1701,66 @@
 .record-editor-actions {
   display: flex;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 10px;
+}
+
+.record-editor-review,
+.record-editor-history {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fbfbfc;
+}
+
+.record-editor-review strong,
+.record-editor-history strong {
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.record-editor-review p,
+.record-editor-history li {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.record-editor-history ol {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.record-editor-history small {
+  display: block;
+  color: var(--ink);
+}
+
+.record-editor-confirm {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.record-editor-confirm input {
+  width: auto;
+  margin-top: 3px;
+}
+
+.record-editor-sections {
+  display: grid;
+  gap: 8px;
+}
+
+.record-editor-order-stop {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr auto;
+  gap: 8px;
+  margin-top: 8px;
 }
 
 @media (max-width: 720px) {
@@ -1717,6 +1776,10 @@
   .record-editor-notice {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .record-editor-order-stop {
+    grid-template-columns: 1fr;
   }
 }
 .mdt-case {

@@ -1,5 +1,9 @@
 /** Owned by the records module. Keep source keys stable and translate at render time. */
 export const recordsMessages: Record<string, string> = {
+  '结构预览 · 新建草稿时可选择此模板':
+    'Structure preview · Select this template when creating a draft',
+  '创建病历草稿后，由当前医生填写此字段。':
+    'The current doctor completes this field after creating a draft.',
   结构化病历草稿: 'Structured medical record draft',
   选择患者: 'Select patient',
   请选择患者: 'Choose a patient',
@@ -22,6 +26,7 @@ export const recordsMessages: Record<string, string> = {
   重新加载服务器版本: 'Reload server version',
   '保存失败，请稍后重试。': 'Save failed. Please try again.',
   无法加载病历: 'Unable to load the medical record',
+  无法加载病历模板: 'Unable to load medical record templates',
   '当前仅保存虚构演示病历，不可用于真实诊疗。':
     'Only fictional demonstration records are stored. They must not be used for real care.',
   '未找到病历，或该病历不在当前医生的授权范围。':
@@ -70,6 +75,7 @@ export const recordsMessages: Record<string, string> = {
   正式编辑功能尚未上线: 'Record editing is not available yet',
   等待审核: 'Awaiting review',
   审核及签名流程已规划: 'Review and signing workflows planned',
+  '本地可提交、审核、归档和修订': 'Local submit, review, archive, and correction',
   版本与归档元数据预览: 'Version and archive metadata preview',
   病历管理: 'Record management',
   模板预览: 'Templates',
@@ -95,6 +101,8 @@ export const recordsMessages: Record<string, string> = {
   '从记录到归档，每一步都有依据': 'A clear process from first note to archive',
   '以下展示计划中的状态流转；当前仅提供只读元数据。':
     'Planned status transitions are shown below. Only read-only metadata is currently available.',
+  '当前本地演示支持提交、退回、批准、归档和修订留痕。':
+    'This local demo can submit, return, approve, archive, and create a correction draft.',
   创建草稿: 'Create draft',
   医生编辑: 'Doctor edits',
   提交审核: 'Submit for review',
@@ -113,9 +121,13 @@ export const recordsMessages: Record<string, string> = {
   版本与修订记录: 'Versions & revisions',
   '保留病历变更历史，将每次修订关联至操作者。':
     'Preserve record history and link every revision to its author.',
+  '打开病历即可查看版本历史、作者、时间和修订原因。':
+    'Open a record to inspect version history, authors, timestamps, and correction reasons.',
   签名与归档: 'Signatures & archiving',
   '完整性验证、分级审核、签名及归档流程。':
     'Completeness checks, tiered review, signing, and archiving.',
+  '本地演示已支持审核、归档和修订；正式签名与临床规则仍待启用。':
+    'Local demo supports review, archive, and corrections. Production signing and clinical rules remain pending.',
   查看功能规划: 'Explore planned feature',
   '{value0} · 演示病历元数据': '{value0} · Demo record metadata',
   病历作者: 'Author',
@@ -133,4 +145,125 @@ export const recordsMessages: Record<string, string> = {
     'Iteration 1 establishes record drafts; Iteration 2 adds structured records, orders, review, and archiving. Shared patient IDs and a record-version model will support authorization, draft saving, validation, review, and audit trails.',
   '当前框架已预留病历、处方、医嘱及修订记录的后端边界，页面展示设计流程。':
     'The framework reserves backend boundaries for records, prescriptions, orders, and revisions. This page previews the planned workflow.',
+  '（提交必填）': ' (required to submit)',
+  已批准待归档: 'Approved, pending archive',
+  最近审核: 'Latest review',
+  已批准: 'Approved',
+  已退回: 'Returned',
+  版本历史: 'Version history',
+  审核意见: 'Review comment',
+  修订原因: 'Correction reason',
+  '请先保存当前修改再继续。': 'Save your current changes before continuing.',
+  '操作失败，请稍后重试。': 'The action failed. Please try again.',
+  '病历已提交审核。': 'The record was submitted for review.',
+  退回修改: 'Return for edits',
+  '病历已退回修改。': 'The record was returned for edits.',
+  批准此版本: 'Approve this version',
+  '已批准当前病历版本。': 'The current record version was approved.',
+  归档此版本: 'Archive this version',
+  '病历已归档。': 'The record was archived.',
+  发起修订: 'Start a correction',
+  '已从归档版本创建新草稿。': 'A new correction draft was created from the archived version.',
+  '状态变更前必须携带当前版本。': 'The current record version is required before this change.',
+  '状态变更必须携带有效的提交标识。': 'A valid submission key is required before this change.',
+  '该提交标识已用于其他病历操作，请先核对当前状态。':
+    'This submission key was already used for a different record command.',
+  '提交审核前请完整填写标题、诊断和模板必填正文。':
+    'Complete the title, diagnosis, and required template fields before submitting.',
+  '不能审核自己撰写的当前病历版本。': 'You cannot review your own current record version.',
+  '当前医生没有病历审核权限。': 'The current doctor does not have record-review permission.',
+  '当前病历状态不允许执行该操作。': 'The current record state does not allow this action.',
+  '只有当前医生可编辑的草稿才能提交审核。': 'Only an editable draft can be submitted for review.',
+  '只有待审核且尚未批准的病历版本可以审核。':
+    'Only a pending, not-yet-approved record version can be reviewed.',
+  '只有当前版本已批准的病历可以归档。':
+    'Only a record whose current version is approved can be archived.',
+  '只有已归档的病历可以发起修订。': 'Only an archived record can start a correction.',
+  '退回病历必须填写审核意见。': 'A review comment is required when returning a record.',
+  '归档修订必须填写修订原因。': 'A correction reason is required for an archived record.',
+  医嘱: 'Orders',
+  '模板只预填内容，确认后才会开立；停止后不可修改或重启。':
+    'Templates only prefill content. Confirm before issuing; a stopped order cannot be changed or restarted.',
+  开单模板: 'Order template',
+  '我已核对模板预填内容，确认开立此医嘱':
+    'I have reviewed the prefilled template and confirm this order',
+  确认开立医嘱: 'Confirm and issue order',
+  当前病历尚无医嘱: 'This record has no orders yet',
+  停止原因: 'Stop reason',
+  停止医嘱: 'Stop order',
+  变更原因: 'Change reason',
+  保存修改: 'Save changes',
+  '医嘱已确认开立。': 'The order was confirmed and issued.',
+  '医嘱已保存新版本。': 'A new order version was saved.',
+  '医嘱已停止。': 'The order was stopped.',
+  '停止医嘱必须填写原因。': 'A reason is required to stop an order.',
+  '修改医嘱必须填写变更原因。': 'A change reason is required to update an order.',
+  '请先选择与该医嘱相同的开单模板。': 'Select the same order template as this order first.',
+  '开立医嘱失败，请稍后重试。': 'Unable to issue the order. Please try again.',
+  '修改医嘱失败，请稍后重试。': 'Unable to update the order. Please try again.',
+  '停止医嘱失败，请稍后重试。': 'Unable to stop the order. Please try again.',
+  引用到会诊: 'Share with consultation',
+  '仅已批准或已归档版本可被远程会诊引用。':
+    'Only approved or archived versions can be referenced by a remote consultation.',
+  会诊任务: 'Consultation task',
+  选择会诊: 'Select a consultation',
+  引用用途: 'Sharing purpose',
+  引用当前版本: 'Reference this version',
+  '已将当前病历版本引用到会诊。': 'The current record version was referenced for consultation.',
+  '引用会诊材料失败，请稍后重试。': 'Unable to share the consultation material. Please try again.',
+  用药医嘱: 'Medication order',
+  '药品 · 剂量 · 疗程': 'Drug · Dose · Duration',
+  药品名称: 'Drug name',
+  剂量: 'Dose',
+  频次: 'Frequency',
+  给药途径: 'Route',
+  疗程: 'Duration',
+  用药说明: 'Instructions',
+  检查医嘱: 'Examination order',
+  '检查项目 · 部位 · 指征': 'Exam · Site · Indication',
+  检查项目: 'Examination',
+  检查部位: 'Body site',
+  检查指征: 'Indication',
+  备注: 'Notes',
+  检验医嘱: 'Laboratory order',
+  '检验项目 · 标本 · 指征': 'Test · Specimen · Indication',
+  检验项目: 'Laboratory test',
+  标本类型: 'Specimen',
+  检验指征: 'Indication',
+  进行中医嘱: 'Active order',
+  已停止: 'Stopped',
+  草稿医嘱: 'Draft order',
+  '未找到医嘱，或该医嘱不在当前医生的授权范围。':
+    'The order was not found or is outside the current doctor’s authorized scope.',
+  '未找到医嘱版本，或该医嘱不在当前医生的授权范围。':
+    'The order version was not found or is outside the current doctor’s authorized scope.',
+  '开立医嘱必须携带有效的提交标识。': 'A valid submission key is required to issue an order.',
+  '修改医嘱前必须携带当前版本。': 'The current order version is required before updating.',
+  '停止医嘱前必须携带当前版本。': 'The current order version is required before stopping.',
+  '停止医嘱必须携带有效的提交标识。': 'A valid submission key is required to stop an order.',
+  '开立医嘱前必须确认模板预填内容。': 'Confirm the prefilled template before issuing an order.',
+  '医嘱内容与所选开单模板不匹配。': 'The order content does not match the selected template.',
+  '只有进行中的医嘱可以修改或停止。': 'Only an active order can be updated or stopped.',
+  '医嘱已被其他保存更新，请重新加载。':
+    'The order was updated by another save. Reload the latest version.',
+  '该提交标识已用于其他医嘱操作，请先核对当前状态。':
+    'This submission key was already used for a different order command.',
+  '未找到会诊材料，或不在当前授权范围。':
+    'The consultation material was not found or is outside the current authorized scope.',
+  '引用会诊材料必须携带有效的提交标识。':
+    'A valid submission key is required to share consultation material.',
+  '回链会诊报告必须携带有效的提交标识。':
+    'A valid submission key is required to link a consultation report.',
+  '引用会诊材料必须填写用途。': 'A purpose is required when sharing consultation material.',
+  '当前医生不是该会诊的参与者。': 'The current doctor is not a participant in this consultation.',
+  '共享区段必须属于该病历模板版本的字段。':
+    'Shared sections must belong to the fields of that record template version.',
+  '远程会诊只能引用已批准或已归档的病历版本。':
+    'Remote consultations can only reference an approved or archived record version.',
+  '只能向进行中的会诊引用病历材料。':
+    'Record material can only be referenced for an active consultation.',
+  '该会诊材料已绑定报告。': 'This consultation material is already linked to a report.',
+  '只能回链已确认的会诊报告。': 'Only a confirmed consultation report can be linked.',
+  '该提交标识已用于其他材料操作，请先核对当前状态。':
+    'This submission key was already used for a different material command.',
 };

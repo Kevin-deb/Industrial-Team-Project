@@ -14,7 +14,11 @@ import { SqlitePatientRepository, registerPatientRoutes } from './patients/index
 import { SqliteEncounterRepository } from './encounters/index.js';
 import { registerClinicalRoutes, SqliteClinicalRepository } from './clinical/index.js';
 import { HealthService, registerHealthRoutes, SqliteHealthRepository } from './health/index.js';
-import { SqlitePatientAccess, SqlitePlatformRepository } from './platform/index.js';
+import {
+  SqlitePatientAccess,
+  SqlitePermissionAccess,
+  SqlitePlatformRepository,
+} from './platform/index.js';
 import { features } from './platform/index.js';
 import { registerPlannedCommands } from './platform/index.js';
 import {
@@ -94,7 +98,7 @@ export async function createApp(options: AppOptions = {}) {
   await app.register(fastifyWebsocket, { options: { maxPayload: 1024 } });
   const patients = new SqlitePatientRepository(db);
   const encounters = new SqliteEncounterRepository(db);
-  const clinical = new SqliteClinicalRepository(db);
+  const clinical = new SqliteClinicalRepository(db, new SqlitePermissionAccess(db), encounters);
   const healthRepository = new SqliteHealthRepository(db);
   const platform = new SqlitePlatformRepository(db);
   const ephemeralMediaRoot =
@@ -253,7 +257,7 @@ export async function createApp(options: AppOptions = {}) {
     const current = context();
     const people = patients.list({ pageSize: 6 }, current);
     const schedule = encounters.list(current);
-    const records = clinical.listRecords(current);
+    const records = clinical.listRecords({}, current);
     const healthData = health.overview(current);
     const data: Dashboard = {
       stats: {

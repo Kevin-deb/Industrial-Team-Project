@@ -6,41 +6,82 @@ All application routes start with `/api/v1`. In the installed desktop applicatio
 
 The private protocol accepts only the application origin and validates asset paths, request size and supported operations. Application-level errors keep the JSON envelope below. A transport-level rejection, such as an invalid protocol origin or oversized request, may return a safe plain-text error before Fastify runs; the renderer must handle a non-JSON failure gracefully.
 
-The current desktop header allowlist forwards `Accept`, `Content-Type`, `Accept-Language`, `Range` and the record-draft concurrency header `If-Match`. `Range` supports local social-media playback, while E-module writes carry version and idempotency values in typed request bodies. Future authenticated transport must explicitly add agreed session and `Idempotency-Key` header handling before enabling retriable production commands. Do not assume a new HTTP header automatically passes through the desktop bridge.
+The current desktop header allowlist forwards `Accept`, `Content-Type`, `Accept-Language`, `Range`, the record concurrency header `If-Match`, and `Idempotency-Key`. `Range` supports local social-media playback, while E-module writes also carry version and idempotency values in typed request bodies. Do not assume a new HTTP header automatically passes through the desktop bridge.
 
 ## Implemented API
 
-| Method and path               | Owner                         | Response data            | Current behavior                                                                                            |
-| ----------------------------- | ----------------------------- | ------------------------ | ----------------------------------------------------------------------------------------------------------- |
-| `GET /api/v1/session`         | A                             | `Session`                | Fixed demonstration doctor, mode, date and disclaimer; not an authentication handshake                      |
-| `GET /api/v1/dashboard`       | A, composing domain summaries | `Dashboard`              | Synthetic workload counts, schedule, patient previews, health alerts and activity                           |
-| `GET /api/v1/patients`        | B                             | `Patient[]`              | Scoped search/filter/pagination; page metadata is outside `data`                                            |
-| `GET /api/v1/patients/:id`    | B                             | `Patient`                | Scoped synthetic patient detail; an unavailable patient is not disclosed                                    |
-| `GET /api/v1/encounters`      | C                             | `Encounter[]`            | Synthetic text/video appointment and encounter worklist                                                     |
-| `GET /api/v1/records`         | D                             | `MedicalRecord[]`        | Synthetic record summaries, review state, version and order count                                           |
-| `GET /api/v1/records/:id`     | D                             | `MedicalRecordDetail`    | Scoped current structured body and draft version                                                            |
-| `GET /api/v1/consultations`   | C                             | `Consultation[]`         | Synthetic expert-consultation summaries and participants                                                    |
-| `GET /api/v1/health/overview` | E                             | `HealthOverview`         | Synthetic observations, alerts, plans and summary counts                                                    |
-| `GET /api/v1/health/patients` | E using B ports               | `HealthPatientSummary[]` | Narrow scoped patient search for E; never returns B's full patient record                                   |
-| `/api/v1/health/observations` | E                             | observation resources    | Filtered/paged reads and idempotent manual/device-simulator writes                                          |
-| `/api/v1/health/plans...`     | E                             | plan resources           | List, create, version-checked update, and version-history reads                                             |
-| `/api/v1/health/assessments`  | E                             | assessment resources     | List and create doctor-authored health assessments                                                          |
-| `/api/v1/health/reminders...` | E                             | reminder resources       | List/create tasks and cancel/retry valid reminder states; external delivery remains behind a port           |
-| `/api/v1/social/...`          | E                             | social resources         | Opt-in groups/forums, posts/replies/reactions/reports, personal activity, notifications and direct messages |
-| `GET /api/v1/audit`           | A                             | `AuditEvent[]`           | Seeded synthetic events and local demo patient-access events, filtered to the demonstration actor           |
-| `GET /api/v1/features`        | A                             | `Feature[]`              | Capability descriptions, owner domain, iteration and demo/planned/disabled state                            |
-| `GET /api/v1/health`          | A                             | `ServiceHealth`          | API/database availability and demonstration mode                                                            |
+| Method and path                             | Owner                         | Response data                       | Current behavior                                                                                            |
+| ------------------------------------------- | ----------------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/session`                       | A                             | `Session`                           | Fixed demonstration doctor, mode, date and disclaimer; not an authentication handshake                      |
+| `GET /api/v1/dashboard`                     | A, composing domain summaries | `Dashboard`                         | Synthetic workload counts, schedule, patient previews, health alerts and activity                           |
+| `GET /api/v1/patients`                      | B                             | `Patient[]`                         | Scoped search/filter/pagination; page metadata is outside `data`                                            |
+| `GET /api/v1/patients/:id`                  | B                             | `Patient`                           | Scoped synthetic patient detail; an unavailable patient is not disclosed                                    |
+| `GET /api/v1/encounters`                    | C                             | `Encounter[]`                       | Synthetic text/video appointment and encounter worklist                                                     |
+| `GET /api/v1/record-templates`              | D                             | `MedicalRecordTemplateDefinition[]` | Versioned record-template catalogue shared by validation and presentation                                   |
+| `GET /api/v1/records`                       | D                             | `MedicalRecord[]`                   | Scoped summaries; optional patient, encounter and status filters are applied by the service                 |
+| `GET /api/v1/records/:id`                   | D                             | `MedicalRecordDetail`               | Scoped current structured body, template version, latest review summary and available actions               |
+| `GET /api/v1/records/:id/versions`          | D                             | `MedicalRecordVersion[]`            | Immutable structured history in descending version order                                                    |
+| `GET /api/v1/records/:id/versions/:version` | D                             | `MedicalRecordVersion`              | One scoped, version-specific record snapshot                                                                |
+| `GET /api/v1/order-templates`               | D                             | `MedicalOrderTemplateDefinition[]`  | Independent order-template catalogue; templates prefill only and never auto-issue                           |
+| `GET /api/v1/orders`                        | D                             | `MedicalOrder[]`                    | Scoped summaries; optional record, patient and status filters are applied by the service                    |
+| `GET /api/v1/orders/:id`                    | D                             | `MedicalOrderDetail`                | Current structured payload, template version and change reason                                              |
+| `GET /api/v1/orders/:id/versions`           | D                             | `MedicalOrderVersion[]`             | Immutable order history in descending version order                                                         |
+| `GET /api/v1/orders/:id/versions/:version`  | D                             | `MedicalOrderVersion`               | One scoped, version-specific order snapshot                                                                 |
+| `GET /api/v1/clinical-materials`            | D                             | `ClinicalMaterialReference[]`       | Requires `consultationId`; rechecks C task status, participant and A patient scope                          |
+| `GET /api/v1/clinical-materials/:id`        | D                             | `ClinicalMaterialReference`         | Fixed record-version reference plus optional confirmed report back-link                                     |
+| `GET /api/v1/consultations`                 | C                             | `Consultation[]`                    | Synthetic expert-consultation summaries and participants                                                    |
+| `GET /api/v1/health/overview`               | E                             | `HealthOverview`                    | Synthetic observations, alerts, plans and summary counts                                                    |
+| `GET /api/v1/health/patients`               | E using B ports               | `HealthPatientSummary[]`            | Narrow scoped patient search for E; never returns B's full patient record                                   |
+| `/api/v1/health/observations`               | E                             | observation resources               | Filtered/paged reads and idempotent manual/device-simulator writes                                          |
+| `/api/v1/health/plans...`                   | E                             | plan resources                      | List, create, version-checked update, and version-history reads                                             |
+| `/api/v1/health/assessments`                | E                             | assessment resources                | List and create doctor-authored health assessments                                                          |
+| `/api/v1/health/reminders...`               | E                             | reminder resources                  | List/create tasks and cancel/retry valid reminder states; external delivery remains behind a port           |
+| `/api/v1/social/...`                        | E                             | social resources                    | Opt-in groups/forums, posts/replies/reactions/reports, personal activity, notifications and direct messages |
+| `GET /api/v1/audit`                         | A                             | `AuditEvent[]`                      | Seeded synthetic events and local demo patient-access events, filtered to the demonstration actor           |
+| `GET /api/v1/features`                      | A                             | `Feature[]`                         | Capability descriptions, owner domain, iteration and demo/planned/disabled state                            |
+| `GET /api/v1/health`                        | A                             | `ServiceHealth`                     | API/database availability and demonstration mode                                                            |
 
 `/health` reports service availability; `/health/overview` is the doctor's health-management view. Do not substitute one for the other.
 
 ## Implemented synthetic draft commands
 
-| Method and path             | Request contract             | Success | Preconditions and limits                                                  |
-| --------------------------- | ---------------------------- | ------- | ------------------------------------------------------------------------- |
-| `POST /api/v1/records`      | `CreateMedicalRecordRequest` | `201`   | Scoped patient; optional encounter must belong to that patient            |
-| `PATCH /api/v1/records/:id` | `UpdateMedicalRecordRequest` | `200`   | Author-owned draft and exact `If-Match: "record-v{version}"` precondition |
+| Method and path                                   | Request contract                    | Success | Preconditions and limits                                                        |
+| ------------------------------------------------- | ----------------------------------- | ------- | ------------------------------------------------------------------------------- |
+| `POST /api/v1/records`                            | `CreateMedicalRecordRequest`        | `201`   | Scoped patient; optional encounter must belong to that patient                  |
+| `PATCH /api/v1/records/:id`                       | `UpdateMedicalRecordRequest`        | `200`   | Author-owned draft and exact `If-Match: "record-v{version}"` precondition       |
+| `POST /api/v1/records/:id/submit`                 | empty object                        | `200`   | Complete author-owned draft; `If-Match` and `Idempotency-Key`                   |
+| `POST /api/v1/records/:id/reviews`                | `ReviewMedicalRecordRequest`        | `200`   | `clinical:review`; not the current version author; pending unapproved version   |
+| `POST /api/v1/records/:id/archive`                | empty object                        | `200`   | Current version already approved; does not change order status                  |
+| `POST /api/v1/records/:id/corrections`            | `CorrectMedicalRecordRequest`       | `200`   | Archived record; required reason; copies a new draft version                    |
+| `POST /api/v1/records/:id/orders`                 | `CreateMedicalOrderRequest`         | `201`   | Confirmed template payload; UUID `Idempotency-Key`; created orders are `active` |
+| `PATCH /api/v1/orders/:id`                        | `UpdateMedicalOrderRequest`         | `200`   | Active order; `If-Match: "order-v{version}"` and required change reason         |
+| `POST /api/v1/orders/:id/stop`                    | `StopMedicalOrderRequest`           | `200`   | Active order; `If-Match`, UUID `Idempotency-Key` and required stop reason       |
+| `POST /api/v1/clinical-materials`                 | `CreateClinicalMaterialRequest`     | `201`   | Approved/archived record version; C participant of an active consultation       |
+| `POST /api/v1/clinical-materials/:id/report-link` | `LinkClinicalMaterialReportRequest` | `200`   | Binds a C-confirmed report ID; does not write consultation or report bodies     |
 
-Both commands return `MedicalRecordDetail` with the current ETag. Every save appends a record version. Missing version preconditions return `428`, stale versions return `412`, non-draft updates return `409`, and template-shape failures return `422`. These commands store fictional local data only; they are not authenticated production clinical writes.
+Both record draft commands return `MedicalRecordDetail` with the current ETag. Every save appends a record version. Missing version preconditions return `428`, stale versions return `412`, non-draft updates return `409`, and template-shape failures return `422`. Lifecycle commands also require a UUID `Idempotency-Key`; a replay of the same actor, operation, record and payload returns the original result, while the same key with a different payload returns `409 IDEMPOTENCY_KEY_CONFLICT`. Incomplete submit attempts return `422 RECORD_INCOMPLETE`. Reviewing one's own current version or reviewing without `clinical:review` returns `403`. Order writes use a separate `clinical_order_receipts` table and `"order-v{version}"` ETag; unconfirmed creates return `422 ORDER_NOT_CONFIRMED`, and stopped orders cannot be patched or restarted. Material writes recheck A patient scope (including grant expiry/revocation and C task status) through C's `findConsultationTask`/`findConfirmedReport` ports and never query `access_grants` or `consultation_participants` inside D. These commands store fictional local data only; they are not authenticated production clinical writes. First-version order validation is structural (shape, length, enum and state) and does not claim clinical-rule certification.
+
+Record collection query parameters:
+
+| Parameter     | Type                                     | Behavior                                                                  |
+| ------------- | ---------------------------------------- | ------------------------------------------------------------------------- |
+| `patientId`   | opaque string, maximum 80 characters     | Returns records for one patient after applying the caller's patient scope |
+| `encounterId` | opaque string, maximum 80 characters     | Returns records linked to one encounter after applying the caller's scope |
+| `status`      | `draft`, `pending-review`, or `archived` | Exact stored workflow-state filter                                        |
+
+Unknown record parameters and invalid values return `400 INVALID_REQUEST`. An inaccessible patient or encounter produces an empty collection rather than disclosing that the resource exists. B and C consumers use these filters instead of fetching the whole clinical collection and filtering in the renderer. Record bodies are fetched from the detail or version endpoint only when needed.
+
+Order collection query parameters:
+
+| Parameter   | Type                                 | Behavior                                                                 |
+| ----------- | ------------------------------------ | ------------------------------------------------------------------------ |
+| `recordId`  | opaque string, maximum 80 characters | Returns orders linked to one record after applying the caller's scope    |
+| `patientId` | opaque string, maximum 80 characters | Returns orders for one patient after applying the caller's patient scope |
+| `status`    | `draft`, `active`, or `stopped`      | Exact stored order-state filter                                          |
+
+The order-template catalogue is independent of record templates. `titleKey`, `subtitleKey` and each field's `labelKey` are interface message keys. Creating an order requires `confirmed: true`; templates never auto-issue.
+
+The template catalogue is the single source of field keys, limits and template versions. `titleKey`, `subtitleKey` and each field's `labelKey` are interface message keys; renderers localize those keys, while clinician-authored record content remains unchanged. A template version stored with a record version is never reinterpreted as a newer template.
 
 Patient query parameters:
 
@@ -118,7 +159,7 @@ Never return stack traces, raw SQL, credentials or patient content in an error. 
 
 ## Unavailable commands and future route design
 
-The original Iteration 0 scaffold registered 39 explicit future command routes. Iteration 1 enables 13 E health/community commands plus `POST /records` and `PATCH /records/:id` for local synthetic workflows; the remaining 24 commands keep their `501 FEATURE_NOT_IMPLEMENTED` handlers. Unknown paths return `404 NOT_FOUND`; there is no catch-all write route. Each domain owns its command and route registration. The [composition registry](../apps/api/src/platform/planned-commands.ts) combines unavailable commands and supplies the standard placeholder response.
+The original Iteration 0 scaffold registered 39 explicit future command routes. Local synthetic workflows now enable E health/community commands, record drafts, record submit/review/archive/correction, versioned medical orders, and scoped consultation material references. Remaining planned writes include C consultation commands. Unknown paths return `404 NOT_FOUND`; there is no catch-all write route. Each domain owns its command and route registration. The [composition registry](../apps/api/src/platform/planned-commands.ts) combines unavailable commands and supplies the standard placeholder response.
 
 The following resource families define ownership and implementation responsibility. Exact accepted payloads must be added to the owning contract before enabling a command.
 
@@ -140,7 +181,7 @@ Use `POST` to create resources or invoke a state transition; `PATCH` to revise p
 
 ### Reserved route registry snapshot
 
-The routes below remain placeholders and return `501`; request body schemas and real operations remain future work. The paths include the common prefix. Record draft creation and update are intentionally absent because they are implemented above.
+The routes below remain placeholders and return `501`; request body schemas and real operations remain future work. The paths include the common prefix. Record drafts, record lifecycle commands, medical-order writes and clinical-material references are intentionally absent because they are implemented above.
 
 | Method  | Route                                   | Owner domain |
 | ------- | --------------------------------------- | ------------ |
@@ -156,12 +197,6 @@ The routes below remain placeholders and return `501`; request body schemas and 
 | `POST`  | `/api/v1/encounters/:id/rtc-room`       | `encounters` |
 | `POST`  | `/api/v1/encounters/:id/recordings`     | `encounters` |
 | `POST`  | `/api/v1/encounters/:id/export`         | `encounters` |
-| `POST`  | `/api/v1/records/:id/submit`            | `clinical`   |
-| `POST`  | `/api/v1/records/:id/reviews`           | `clinical`   |
-| `POST`  | `/api/v1/records/:id/archive`           | `clinical`   |
-| `POST`  | `/api/v1/records/:id/orders`            | `clinical`   |
-| `PATCH` | `/api/v1/orders/:id`                    | `clinical`   |
-| `POST`  | `/api/v1/orders/:id/stop`               | `clinical`   |
 | `POST`  | `/api/v1/consultations`                 | `encounters` |
 | `POST`  | `/api/v1/consultations/:id/accept`      | `encounters` |
 | `POST`  | `/api/v1/consultations/:id/attachments` | `encounters` |
@@ -171,18 +206,20 @@ The routes below remain placeholders and return `501`; request body schemas and 
 
 ## DTO rules and module seams
 
-| Contract               | Current key fields                                                                                         | Ownership and interpretation                                                                             |
-| ---------------------- | ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `Patient`              | ID, demographic summary, diagnosis, tags, status, visits, assigned doctor, allergies/history, care summary | B owns profile data; linked care-plan details belong to E                                                |
-| `HealthPatientSummary` | ID, display name, age, gender, diagnosis, next follow-up and avatar initials                               | E consumes this narrow B-port projection; phone, allergies, history and care summary stay in B           |
-| `Encounter`            | ID, patient ID/name, text/video type, status, schedule, reason, duration                                   | C owns the patient encounter; it differs from an expert consultation                                     |
-| `MedicalRecord`        | ID, patient reference, title/diagnosis, status, author, update time, version, order count                  | D owns record/review state; order count is a summary, not an editable order API                          |
-| `MedicalRecordDetail`  | Record summary, structured body, template metadata and version history                                    | D owns editable local drafts and their optimistic concurrency boundary                                  |
-| `Consultation`         | ID, patient reference, title, specialty, status, schedule, participants, summary                           | C owns the expert task and report workflow                                                               |
-| `Observation`          | Patient, metric, numeric value, unit, measured/received timestamps, source, external source ID and quality | E owns monitoring data; local writes allow manual entry and a device simulator                           |
-| `CarePlan`             | Patient, title, state, goals, review date, completion percentage                                           | E owns plan lifecycle; current percentage is a demonstration value                                       |
-| `AuditEvent`           | Actor, action, target, time, outcome and description                                                       | A owns audit access and append behavior; seed events and local patient-list/detail accesses are recorded |
-| `Feature`              | ID, name, domain, status, description, iteration                                                           | Capability metadata helps the UI present planned functions accurately                                    |
+| Contract                    | Current key fields                                                                                         | Ownership and interpretation                                                                             |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `Patient`                   | ID, demographic summary, diagnosis, tags, status, visits, assigned doctor, allergies/history, care summary | B owns profile data; linked care-plan details belong to E                                                |
+| `HealthPatientSummary`      | ID, display name, age, gender, diagnosis, next follow-up and avatar initials                               | E consumes this narrow B-port projection; phone, allergies, history and care summary stay in B           |
+| `Encounter`                 | ID, patient ID/name, text/video type, status, schedule, reason, duration                                   | C owns the patient encounter; it differs from an expert consultation                                     |
+| `MedicalRecord`             | ID, patient reference, title/diagnosis, status, author, update time, version, order count                  | D owns record/review state; order count is a summary, not an editable order API                          |
+| `MedicalRecordDetail`       | Record summary, structured body, template metadata and version history                                     | D owns editable local drafts and their optimistic concurrency boundary                                   |
+| `MedicalOrder`              | ID, record/patient references, type, status, version, author and stop metadata                             | D owns order state independently of EMR lifecycle; seed `ORD-001` may remain `draft`                     |
+| `ClinicalMaterialReference` | Consultation, patient, record version, shared sections, purpose and optional confirmed report ID           | D stores a fixed record-version pointer; C owns consultation and report bodies                           |
+| `Consultation`              | ID, patient reference, title, specialty, status, schedule, participants, summary                           | C owns the expert task and report workflow                                                               |
+| `Observation`               | Patient, metric, numeric value, unit, measured/received timestamps, source, external source ID and quality | E owns monitoring data; local writes allow manual entry and a device simulator                           |
+| `CarePlan`                  | Patient, title, state, goals, review date, completion percentage                                           | E owns plan lifecycle; current percentage is a demonstration value                                       |
+| `AuditEvent`                | Actor, action, target, time, outcome and description                                                       | A owns audit access and append behavior; seed events and local patient-list/detail accesses are recorded |
+| `Feature`                   | ID, name, domain, status, description, iteration                                                           | Capability metadata helps the UI present planned functions accurately                                    |
 
 Use opaque string IDs; do not parse meaning from an ID prefix. Keep database `snake_case` inside repositories and public DTO fields in `camelCase`. Return only fields a consumer needs. A future date-only value uses `YYYY-MM-DD`; an event timestamp uses an explicit offset or UTC ISO 8601. Store measured time separately from received time. Display formatting belongs to the UI, and all tests must account for timezone differences.
 
@@ -191,6 +228,7 @@ Current enum values are deliberately small:
 - Patient: `stable`, `attention`, `follow-up`.
 - Encounter: `waiting`, `scheduled`, `completed`.
 - Record: `draft`, `pending-review`, `archived`.
+- Order: `draft`, `active`, `stopped`.
 - Expert consultation: `requested`, `scheduled`, `completed`.
 - Care plan: `active`, `draft`.
 - Capability: `demo`, `planned`, `disabled`.

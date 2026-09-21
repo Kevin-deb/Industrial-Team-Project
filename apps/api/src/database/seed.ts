@@ -20,6 +20,7 @@ export function seedDemo(db: DatabaseSync): void {
       'patient:read',
       'patient:write',
       'clinical:read',
+      'clinical:review',
       'encounter:read',
       'health:read',
       'audit:self',
@@ -377,18 +378,50 @@ export function seedDemo(db: DatabaseSync): void {
         '2026-09-08T11:00:00+08:00',
       ],
     ];
+    const hasClinicalTemplateVersion = !!db
+      .prepare(
+        "SELECT 1 FROM pragma_table_info('medical_record_versions') WHERE name='template_version'",
+      )
+      .get();
     for (const r of records) {
       record.run(...r, 1, r[4] === 'archived' ? r[6]! : null);
-      db.prepare('INSERT INTO medical_record_versions VALUES(?,?,?,?,?,?,?,?)').run(
-        'version-' + r[0],
-        r[0]!,
-        1,
-        'general-followup-v1',
-        JSON.stringify({ chiefComplaint: '仅用于演示，非临床病历', synthetic: true }),
-        r[5]!,
-        r[6]!,
-        null,
-      );
+      if (hasClinicalTemplateVersion)
+        db.prepare(
+          `INSERT INTO medical_record_versions(
+            id,record_id,version,template_id,body_json,authored_by,authored_at,amendment_reason,
+            template_version,title,diagnosis
+          ) VALUES(?,?,?,?,?,?,?,NULL,1,?,?)`,
+        ).run(
+          'version-' + r[0],
+          r[0]!,
+          1,
+          'followup',
+          JSON.stringify({
+            followUpPurpose: '仅用于演示，非临床病历',
+            healthMonitoringData: '',
+            currentMedicationAndAdherence: '',
+            lifestyleAndCare: '',
+            nextFollowUpArrangement: '',
+          }),
+          r[5]!,
+          r[6]!,
+          r[2]!,
+          r[3]!,
+        );
+      else
+        db.prepare(
+          `INSERT INTO medical_record_versions(
+            id,record_id,version,template_id,body_json,authored_by,authored_at,amendment_reason
+          ) VALUES(?,?,?,?,?,?,?,NULL)`,
+        ).run(
+          'version-' + r[0],
+          r[0]!,
+          1,
+          'general-followup-v1',
+          JSON.stringify({ chiefComplaint: '仅用于演示，非临床病历', synthetic: true }),
+          r[5]!,
+          r[6]!,
+        );
     }
     db.prepare('INSERT INTO record_reviews VALUES(?,?,?,?,?,?,?)').run(
       'REV-001',
@@ -411,15 +444,41 @@ export function seedDemo(db: DatabaseSync): void {
       null,
       null,
     );
-    db.prepare('INSERT INTO medical_order_versions VALUES(?,?,?,?,?,?,?)').run(
-      'ORDV-001',
-      'ORD-001',
-      1,
-      JSON.stringify({ label: '检查医嘱占位示例', synthetic: true }),
-      DEMO_DOCTOR_ID,
-      '2026-09-10T08:45:00+08:00',
-      'Synthetic scaffold',
-    );
+    const hasOrderTemplateColumns = !!db
+      .prepare("SELECT 1 FROM pragma_table_info('medical_order_versions') WHERE name='template_id'")
+      .get();
+    const orderPayload = JSON.stringify({
+      examName: '检查医嘱占位示例',
+      bodySite: '',
+      indication: '仅用于演示，非临床医嘱',
+      notes: '',
+    });
+    if (hasOrderTemplateColumns)
+      db.prepare(
+        `INSERT INTO medical_order_versions(
+          id,order_id,version,payload_json,authored_by,authored_at,change_reason,template_id,template_version
+        ) VALUES(?,?,?,?,?,?,?,?,?)`,
+      ).run(
+        'ORDV-001',
+        'ORD-001',
+        1,
+        orderPayload,
+        DEMO_DOCTOR_ID,
+        '2026-09-10T08:45:00+08:00',
+        'Synthetic scaffold',
+        'examination',
+        1,
+      );
+    else
+      db.prepare('INSERT INTO medical_order_versions VALUES(?,?,?,?,?,?,?)').run(
+        'ORDV-001',
+        'ORD-001',
+        1,
+        orderPayload,
+        DEMO_DOCTOR_ID,
+        '2026-09-10T08:45:00+08:00',
+        'Synthetic scaffold',
+      );
     const consultation = db.prepare(
       'INSERT INTO consultations(id,patient_id,requested_by,title,specialty,status,scheduled_at,summary) VALUES(?,?,?,?,?,?,?,?)',
     );
