@@ -126,3 +126,43 @@ test('logout revokes the session and photo verification cannot be skipped', asyn
     await app.close();
   }
 });
+
+test('demo face sign-in is an alternative entry for a verified clinician', async () => {
+  const app = await createApp({ runtime: 'local-demo' });
+  try {
+    const started = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/photo-login/start',
+      payload: { account: 'xu.qing' },
+    });
+    assert.equal(started.statusCode, 202, started.body);
+    assert.equal(started.json().data.demoOnly, true);
+
+    const completed = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/photo-check',
+      payload: {
+        ticket: started.json().data.photoTicket,
+        captureMethod: 'camera',
+        photoDataUrl: 'data:image/png;base64,iVBORw0KGgo=',
+      },
+    });
+    assert.equal(completed.statusCode, 201, completed.body);
+
+    const session = await app.inject({
+      url: '/api/v1/session',
+      headers: { authorization: `Bearer ${completed.json().data.token}` },
+    });
+    assert.equal(session.statusCode, 200, session.body);
+    assert.equal(session.json().data.doctor.id, 'doctor-demo-003');
+
+    const unknown = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/photo-login/start',
+      payload: { account: 'not-a-clinician' },
+    });
+    assert.equal(unknown.statusCode, 401, unknown.body);
+  } finally {
+    await app.close();
+  }
+});

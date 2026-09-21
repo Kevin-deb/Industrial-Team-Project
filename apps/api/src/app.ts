@@ -202,6 +202,7 @@ export async function createApp(options: AppOptions = {}) {
     const isPublic =
       pathname === '/api/v1/health' ||
       pathname === '/api/v1/auth/login' ||
+      pathname === '/api/v1/auth/photo-login/start' ||
       pathname === '/api/v1/auth/email/verify' ||
       pathname === '/api/v1/auth/photo-check' ||
       pathname.startsWith('/api/v1/auth/password/recover-password/') ||

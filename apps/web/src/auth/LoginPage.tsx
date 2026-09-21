@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Camera, CheckCircle2, Languages, LockKeyhole, Mail, Stethoscope, Upload } from 'lucide-react';
+import { Camera, CheckCircle2, Languages, LockKeyhole, Mail, ScanFace, ShieldCheck, Stethoscope, Upload } from 'lucide-react';
 import { useI18n } from '../shared/i18n';
 import './auth.css';
 
@@ -8,12 +8,14 @@ type VerifyResult = { photoTicket: string };
 
 export function LoginPage({
   beginLogin,
+  beginPhotoLogin,
   verifyEmail,
   completePhotoCheck,
   beginRecovery,
   completeRecovery,
 }: {
   beginLogin: (input: { account: string; password: string }) => Promise<BeginResult>;
+  beginPhotoLogin: (input: { account: string }) => Promise<{ photoTicket: string; demoOnly: true }>;
   verifyEmail: (input: { challengeId: string; code: string }) => Promise<VerifyResult>;
   completePhotoCheck: (input: {
     ticket: string;
@@ -24,6 +26,7 @@ export function LoginPage({
   completeRecovery: (input: { challengeId: string; code?: string; photoDataUrl?: string; newPassword: string }) => Promise<void>;
 }) {
   const { t, language, setLanguage } = useI18n();
+  const [loginMode, setLoginMode] = useState<'password' | 'face'>('password');
   const [step, setStep] = useState<'password' | 'email' | 'photo'>('password');
   const [account, setAccount] = useState('lin.zhiyuan');
   const [password, setPassword] = useState('123456');
@@ -86,9 +89,36 @@ export function LoginPage({
     reader.readAsDataURL(file);
   }
 
+  function stopCamera() {
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+  }
+
+  function selectLoginMode(mode: 'password' | 'face') {
+    stopCamera();
+    setLoginMode(mode);
+    setStep('password');
+    setTicket('');
+    setPhoto('');
+    setError('');
+  }
+
   return (
     <main className="auth-page">
-      <section className="auth-card">
+      <aside className="auth-visual" aria-label={t('医院工作环境')}>
+        <div className="auth-visual-shade" />
+        <div className="auth-visual-content">
+          <div className="auth-visual-brand"><Stethoscope size={22} /><span>CareLink</span></div>
+          <div className="auth-visual-copy">
+            <p>{t('医院临床协作平台')}</p>
+            <h2>{t('安全连接每一次诊疗')}</h2>
+            <span>{t('患者数据按医生授权范围严格隔离')}</span>
+          </div>
+          <div className="auth-visual-trust"><ShieldCheck size={18} />{t('仅限医院审核人员访问')}</div>
+        </div>
+      </aside>
+      <section className="auth-panel">
+      <div className="auth-card">
         <header className="auth-brand">
           <div className="auth-mark"><Stethoscope size={25} /></div>
           <div><strong>Care<span>Link</span></strong><small>{t('医生服务工作台')}</small></div>
@@ -101,6 +131,16 @@ export function LoginPage({
           <h1>{t('登录 CareLink')}</h1>
           <span>{t('仅限已审核的医生与授权人员使用')}</span>
         </div>
+        {!recovering && step === 'password' && (
+          <div className="auth-mode-tabs" role="tablist" aria-label={t('登录方式')}>
+            <button type="button" role="tab" aria-selected={loginMode === 'password'} className={loginMode === 'password' ? 'active' : ''} onClick={() => selectLoginMode('password')}>
+              <LockKeyhole size={17} />{t('账号密码')}
+            </button>
+            <button type="button" role="tab" aria-selected={loginMode === 'face'} className={loginMode === 'face' ? 'active' : ''} onClick={() => selectLoginMode('face')}>
+              <ScanFace size={18} />{t('人脸验证')}
+            </button>
+          </div>
+        )}
         {recovering ? (
           <form onSubmit={(event) => { event.preventDefault(); void perform(async () => {
             if (!recoveryChallenge) {
@@ -130,7 +170,7 @@ export function LoginPage({
             <span key={item} className={step === item ? 'active' : ''}>{index + 1}</span>
           ))}
         </div>
-        {step === 'password' && (
+        {step === 'password' && loginMode === 'password' && (
           <form onSubmit={(event) => { event.preventDefault(); void perform(async () => {
             const next = await beginLogin({ account, password }); setChallenge(next); setStep('email');
           }); }}>
@@ -138,6 +178,15 @@ export function LoginPage({
             <label>{t('密码')}<div className="auth-input-icon"><LockKeyhole size={17} /><input aria-label={t('密码')} value={password} onChange={(e) => setPassword(e.target.value)} type="password" autoComplete="current-password" /></div></label>
             <button className="auth-primary" disabled={busy}>{t('继续')}</button>
             <button type="button" className="auth-text-button" onClick={() => setRecovering(true)}>{t('忘记密码？')}</button>
+          </form>
+        )}
+        {step === 'password' && loginMode === 'face' && (
+          <form onSubmit={(event) => { event.preventDefault(); void perform(async () => {
+            const next = await beginPhotoLogin({ account }); setTicket(next.photoTicket); setStep('photo');
+          }); }}>
+            <div className="auth-face-note"><ScanFace size={21}/><div><strong>{t('人脸验证登录')}</strong><p>{t('课程演示仅采集照片，不执行真实人脸匹配或活体检测。')}</p></div></div>
+            <label>{t('医生账号')}<input aria-label={t('医生账号')} value={account} onChange={(e) => setAccount(e.target.value)} autoComplete="username" /></label>
+            <button className="auth-primary" disabled={busy || account.trim().length < 3}><Camera size={18}/>{t('开始人脸验证')}</button>
           </form>
         )}
         {step === 'email' && challenge && (
@@ -152,7 +201,7 @@ export function LoginPage({
         )}
         {step === 'photo' && (
           <div>
-            <div className="auth-message"><Camera size={20} /><div><strong>{t('演示拍照核验')}</strong><p>{t('本步骤仅采集演示照片，不执行真实人脸识别或活体检测。')}</p></div></div>
+            <div className="auth-message"><Camera size={20} /><div><strong>{loginMode === 'face' ? t('人脸验证登录') : t('演示拍照核验')}</strong><p>{t('本步骤仅采集演示照片，不执行真实人脸识别或活体检测。')}</p></div></div>
             <div className="photo-stage">
               {photo ? <img src={photo} alt={t('待提交的演示照片')} /> : <video ref={videoRef} autoPlay playsInline muted />}
             </div>
@@ -164,11 +213,13 @@ export function LoginPage({
             <button className="auth-primary" disabled={busy || !photo} onClick={() => void perform(() => completePhotoCheck({ ticket, captureMethod: method, photoDataUrl: photo }))}>
               <CheckCircle2 size={18} />{t('完成演示核验')}
             </button>
+            <button type="button" className="auth-text-button" onClick={() => selectLoginMode(loginMode)}>{t('返回登录方式')}</button>
           </div>
         )}
         </>}
         {error && <p className="auth-error" role="alert">{error}</p>}
-        <footer>{t('所有账号与患者资料均为合成演示数据')}</footer>
+        <footer><strong>{t('账号由医院管理员审核并分配')}</strong><span>{t('不开放公开注册')} · {t('所有账号与患者资料均为合成演示数据')}</span></footer>
+      </div>
       </section>
     </main>
   );

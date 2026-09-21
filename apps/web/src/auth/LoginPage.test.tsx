@@ -7,6 +7,39 @@ import { LoginPage } from './LoginPage';
 describe('verified clinician login', () => {
   beforeEach(() => localStorage.clear());
 
+  const props = {
+    beginLogin: vi.fn(),
+    beginPhotoLogin: vi.fn(),
+    verifyEmail: vi.fn(),
+    completePhotoCheck: vi.fn(),
+    beginRecovery: vi.fn(),
+    completeRecovery: vi.fn(),
+  };
+
+  it('offers password and demo face sign-in without public registration', async () => {
+    const user = userEvent.setup();
+    render(<I18nProvider><LoginPage {...props} /></I18nProvider>);
+
+    expect(screen.getByRole('tab', { name: '账号密码' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '人脸验证' })).toBeInTheDocument();
+    expect(screen.queryByText('注册')).not.toBeInTheDocument();
+    expect(screen.getByText('账号由医院管理员审核并分配')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('tab', { name: '人脸验证' }));
+    expect(screen.getByLabelText('医生账号')).toBeInTheDocument();
+    expect(screen.getByText(/课程演示仅采集照片/)).toBeInTheDocument();
+  });
+
+  it('allows returning from the demo face capture step', async () => {
+    const user = userEvent.setup();
+    const beginPhotoLogin = vi.fn().mockResolvedValue({ photoTicket: 'face-ticket', demoOnly: true });
+    render(<I18nProvider><LoginPage {...props} beginPhotoLogin={beginPhotoLogin} /></I18nProvider>);
+
+    await user.click(screen.getByRole('tab', { name: '人脸验证' }));
+    await user.click(screen.getByRole('button', { name: '开始人脸验证' }));
+    expect(await screen.findByRole('button', { name: '返回登录方式' })).toBeInTheDocument();
+  });
+
   it('requires password, email code and an explicitly labelled demo photo check', async () => {
     const user = userEvent.setup();
     const begin = vi.fn().mockResolvedValue({ challengeId: 'challenge', emailHint: 'l***@carelink.demo' });
@@ -14,7 +47,7 @@ describe('verified clinician login', () => {
     const complete = vi.fn().mockResolvedValue(undefined);
     render(
       <I18nProvider>
-        <LoginPage beginLogin={begin} verifyEmail={verify} completePhotoCheck={complete} beginRecovery={vi.fn()} completeRecovery={vi.fn()} />
+        <LoginPage {...props} beginLogin={begin} verifyEmail={verify} completePhotoCheck={complete} />
       </I18nProvider>,
     );
     await user.type(screen.getByLabelText('账号或邮箱'), 'lin.zhiyuan');
@@ -33,7 +66,7 @@ describe('verified clinician login', () => {
     localStorage.setItem('carelink-language', 'en');
     render(
       <I18nProvider>
-        <LoginPage beginLogin={vi.fn()} verifyEmail={vi.fn()} completePhotoCheck={vi.fn()} beginRecovery={vi.fn()} completeRecovery={vi.fn()} />
+        <LoginPage {...props} />
       </I18nProvider>,
     );
     expect(screen.getByRole('heading', { name: 'Sign in to CareLink' })).toBeInTheDocument();

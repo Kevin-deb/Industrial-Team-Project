@@ -269,6 +269,39 @@ export class AuthService {
     return { challengeId, emailHint: `${local[0]}***@${domain}`, expiresAt };
   }
 
+  beginPhotoLogin(input: { account: string }) {
+    const at = this.now();
+    const user = this.repository.findUser(input.account);
+    if (
+      !user ||
+      user.status !== 'active' ||
+      Number(user.doctor_enabled) !== 1 ||
+      user.personnel_status !== 'verified' ||
+      user.credential_status !== 'verified'
+    ) {
+      throw new AuthError('INVALID_CREDENTIALS');
+    }
+    const challengeId = this.randomToken();
+    const photoTicket = this.randomToken();
+    const expiresAt = addMinutes(at, 10);
+    this.repository.createChallenge({
+      id: challengeId,
+      userId: String(user.id),
+      codeHash: hashSecret(this.randomCode()),
+      expiresAt,
+      createdAt: at,
+      purpose: 'login:photo',
+    });
+    this.repository.consumeChallenge(challengeId, at, tokenHash(photoTicket), expiresAt);
+    this.audit?.({
+      actorId: String(user.identity_id),
+      action: 'auth.photo.challenge',
+      outcome: 'success',
+      targetId: String(user.id),
+    });
+    return { photoTicket, expiresAt, demoOnly: true as const };
+  }
+
   async beginPasswordOperation(input: {
     account?: string;
     sessionToken?: string;

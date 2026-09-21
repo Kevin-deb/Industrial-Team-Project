@@ -84,6 +84,28 @@ export function registerAuthRoutes(
   });
 
   app.post(
+    '/api/v1/auth/photo-login/start',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['account'],
+          properties: { account: { type: 'string', minLength: 3, maxLength: 160 } },
+        },
+      },
+    },
+    async (request, reply) => {
+      try {
+        const data = auth.beginPhotoLogin(request.body as { account: string });
+        return reply.code(202).send(envelope(request, data));
+      } catch (error) {
+        return replyAuthError(error, request, reply, fail);
+      }
+    },
+  );
+
+  app.post(
     '/api/v1/auth/email/verify',
     {
       schema: {

@@ -71,6 +71,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     ).data;
   }, []);
 
+  const beginPhotoLogin = useCallback(async (input: { account: string }) => {
+    return (
+      await requestApi<{ photoTicket: string; expiresAt: string; demoOnly: true }>('/auth/photo-login/start', {
+        method: 'POST',
+        body: JSON.stringify(input),
+      })
+    ).data;
+  }, []);
+
   const beginRecovery = useCallback(async (input: { account: string; method: 'email' | 'photo' }) => {
     const started = await requestApi<PasswordChallenge>('/auth/password/recover-password/start', {
       method: 'POST', body: JSON.stringify(input),
@@ -116,6 +125,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return (
       <LoginPage
         beginLogin={beginLogin}
+        beginPhotoLogin={beginPhotoLogin}
         verifyEmail={verifyEmail}
         completePhotoCheck={completePhotoCheck}
         beginRecovery={beginRecovery}
