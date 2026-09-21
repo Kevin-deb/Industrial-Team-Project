@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, Menu, protocol, session, screen } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, protocol, session, screen } from 'electron';
 import { resolve, isAbsolute } from 'node:path';
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { createApp } from '../../api/src/app.js';
@@ -35,6 +35,7 @@ let services: Awaited<ReturnType<typeof createApp>> | undefined;
 let closing = false;
 let mayQuit = false;
 const socialRealtime = new SocialRealtimeHub();
+let stopRealtime: (() => void) | undefined;
 
 function showStartupError(error: unknown) {
   const dataRoot = app.getPath('userData');
@@ -146,9 +147,20 @@ if (!app.requestSingleInstanceLock()) {
         logger: false,
         socialRealtime,
       });
-      await subscribeCurrentDoctor(services, socialRealtime, (event) => {
-        if (window && !window.isDestroyed())
-          window.webContents.send('carelink:social-event', event);
+      ipcMain.handle('carelink:set-session-token', async (_event, token: unknown) => {
+        stopRealtime?.();
+        stopRealtime = undefined;
+        if (typeof token !== 'string' || !token) return { subscribed: false };
+        stopRealtime = await subscribeCurrentDoctor(
+          services!,
+          socialRealtime,
+          (event) => {
+            if (window && !window.isDestroyed())
+              window.webContents.send('carelink:social-event', event);
+          },
+          token,
+        );
+        return { subscribed: true };
       });
       protocol.handle('carelink', createProtocolHandler(services, resolve(__dirname, 'renderer')));
       await openWindow();

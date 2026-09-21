@@ -8,4 +8,7 @@ contextBridge.exposeInMainWorld('carelinkRealtime', {
     ipcRenderer.on('carelink:social-event', handler);
     return () => ipcRenderer.removeListener('carelink:social-event', handler);
   },
+  setSessionToken(token: string | null) {
+    return ipcRenderer.invoke('carelink:set-session-token', token);
+  },
 });
