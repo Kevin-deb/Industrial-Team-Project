@@ -121,6 +121,164 @@
 .encounter-filter-separator {
   color: #a1adb1;
 }
+.appointment-manager {
+  display: grid;
+  gap: 18px;
+}
+.appointment-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.appointment-summary > div {
+  border: 1px solid #e8eef1;
+  border-radius: 10px;
+  padding: 16px;
+  background: #f8fafb;
+}
+.appointment-summary span {
+  display: block;
+  color: #84959c;
+  font-size: 11px;
+  margin-bottom: 8px;
+}
+.appointment-summary strong {
+  color: #24434b;
+  font-size: 24px;
+}
+.appointment-section {
+  border: 1px solid #e7eef1;
+  border-radius: 12px;
+  padding: 18px;
+  background: #fff;
+}
+.appointment-section-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+.appointment-section-title h3 {
+  margin: 0;
+  color: #28454e;
+  font-size: 15px;
+}
+.appointment-section-title p {
+  margin: 3px 0 0;
+  color: #8fa0a6;
+  font-size: 11px;
+  line-height: 1.7;
+}
+.appointment-form-row,
+.appointment-reschedule {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 0.8fr 0.8fr 0.7fr auto;
+  gap: 10px;
+  align-items: end;
+}
+.appointment-form-row label,
+.appointment-window-list label,
+.appointment-notice-grid label,
+.appointment-reschedule label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  color: #87989f;
+  font-size: 11px;
+}
+.appointment-form-row input,
+.appointment-form-row select,
+.appointment-window-list input,
+.appointment-notice-grid input,
+.appointment-notice-grid select,
+.appointment-notice-grid textarea {
+  width: 100%;
+  border: 1px solid #dfe8ec;
+  border-radius: 9px;
+  background: #fbfcfd;
+  color: #35515a;
+  font: inherit;
+  font-size: 12px;
+  min-height: 38px;
+  padding: 8px 10px;
+  outline: none;
+}
+.appointment-notice-grid textarea {
+  min-height: 78px;
+  resize: vertical;
+  line-height: 1.7;
+}
+.appointment-form-row input:focus,
+.appointment-form-row select:focus,
+.appointment-window-list input:focus,
+.appointment-notice-grid input:focus,
+.appointment-notice-grid select:focus,
+.appointment-notice-grid textarea:focus {
+  border-color: #2f86c5;
+  box-shadow: 0 0 0 3px #2f86c512;
+}
+.appointment-window-list,
+.appointment-schedule-list,
+.appointment-notice-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+.appointment-window-list article,
+.appointment-schedule-list article,
+.appointment-notice-list article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 14px;
+  align-items: center;
+  border: 1px solid #edf2f4;
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: #f9fbfc;
+}
+.appointment-window-list strong,
+.appointment-schedule-list strong,
+.appointment-notice-list strong {
+  display: block;
+  color: #34545d;
+  font-size: 13px;
+}
+.appointment-window-list span,
+.appointment-schedule-list span,
+.appointment-notice-list p {
+  margin: 4px 0 0;
+  color: #81949b;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.appointment-window-list label {
+  width: 88px;
+}
+.appointment-notice-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.7fr;
+  gap: 12px;
+}
+.appointment-notice-text,
+.appointment-reschedule {
+  grid-column: 1 / -1;
+}
+.appointment-notice-actions {
+  display: flex;
+  gap: 10px;
+  align-items: end;
+  flex-wrap: wrap;
+}
+.appointment-reschedule {
+  grid-template-columns: 1fr 1fr auto;
+}
+.appointment-notice-list article > div:last-child {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+}
 .feature-tabs {
   display: flex;
   gap: 5px;

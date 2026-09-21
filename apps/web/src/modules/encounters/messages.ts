@@ -6,6 +6,8 @@ export const encountersMessages: Record<string, string> = {
   '有序接诊，从容沟通。让优质的医疗服务跨越距离。':
     'Stay organized and communicate with confidence, bringing quality care closer.',
   预约管理: 'Manage appointments',
+  '管理可接诊时段、排班容量、患者提醒与改期确认':
+    'Manage availability, capacity, patient reminders, and reschedule confirmations',
   演示接诊安排: 'Demo appointments',
   查看当前工作队列: 'Your current work queue',
   等待接诊: 'Awaiting care',
@@ -51,6 +53,44 @@ export const encountersMessages: Record<string, string> = {
   预约时长: 'Duration',
   '{value0} 分钟': '{value0} minutes',
   预约日期: 'Appointment date',
+  今日可接诊容量: 'Today capacity',
+  设置可接诊时段: 'Set availability',
+  '医生只维护自己的可服务时间，不确认患者人选。':
+    'Doctors manage their own service windows and do not approve patient selection.',
+  日期: 'Date',
+  方式: 'Type',
+  开始: 'Start',
+  结束: 'End',
+  容量: 'Capacity',
+  添加时段: 'Add slot',
+  '已约 {booked}/{capacity}': '{booked}/{capacity} booked',
+  查看预约排班: 'View schedule',
+  '按当前接诊队列展示图文 48h 窗口和视频固定时段。':
+    'Shows text 48h windows and fixed video slots from the current queue.',
+  患者通知与改期: 'Patient notices and rescheduling',
+  '医生发起通知，患者接受改期后平台自动更新时间。':
+    'The doctor sends notices; after patient acceptance, the platform updates the time automatically.',
+  选择接诊: 'Select visit',
+  提醒内容: 'Reminder content',
+  '请患者在问诊前补充近期检查结果和当前用药。':
+    'Ask the patient to add recent test results and current medication before the visit.',
+  提醒补充资料: 'Ask for materials',
+  提醒按时进入: 'Remind to join on time',
+  改期日期: 'New date',
+  改期时间: 'New time',
+  发送改期通知: 'Send reschedule notice',
+  资料提醒: 'Material reminder',
+  按时进入提醒: 'Join reminder',
+  改期通知: 'Reschedule notice',
+  '已提醒患者在服务窗口内保持在线。':
+    'Patient has been reminded to stay online during the service window.',
+  '建议改至 {date} {time}，等待患者确认。':
+    'Suggested moving to {date} {time}, waiting for patient confirmation.',
+  '待患者确认': 'Waiting for patient confirmation',
+  患者已接受: 'Patient accepted',
+  已发送: 'Sent',
+  模拟患者接受: 'Simulate patient acceptance',
+  '平台已自动调整接诊时段。': 'The platform has automatically updated the care window.',
   就诊事由: 'Visit reason',
   进入诊间: 'Enter room',
   返回接诊列表: 'Back to appointments',
@@ -125,13 +165,52 @@ export const encountersMessages: Record<string, string> = {
   内分泌科: 'Endocrinology',
   '评估餐后血糖，强调饮食与运动管理。':
     'Review postprandial glucose and reinforce diet and exercise management.',
+  低血糖风险评估: 'Hypoglycemia risk assessment',
+  '2型糖尿病伴血糖波动': 'Type 2 diabetes with glucose fluctuation',
+  '调整晚餐后加餐建议，提醒随身携带糖块并记录低血糖时间。':
+    'Adjust after-dinner snack guidance, carry glucose, and record hypoglycemia timing.',
+  胸闷症状复查: 'Chest tightness follow-up',
+  心血管内科: 'Cardiology',
+  冠心病稳定期: 'Stable coronary heart disease',
+  '复核心电图与用药依从性，建议继续观察活动耐量变化。':
+    'Review ECG and medication adherence, and continue observing exercise tolerance changes.',
+  冠心病用药答疑: 'Coronary medication Q&A',
+  冠心病二级预防: 'Secondary prevention for coronary heart disease',
+  '解释抗血小板药物服用注意事项，提醒出现黑便或出血及时就医。':
+    'Explain antiplatelet precautions and advise urgent care for black stool or bleeding.',
+  饮食运动计划调整: 'Diet and exercise plan adjustment',
+  糖尿病前期管理: 'Prediabetes management',
+  '建议每周至少五次中等强度步行，晚餐主食量减少三分之一。':
+    'Recommend moderate walking at least five times weekly and reducing dinner staples by one third.',
+  体重管理线上随访: 'Online weight management follow-up',
+  营养门诊: 'Nutrition clinic',
+  超重伴代谢风险: 'Overweight with metabolic risk',
+  '建立饮食日志，四周后复核体重、腰围与空腹血糖。':
+    'Start a food diary and review weight, waist circumference, and fasting glucose in four weeks.',
   呼吸道症状复诊: 'Respiratory symptom follow-up',
   呼吸内科: 'Respiratory medicine',
   '季节变化时加强观察，按需使用吸入药物。':
     'Increase monitoring during seasonal changes and use inhaled medication as needed.',
+  咳嗽用药咨询: 'Cough medication consultation',
+  感染后咳嗽: 'Post-infectious cough',
+  '短期对症处理，若出现发热、喘憋或痰中带血需线下就诊。':
+    'Short-term symptomatic care; seek in-person care for fever, wheezing, or blood in sputum.',
+  膝关节疼痛康复咨询: 'Knee pain rehabilitation consultation',
+  康复医学科: 'Rehabilitation medicine',
+  膝骨关节炎康复期: 'Knee osteoarthritis rehabilitation',
+  '指导股四头肌训练，避免长时间爬楼与负重深蹲。':
+    'Guide quadriceps training and avoid prolonged stair climbing or weighted deep squats.',
+  康复训练反馈: 'Rehabilitation training feedback',
+  膝关节慢性疼痛: 'Chronic knee pain',
+  '疼痛较前减轻，建议继续低冲击运动并记录疼痛评分。':
+    'Pain has improved; continue low-impact exercise and record pain scores.',
   慢病管理随访: 'Chronic disease follow-up',
   '继续降脂治疗，三个月后复查血脂。':
     'Continue lipid-lowering therapy and recheck lipids in three months.',
+  头晕症状随访: 'Dizziness follow-up',
+  眩晕待查: 'Vertigo under evaluation',
+  '建议监测血压并记录发作时长，若伴肢体无力需急诊评估。':
+    'Monitor blood pressure and episode duration; seek emergency evaluation if limb weakness occurs.',
   既往在线随访: 'Previous online follow-up',
   血压管理: 'Blood pressure management',
   血糖管理: 'Blood glucose management',

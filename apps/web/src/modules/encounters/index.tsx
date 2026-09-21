@@ -14,6 +14,7 @@ import {
   ImagePlus,
   Mic,
   MessageSquare,
+  Plus,
   PhoneCall,
   PhoneOff,
   Search,
@@ -32,7 +33,6 @@ import {
   LinkAction,
   Metric,
   PersonAvatar,
-  PlannedDialog,
   ReadOnlyNote,
 } from '../ui';
 
@@ -82,6 +82,23 @@ type SavedEncounterRecord = {
   messageCount: number;
   audioSaved: boolean;
   videoSaved: boolean;
+};
+type AvailabilityWindow = {
+  id: string;
+  date: string;
+  type: Encounter['type'];
+  start: string;
+  end: string;
+  capacity: number;
+  booked: number;
+};
+type NoticeLog = {
+  id: string;
+  encounterId: string;
+  patientName: string;
+  kind: '资料提醒' | '按时进入提醒' | '改期通知';
+  content: string;
+  status: '待患者确认' | '患者已接受' | '已发送';
 };
 const extraDemoEncounters: Encounter[] = [
   {
@@ -247,6 +264,50 @@ const patientHistories: Record<string, HistoryRecord[]> = {
       diagnosis: '2型糖尿病',
       outcome: '评估餐后血糖，强调饮食与运动管理。',
     },
+    {
+      id: 'MR-PAT002-02',
+      title: '低血糖风险评估',
+      date: '2026-07-16',
+      department: '内分泌科',
+      diagnosis: '2型糖尿病伴血糖波动',
+      outcome: '调整晚餐后加餐建议，提醒随身携带糖块并记录低血糖时间。',
+    },
+  ],
+  'PAT-004': [
+    {
+      id: 'MR-PAT004-01',
+      title: '胸闷症状复查',
+      date: '2026-08-28',
+      department: '心血管内科',
+      diagnosis: '冠心病稳定期',
+      outcome: '复核心电图与用药依从性，建议继续观察活动耐量变化。',
+    },
+    {
+      id: 'MR-PAT004-02',
+      title: '冠心病用药答疑',
+      date: '2026-07-22',
+      department: '心血管内科',
+      diagnosis: '冠心病二级预防',
+      outcome: '解释抗血小板药物服用注意事项，提醒出现黑便或出血及时就医。',
+    },
+  ],
+  'PAT-005': [
+    {
+      id: 'MR-PAT005-01',
+      title: '饮食运动计划调整',
+      date: '2026-09-02',
+      department: '内分泌科',
+      diagnosis: '糖尿病前期管理',
+      outcome: '建议每周至少五次中等强度步行，晚餐主食量减少三分之一。',
+    },
+    {
+      id: 'MR-PAT005-02',
+      title: '体重管理线上随访',
+      date: '2026-08-05',
+      department: '营养门诊',
+      diagnosis: '超重伴代谢风险',
+      outcome: '建立饮食日志，四周后复核体重、腰围与空腹血糖。',
+    },
   ],
   'PAT-006': [
     {
@@ -256,6 +317,32 @@ const patientHistories: Record<string, HistoryRecord[]> = {
       department: '呼吸内科',
       diagnosis: '慢性支气管炎',
       outcome: '季节变化时加强观察，按需使用吸入药物。',
+    },
+    {
+      id: 'MR-PAT006-02',
+      title: '咳嗽用药咨询',
+      date: '2026-06-29',
+      department: '呼吸内科',
+      diagnosis: '感染后咳嗽',
+      outcome: '短期对症处理，若出现发热、喘憋或痰中带血需线下就诊。',
+    },
+  ],
+  'PAT-007': [
+    {
+      id: 'MR-PAT007-01',
+      title: '膝关节疼痛康复咨询',
+      date: '2026-08-17',
+      department: '康复医学科',
+      diagnosis: '膝骨关节炎康复期',
+      outcome: '指导股四头肌训练，避免长时间爬楼与负重深蹲。',
+    },
+    {
+      id: 'MR-PAT007-02',
+      title: '康复训练反馈',
+      date: '2026-07-09',
+      department: '康复医学科',
+      diagnosis: '膝关节慢性疼痛',
+      outcome: '疼痛较前减轻，建议继续低冲击运动并记录疼痛评分。',
     },
   ],
   'PAT-003': [
@@ -267,8 +354,45 @@ const patientHistories: Record<string, HistoryRecord[]> = {
       diagnosis: '高脂血症',
       outcome: '继续降脂治疗，三个月后复查血脂。',
     },
+    {
+      id: 'MR-PAT003-02',
+      title: '头晕症状随访',
+      date: '2026-06-26',
+      department: '神经内科',
+      diagnosis: '眩晕待查',
+      outcome: '建议监测血压并记录发作时长，若伴肢体无力需急诊评估。',
+    },
   ],
 };
+const initialAvailabilityWindows: AvailabilityWindow[] = [
+  {
+    id: 'AW-001',
+    date: '2026-09-21',
+    type: 'text',
+    start: '08:00',
+    end: '20:00',
+    capacity: 8,
+    booked: 3,
+  },
+  {
+    id: 'AW-002',
+    date: '2026-09-21',
+    type: 'video',
+    start: '09:00',
+    end: '11:30',
+    capacity: 6,
+    booked: 2,
+  },
+  {
+    id: 'AW-003',
+    date: '2026-09-22',
+    type: 'video',
+    start: '14:00',
+    end: '17:00',
+    capacity: 5,
+    booked: 1,
+  },
+];
 
 function clinicalBrief(encounter: Encounter) {
   return (
@@ -485,6 +609,341 @@ function SavedRecordsPanel({
         </div>
       )}
     </section>
+  );
+}
+
+function AppointmentManagementDialog({
+  encounters,
+  nowMs,
+  onClose,
+  onRescheduleAccepted,
+}: {
+  encounters: Encounter[];
+  nowMs: number;
+  onClose: () => void;
+  onRescheduleAccepted: (id: string, nextScheduledAt: string) => void;
+}) {
+  const { t, formatDate } = useI18n();
+  const firstWaiting = encounters.find((item) => encounterDisplayStatus(item, nowMs) !== 'completed');
+  const [windows, setWindows] = useState(initialAvailabilityWindows);
+  const [newWindow, setNewWindow] = useState({
+    date: '2026-09-22',
+    type: 'video' as Encounter['type'],
+    start: '09:00',
+    end: '09:20',
+    capacity: 4,
+  });
+  const [selectedEncounterId, setSelectedEncounterId] = useState(firstWaiting?.id ?? '');
+  const [nextDate, setNextDate] = useState('2026-09-22');
+  const [nextTime, setNextTime] = useState('10:00');
+  const [noticeText, setNoticeText] = useState('请患者在问诊前补充近期检查结果和当前用药。');
+  const [notices, setNotices] = useState<NoticeLog[]>([
+    {
+      id: 'NOTICE-001',
+      encounterId: 'ENC-012',
+      patientName: '张淑兰',
+      kind: '按时进入提醒',
+      content: '已提醒患者在服务窗口内保持在线。',
+      status: '已发送',
+    },
+  ]);
+  const selectedEncounter = encounters.find((item) => item.id === selectedEncounterId);
+  const addWindow = useCallback(() => {
+    setWindows((current) => [
+      {
+        id: `AW-${Date.now()}`,
+        date: newWindow.date,
+        type: newWindow.type,
+        start: newWindow.start,
+        end: newWindow.end,
+        capacity: newWindow.capacity,
+        booked: 0,
+      },
+      ...current,
+    ]);
+  }, [newWindow]);
+  const sendNotice = useCallback(
+    (kind: NoticeLog['kind']) => {
+      if (!selectedEncounter) return;
+      setNotices((current) => [
+        {
+          id: `NOTICE-${Date.now()}`,
+          encounterId: selectedEncounter.id,
+          patientName: selectedEncounter.patientName,
+          kind,
+          content:
+            kind === '改期通知'
+              ? `建议改至 ${nextDate} ${nextTime}，等待患者确认。`
+              : noticeText,
+          status: kind === '改期通知' ? '待患者确认' : '已发送',
+        },
+        ...current,
+      ]);
+    },
+    [nextDate, nextTime, noticeText, selectedEncounter],
+  );
+  const acceptReschedule = useCallback(
+    (notice: NoticeLog) => {
+      const nextScheduledAt = `${nextDate}T${nextTime}:00+08:00`;
+      onRescheduleAccepted(notice.encounterId, nextScheduledAt);
+      setNotices((current) =>
+        current.map((item) =>
+          item.id === notice.id
+            ? {
+                ...item,
+                status: '患者已接受',
+                content: `${item.content} 平台已自动调整接诊时段。`,
+              }
+            : item,
+        ),
+      );
+    },
+    [nextDate, nextTime, onRescheduleAccepted],
+  );
+  const pendingCount = encounters.filter(
+    (item) => encounterDisplayStatus(item, nowMs) === 'waiting',
+  ).length;
+  const activeTextCount = encounters.filter(
+    (item) => encounterDisplayStatus(item, nowMs) === 'active',
+  ).length;
+  return (
+    <FeatureDialog
+      title="预约管理"
+      subtitle="管理可接诊时段、排班容量、患者提醒与改期确认"
+      onClose={onClose}
+      wide
+    >
+      <div className="appointment-manager">
+        <div className="appointment-summary">
+          <div>
+            <span>{t('待接诊')}</span>
+            <strong>{pendingCount}</strong>
+          </div>
+          <div>
+            <span>{t('接诊中')}</span>
+            <strong>{activeTextCount}</strong>
+          </div>
+          <div>
+            <span>{t('今日可接诊容量')}</span>
+            <strong>
+              {windows
+                .filter((item) => item.date === '2026-09-21')
+                .reduce((total, item) => total + item.capacity, 0)}
+            </strong>
+          </div>
+        </div>
+
+        <section className="appointment-section">
+          <div className="appointment-section-title">
+            <h3>{t('设置可接诊时段')}</h3>
+            <p>{t('医生只维护自己的可服务时间，不确认患者人选。')}</p>
+          </div>
+          <div className="appointment-form-row">
+            <label>
+              <span>{t('日期')}</span>
+              <input
+                type="date"
+                value={newWindow.date}
+                onChange={(event) => setNewWindow((current) => ({ ...current, date: event.target.value }))}
+              />
+            </label>
+            <label>
+              <span>{t('方式')}</span>
+              <select
+                value={newWindow.type}
+                onChange={(event) =>
+                  setNewWindow((current) => ({
+                    ...current,
+                    type: event.target.value as Encounter['type'],
+                  }))
+                }
+              >
+                <option value="text">{t('图文问诊')}</option>
+                <option value="video">{t('视频问诊')}</option>
+              </select>
+            </label>
+            <label>
+              <span>{t('开始')}</span>
+              <input
+                type="time"
+                value={newWindow.start}
+                onChange={(event) => setNewWindow((current) => ({ ...current, start: event.target.value }))}
+              />
+            </label>
+            <label>
+              <span>{t('结束')}</span>
+              <input
+                type="time"
+                value={newWindow.end}
+                onChange={(event) => setNewWindow((current) => ({ ...current, end: event.target.value }))}
+              />
+            </label>
+            <label>
+              <span>{t('容量')}</span>
+              <input
+                type="number"
+                min="1"
+                max="20"
+                value={newWindow.capacity}
+                onChange={(event) =>
+                  setNewWindow((current) => ({
+                    ...current,
+                    capacity: Number(event.target.value) || 1,
+                  }))
+                }
+              />
+            </label>
+            <Button onClick={addWindow}>
+              <Plus size={16} />
+              {t('添加时段')}
+            </Button>
+          </div>
+          <div className="appointment-window-list">
+            {windows.map((window) => (
+              <article key={window.id}>
+                <div>
+                  <strong>{formatDate(window.date)}</strong>
+                  <span>
+                    {window.start}-{window.end} ·{' '}
+                    {window.type === 'video' ? t('视频问诊') : t('图文问诊')}
+                  </span>
+                </div>
+                <label>
+                  <span>{t('容量')}</span>
+                  <input
+                    type="number"
+                    min={window.booked}
+                    value={window.capacity}
+                    onChange={(event) =>
+                      setWindows((current) =>
+                        current.map((item) =>
+                          item.id === window.id
+                            ? { ...item, capacity: Math.max(window.booked, Number(event.target.value) || 1) }
+                            : item,
+                        ),
+                      )
+                    }
+                  />
+                </label>
+                <Badge tone={window.booked >= window.capacity ? 'amber' : 'teal'}>
+                  {t('已约 {booked}/{capacity}', {
+                    booked: window.booked,
+                    capacity: window.capacity,
+                  })}
+                </Badge>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="appointment-section">
+          <div className="appointment-section-title">
+            <h3>{t('查看预约排班')}</h3>
+            <p>{t('按当前接诊队列展示图文 48h 窗口和视频固定时段。')}</p>
+          </div>
+          <div className="appointment-schedule-list">
+            {encounters.slice(0, 8).map((encounter) => {
+              const displayStatus = encounterDisplayStatus(encounter, nowMs);
+              return (
+                <article key={encounter.id}>
+                  <div>
+                    <strong>{encounter.patientName}</strong>
+                    <span>
+                      {encounter.id} ·{' '}
+                      {encounter.type === 'video' ? t('视频问诊') : t('图文问诊')}
+                    </span>
+                  </div>
+                  <span>
+                    {encounterDate(encounter, formatDate)} · {encounterTime(encounter, formatDate)}
+                  </span>
+                  <Badge tone={tones[displayStatus]}>{t(statuses[displayStatus])}</Badge>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="appointment-section">
+          <div className="appointment-section-title">
+            <h3>{t('患者通知与改期')}</h3>
+            <p>{t('医生发起通知，患者接受改期后平台自动更新时间。')}</p>
+          </div>
+          <div className="appointment-notice-grid">
+            <label>
+              <span>{t('选择接诊')}</span>
+              <select
+                value={selectedEncounterId}
+                onChange={(event) => setSelectedEncounterId(event.target.value)}
+              >
+                {encounters
+                  .filter((item) => encounterDisplayStatus(item, nowMs) !== 'completed')
+                  .map((encounter) => (
+                    <option value={encounter.id} key={encounter.id}>
+                      {encounter.patientName} · {encounter.id}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <label className="appointment-notice-text">
+              <span>{t('提醒内容')}</span>
+              <textarea
+                value={noticeText}
+                onChange={(event) => setNoticeText(event.target.value)}
+              />
+            </label>
+            <div className="appointment-notice-actions">
+              <Button variant="secondary" onClick={() => sendNotice('资料提醒')}>
+                {t('提醒补充资料')}
+              </Button>
+              <Button variant="secondary" onClick={() => sendNotice('按时进入提醒')}>
+                {t('提醒按时进入')}
+              </Button>
+            </div>
+            <div className="appointment-reschedule">
+              <label>
+                <span>{t('改期日期')}</span>
+                <input
+                  type="date"
+                  value={nextDate}
+                  onChange={(event) => setNextDate(event.target.value)}
+                />
+              </label>
+              <label>
+                <span>{t('改期时间')}</span>
+                <input
+                  type="time"
+                  value={nextTime}
+                  onChange={(event) => setNextTime(event.target.value)}
+                />
+              </label>
+              <Button onClick={() => sendNotice('改期通知')}>{t('发送改期通知')}</Button>
+            </div>
+          </div>
+          <div className="appointment-notice-list">
+            {notices.map((notice) => (
+              <article key={notice.id}>
+                <div>
+                  <strong>
+                    {notice.patientName} · {t(notice.kind)}
+                  </strong>
+                  <p>{t(notice.content)}</p>
+                </div>
+                <div>
+                  <Badge tone={notice.status === '患者已接受' ? 'teal' : 'amber'}>
+                    {t(notice.status)}
+                  </Badge>
+                  {notice.kind === '改期通知' && notice.status === '待患者确认' && (
+                    <Button variant="secondary" onClick={() => acceptReschedule(notice)}>
+                      {t('模拟患者接受')}
+                    </Button>
+                  )}
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      </div>
+    </FeatureDialog>
   );
 }
 
@@ -950,6 +1409,7 @@ export function EncountersPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [roomId, setRoomId] = useState<string | null>(null);
   const [statusOverrides, setStatusOverrides] = useState<Record<string, Encounter['status']>>({});
+  const [scheduleOverrides, setScheduleOverrides] = useState<Record<string, string>>({});
   const [savedRecordsByEncounter, setSavedRecordsByEncounter] = useState<
     Record<string, SavedEncounterRecord[]>
   >({});
@@ -961,17 +1421,17 @@ export function EncountersPage() {
     return Array.from(byId.values())
       .map((item) => ({
         ...item,
+        scheduledAt: scheduleOverrides[item.id] ?? item.scheduledAt,
         status: statusOverrides[item.id] ?? (item.status === 'scheduled' ? 'waiting' : item.status),
       }))
       .sort((left, right) => Date.parse(left.scheduledAt) - Date.parse(right.scheduledAt));
-  }, [data, statusOverrides]);
+  }, [data, scheduleOverrides, statusOverrides]);
   const nowMs = Date.now();
   const selected = encounterRows.find((item) => item.id === selectedId) ?? null;
   const activeRoom = encounterRows.find((item) => item.id === roomId) ?? null;
   const selectedBrief = selected ? clinicalBrief(selected) : null;
-  const [planned, setPlanned] = useState<string | null>(null);
+  const [appointmentOpen, setAppointmentOpen] = useState(false);
   const close = useCallback(() => setSelectedId(null), []);
-  const closePlanned = useCallback(() => setPlanned(null), []);
   const completeEncounter = useCallback((id: string, record: SavedEncounterRecord) => {
     setStatusOverrides((current) => ({ ...current, [id]: 'completed' }));
     setSavedRecordsByEncounter((current) => {
@@ -979,6 +1439,10 @@ export function EncountersPage() {
       if (records.some((item) => item.id === record.id)) return current;
       return { ...current, [id]: [record, ...records] };
     });
+  }, []);
+  const applyReschedule = useCallback((id: string, nextScheduledAt: string) => {
+    setScheduleOverrides((current) => ({ ...current, [id]: nextScheduledAt }));
+    setStatusOverrides((current) => ({ ...current, [id]: 'waiting' }));
   }, []);
   const encounters = useMemo(
     () =>
@@ -1010,7 +1474,7 @@ export function EncountersPage() {
         title={t('在线诊疗')}
         description={t('有序接诊，从容沟通。让优质的医疗服务跨越距离。')}
         action={
-          <Button onClick={() => setPlanned('预约管理')}>
+          <Button onClick={() => setAppointmentOpen(true)}>
             <CalendarPlus size={16} />
             {t('预约管理')}
           </Button>
@@ -1209,19 +1673,13 @@ export function EncountersPage() {
           {selectedBrief && <ClinicalSummary brief={selectedBrief} />}
         </FeatureDialog>
       )}
-      {planned && (
-        <PlannedDialog title={planned} iteration="Iteration 1–3" onClose={closePlanned}>
-          <p>
-            {t(
-              'Iteration 1 实现基础图文接诊，Iteration 3 接入图像、视频与会诊协作。预约管理聚焦设置可接诊时段、患者通知与改期确认；医生不确认预约人选。',
-            )}
-          </p>
-          <p>
-            {t(
-              '医生发起改期通知后，由患者确认是否接受；双方达成一致后，平台自动调整接诊时段并留下审计记录。',
-            )}
-          </p>
-        </PlannedDialog>
+      {appointmentOpen && (
+        <AppointmentManagementDialog
+          encounters={encounterRows}
+          nowMs={nowMs}
+          onClose={() => setAppointmentOpen(false)}
+          onRescheduleAccepted={applyReschedule}
+        />
       )}
     </div>
   );
