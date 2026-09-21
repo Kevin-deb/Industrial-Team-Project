@@ -57,16 +57,17 @@ INSERT INTO "consultation_messages"("id","consultation_id","sender_identity_id",
 INSERT INTO "consultation_messages"("id","consultation_id","sender_identity_id","body","sent_at","image_url","image_name") VALUES('CMSG-003','CON-IN-001','doctor-demo-002','已提交术后康复资料，请全科协助评估随访计划。','2026-09-11T15:20:00+08:00',NULL,NULL);
 INSERT INTO "consultation_messages"("id","consultation_id","sender_identity_id","body","sent_at","image_url","image_name") VALUES('CMSG-004','CON-IN-002','doctor-demo-003','患者近期足部麻木加重，邀请全科一起评估综合干预方案。','2026-09-12T16:40:00+08:00',NULL,NULL);
 
--- consultation_participants: 10 row(s)
+-- consultation_participants: 11 row(s)
 INSERT INTO "consultation_participants"("consultation_id","identity_id","participant_role","joined_at","left_at") VALUES('CON-001','doctor-demo-001','expert',NULL,NULL);
-INSERT INTO "consultation_participants"("consultation_id","identity_id","participant_role","joined_at","left_at") VALUES('CON-001','doctor-demo-002','expert',NULL,NULL);
+INSERT INTO "consultation_participants"("consultation_id","identity_id","participant_role","joined_at","left_at") VALUES('CON-001','doctor-demo-002','reviewer',NULL,NULL);
 INSERT INTO "consultation_participants"("consultation_id","identity_id","participant_role","joined_at","left_at") VALUES('CON-002','doctor-demo-001','expert',NULL,NULL);
+INSERT INTO "consultation_participants"("consultation_id","identity_id","participant_role","joined_at","left_at") VALUES('CON-002','doctor-demo-002','reviewer',NULL,NULL);
 INSERT INTO "consultation_participants"("consultation_id","identity_id","participant_role","joined_at","left_at") VALUES('CON-002','doctor-demo-003','expert',NULL,NULL);
 INSERT INTO "consultation_participants"("consultation_id","identity_id","participant_role","joined_at","left_at") VALUES('CON-IN-001','doctor-demo-001','invited',NULL,NULL);
-INSERT INTO "consultation_participants"("consultation_id","identity_id","participant_role","joined_at","left_at") VALUES('CON-IN-001','doctor-demo-002','requester',NULL,NULL);
+INSERT INTO "consultation_participants"("consultation_id","identity_id","participant_role","joined_at","left_at") VALUES('CON-IN-001','doctor-demo-002','reviewer',NULL,NULL);
 INSERT INTO "consultation_participants"("consultation_id","identity_id","participant_role","joined_at","left_at") VALUES('CON-IN-001','doctor-demo-003','expert',NULL,NULL);
 INSERT INTO "consultation_participants"("consultation_id","identity_id","participant_role","joined_at","left_at") VALUES('CON-IN-002','doctor-demo-001','invited',NULL,NULL);
-INSERT INTO "consultation_participants"("consultation_id","identity_id","participant_role","joined_at","left_at") VALUES('CON-IN-002','doctor-demo-002','expert',NULL,NULL);
+INSERT INTO "consultation_participants"("consultation_id","identity_id","participant_role","joined_at","left_at") VALUES('CON-IN-002','doctor-demo-002','reviewer',NULL,NULL);
 INSERT INTO "consultation_participants"("consultation_id","identity_id","participant_role","joined_at","left_at") VALUES('CON-IN-002','doctor-demo-003','requester',NULL,NULL);
 
 -- consultations: 4 row(s)

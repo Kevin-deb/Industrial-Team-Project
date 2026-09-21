@@ -1,5 +1,5 @@
 import { useI18n } from '../../shared/i18n';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CalendarClock,
   ChevronDown,
@@ -23,6 +23,7 @@ import type {
   ConsultationDoctorOption,
   ConsultationMaterial,
   Patient,
+  Session,
 } from '@doctor/contracts';
 import { requestApi, useApi } from '../../shared/api';
 import { Badge, Button, Card, EmptyState, LoadingState, Modal, PageHeader } from '../../shared/ui';
@@ -38,6 +39,15 @@ import {
 const statuses = { requested: '申请中', scheduled: '已安排', completed: '已完成' };
 const tones = { requested: 'amber', scheduled: 'blue', completed: 'teal' } as const;
 const textEncoder = new TextEncoder();
+const CONSULTATION_ROOM_REFRESH_MS = 2500;
+
+function isPendingReview(item: Consultation) {
+  return item.status === 'requested' && Boolean(item.canReview);
+}
+
+function consultationStatusLabel(item: Consultation) {
+  return isPendingReview(item) ? '待审核' : statuses[item.status];
+}
 type DraftMaterial = {
   title: string;
   fileName: string;
@@ -192,6 +202,7 @@ function RequestDialog({
       description: '发起会诊时补充的患者资料。',
     },
   ]);
+  const [reviewer, setReviewer] = useState<ConsultationDoctorOption | null>(null);
   const [selectedDoctors, setSelectedDoctors] = useState<ConsultationDoctorOption[]>([]);
   const [doctorQuery, setDoctorQuery] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -238,7 +249,7 @@ function RequestDialog({
     setMaterials((current) => [...current, ...uploaded]);
   };
   const create = async () => {
-    if (!selectedPatient || !selectedDoctors.length || submitting) return;
+    if (!selectedPatient || !reviewer || !selectedDoctors.length || submitting) return;
     setSubmitting(true);
     try {
       await requestApi<Consultation>('/consultations', {
@@ -248,7 +259,8 @@ function RequestDialog({
           title,
           specialty,
           scheduledAt: new Date(scheduledAt).toISOString(),
-          summary: '已发起远程会诊申请，等待专家确认参与。',
+          summary: '已发起远程会诊申请，等待审核人同意后进入诊室。',
+          reviewerId: reviewer.id,
           participantIds: selectedDoctors.map((doctor) => doctor.id),
           materials,
         }),
@@ -337,7 +349,7 @@ function RequestDialog({
         <section className="consultation-doctor-picker">
           <div>
             <h3>{t('选择参与医生')}</h3>
-            <p>{t('搜索医生姓名、科室或职称，添加参与本次远程会诊的专家。')}</p>
+            <p>{t('搜索医生姓名、科室或职称，设置一名审核人，并添加参与本次远程会诊的专家。')}</p>
           </div>
           <label className="consultation-doctor-search">
             <Search size={16} />
@@ -348,6 +360,19 @@ function RequestDialog({
               aria-label={t('搜索医生姓名、科室或职称')}
             />
           </label>
+          <div className="consultation-reviewer-box">
+            <strong>{t('审核人')}</strong>
+            {reviewer ? (
+              <span>
+                {t(reviewer.name)} · {t(reviewer.department)}
+                <button type="button" onClick={() => setReviewer(null)} aria-label={t('移除审核人')}>
+                  <X size={13} />
+                </button>
+              </span>
+            ) : (
+              <p>{t('请选择一名审核人')}</p>
+            )}
+          </div>
           <div className="consultation-selected-doctors">
             {selectedDoctors.length ? (
               selectedDoctors.map((doctor) => (
@@ -369,6 +394,7 @@ function RequestDialog({
           <div className="consultation-doctor-results">
             {filteredDoctors.map((doctor) => {
               const selected = selectedDoctors.some((item) => item.id === doctor.id);
+              const isReviewer = reviewer?.id === doctor.id;
               return (
                 <article key={doctor.id}>
                   <div>
@@ -377,9 +403,14 @@ function RequestDialog({
                     {t(doctor.department)} · {t(doctor.title)}
                   </small>
                   </div>
-                  <Button variant="secondary" disabled={selected} onClick={() => addDoctor(doctor)}>
-                    {t(selected ? '已添加' : '添加')}
-                  </Button>
+                  <div className="consultation-doctor-actions">
+                    <Button variant="secondary" disabled={isReviewer} onClick={() => setReviewer(doctor)}>
+                      {t(isReviewer ? '审核人' : '设为审核人')}
+                    </Button>
+                    <Button variant="secondary" disabled={selected} onClick={() => addDoctor(doctor)}>
+                      {t(selected ? '已添加' : '添加')}
+                    </Button>
+                  </div>
                 </article>
               );
             })}
@@ -398,7 +429,7 @@ function RequestDialog({
         </div>
         <Button
           onClick={create}
-          disabled={!selectedPatient || !selectedDoctors.length || submitting}
+          disabled={!selectedPatient || !reviewer || !selectedDoctors.length || submitting}
         >
           <FilePlus2 size={16} />
           {t(submitting ? '提交中' : '提交会诊申请')}
@@ -419,17 +450,42 @@ function ConsultationRoom({
 }) {
   const { t, formatDate } = useI18n();
   const contextData = useApi<ConsultationContext>(`/consultations/${encodeURIComponent(id)}/context`);
+  const session = useApi<Session>('/session');
+  const [liveRoom, setLiveRoom] = useState<ConsultationContext | null>(null);
   const [draft, setDraft] = useState('');
   const [previewImage, setPreviewImage] = useState<{ url: string; name?: string } | null>(null);
   const [confirmFinish, setConfirmFinish] = useState(false);
   const [participantsOpen, setParticipantsOpen] = useState(true);
-  const room = contextData.data;
+  const discussionEndRef = useRef<HTMLDivElement | null>(null);
+  const refreshRoom = useCallback(async () => {
+    const result = await requestApi<ConsultationContext>(`/consultations/${encodeURIComponent(id)}/context`);
+    setLiveRoom(result.data);
+  }, [id]);
+  useEffect(() => {
+    if (contextData.data) setLiveRoom(contextData.data);
+  }, [contextData.data]);
+  const room = liveRoom ?? contextData.data;
   const item = room?.consultation;
   const materials = room?.materials ?? [];
   const messages = room?.messages ?? [];
   const participants = room?.participants ?? [];
   const reportText = room?.report?.body ?? '';
   const isFinished = item?.status === 'completed';
+  useEffect(() => {
+    if (isFinished) return undefined;
+    const refresh = () => {
+      if (document.visibilityState === 'visible') void refreshRoom().catch(() => undefined);
+    };
+    const timer = window.setInterval(refresh, CONSULTATION_ROOM_REFRESH_MS);
+    window.addEventListener('focus', refresh);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', refresh);
+    };
+  }, [isFinished, refreshRoom]);
+  useEffect(() => {
+    discussionEndRef.current?.scrollIntoView({ block: 'end' });
+  }, [messages.length]);
   const downloadText = (filename: string, content: string) => {
     downloadBlob(filename, new Blob([content], { type: 'text/plain;charset=utf-8' }));
   };
@@ -449,7 +505,7 @@ function ConsultationRoom({
         }),
       ),
     );
-    contextData.reload();
+    await refreshRoom();
   };
   const send = async () => {
     if (isFinished) return;
@@ -460,7 +516,7 @@ function ConsultationRoom({
       body: JSON.stringify({ body }),
     });
     setDraft('');
-    contextData.reload();
+    await refreshRoom();
   };
   const sendImage = (files: FileList | null) => {
     if (isFinished) return;
@@ -476,14 +532,14 @@ function ConsultationRoom({
           imageName: file.name,
         }),
       });
-      contextData.reload();
+      await refreshRoom();
     };
     reader.readAsDataURL(file);
   };
   const finish = async () => {
     await requestApi(`/consultations/${encodeURIComponent(id)}/complete`, { method: 'POST' });
     setConfirmFinish(false);
-    contextData.reload();
+    await refreshRoom();
     onChanged();
   };
   const downloadMaterials = () => {
@@ -527,14 +583,14 @@ function ConsultationRoom({
       `/consultations/${encodeURIComponent(id)}/materials/${encodeURIComponent(material.id)}`,
       { method: 'DELETE' },
     );
-    contextData.reload();
+    await refreshRoom();
   };
   const downloadReport = () => {
     if (!item) return;
     if (!reportText) return;
     downloadText(`${item.id}-consultation-report.txt`, reportText);
   };
-  if (contextData.loading || contextData.error || !room || !item)
+  if ((contextData.loading && !room) || contextData.error || !room || !item)
     return <LoadingState error={contextData.error} onRetry={contextData.reload} />;
   return (
     <div className="consultation-room-page">
@@ -660,38 +716,40 @@ function ConsultationRoom({
           <section className="consultation-stage">
             <div className="consultation-discussion">
               <h3>{t('会诊讨论')}</h3>
-              {messages.map((message) => (
-                <div
-                  className={`consultation-message ${
-                    message.authorName === '林知远'
-                      ? 'consultation-message--doctor'
-                      : 'consultation-message--expert'
-                  }`}
-                  key={message.id}
-                >
-                  <strong>{t(message.authorName === '林知远' ? '我' : message.authorName)}</strong>
-                  {message.imageUrl ? (
-                    <figure className="encounter-message-image">
-                      <button
-                        className="message-image-preview"
-                        type="button"
-                        onClick={() =>
-                          setPreviewImage({
-                            url: message.imageUrl as string,
-                            name: message.imageName,
-                          })
-                        }
-                        aria-label={t('查看大图')}
-                      >
-                        <img src={message.imageUrl} alt={message.imageName || t('图片消息')} />
-                      </button>
-                      <figcaption>{message.imageName}</figcaption>
-                    </figure>
-                  ) : (
-                    <p>{t(message.body)}</p>
-                  )}
-                </div>
-              ))}
+              {messages.map((message) => {
+                const isMine = message.authorId === session.data?.doctor.id;
+                return (
+                  <div
+                    className={`consultation-message ${
+                      isMine ? 'consultation-message--doctor' : 'consultation-message--expert'
+                    }`}
+                    key={message.id}
+                  >
+                    <strong>{t(isMine ? '我' : message.authorName)}</strong>
+                    {message.imageUrl ? (
+                      <figure className="encounter-message-image">
+                        <button
+                          className="message-image-preview"
+                          type="button"
+                          onClick={() =>
+                            setPreviewImage({
+                              url: message.imageUrl as string,
+                              name: message.imageName,
+                            })
+                          }
+                          aria-label={t('查看大图')}
+                        >
+                          <img src={message.imageUrl} alt={message.imageName || t('图片消息')} />
+                        </button>
+                        <figcaption>{message.imageName}</figcaption>
+                      </figure>
+                    ) : (
+                      <p>{t(message.body)}</p>
+                    )}
+                  </div>
+                );
+              })}
+              <div ref={discussionEndRef} />
             </div>
             <div className="consultation-room-controls">
               {isFinished && (
@@ -797,9 +855,19 @@ export function ConsultationsPage() {
     [reload],
   );
   const cases = useMemo(
-    () => allCases.filter((item) => status === 'all' || item.status === status),
+    () =>
+      allCases.filter((item) => {
+        if (status === 'all') return true;
+        if (status === 'pending-review') return isPendingReview(item);
+        if (status === 'requested') return item.status === 'requested' && !isPendingReview(item);
+        return item.status === status;
+      }),
     [allCases, status],
   );
+  const pendingReviewCount = allCases.filter(isPendingReview).length;
+  const requestedCount = allCases.filter((item) => item.status === 'requested' && !isPendingReview(item)).length;
+  const scheduledCount = allCases.filter((item) => item.status === 'scheduled').length;
+  const completedCount = allCases.filter((item) => item.status === 'completed').length;
   if (roomId)
     return (
       <ConsultationRoom
@@ -843,9 +911,10 @@ export function ConsultationsPage() {
               onChange={setStatus}
               options={[
                 { value: 'all', label: '全部会诊', count: allCases.length },
-                { value: 'requested', label: '申请中' },
-                { value: 'scheduled', label: '已安排' },
-                { value: 'completed', label: '已完成' },
+                { value: 'pending-review', label: '待审核', count: pendingReviewCount },
+                { value: 'requested', label: '申请中', count: requestedCount },
+                { value: 'scheduled', label: '已安排', count: scheduledCount },
+                { value: 'completed', label: '已完成', count: completedCount },
               ]}
             />
             <span className="feature-mini-label">{t('当前医生相关的会诊安排')}</span>
@@ -858,7 +927,9 @@ export function ConsultationsPage() {
                     <span className="feature-symbol blue">
                       <UsersRound size={20} />
                     </span>
-                    <Badge tone={tones[item.status]}>{t(statuses[item.status])}</Badge>
+                    <Badge tone={isPendingReview(item) ? 'rose' : tones[item.status]}>
+                      {t(consultationStatusLabel(item))}
+                    </Badge>
                   </div>
                   <span className="feature-eyebrow">{item.id}</span>
                   <h3>{t(item.title)}</h3>
@@ -881,13 +952,13 @@ export function ConsultationsPage() {
                   <div className="mdt-footer" style={{ marginTop: 18 }}>
                     <span>{t('演示会诊')}</span>
                     <div className="consultation-card-actions">
-                      {item.direction === 'received' && item.status === 'requested' && (
+                      {item.canReview && item.status === 'requested' && (
                         <Button
                           className="consultation-accept-button"
                           variant="secondary"
                           onClick={() => acceptConsultation(item.id)}
                         >
-                          {t('接受申请')}
+                          {t('同意申请')}
                         </Button>
                       )}
                       {item.direction === 'received' && item.status !== 'requested' && (
@@ -946,7 +1017,9 @@ export function ConsultationsPage() {
           subtitle={t('{value0} · 会诊详情预览', { value0: selected.id })}
           onClose={close}
         >
-          <Badge tone={tones[selected.status]}>{t(statuses[selected.status])}</Badge>
+          <Badge tone={isPendingReview(selected) ? 'rose' : tones[selected.status]}>
+            {t(consultationStatusLabel(selected))}
+          </Badge>
           <DetailGrid
             items={[
               { label: '患者', value: selected.patientName },
@@ -962,18 +1035,19 @@ export function ConsultationsPage() {
                 label: '参与医生',
                 value: selected.participants.join(language === 'en' ? ', ' : '、'),
               },
+              { label: '审核人', value: selected.reviewerName ?? '—' },
             ]}
           />
           <h4 className="feature-small-heading">{t('会诊摘要')}</h4>
           <p className="feature-prose">{selected.summary}</p>
           <div className="encounter-room-action consultation-detail-actions">
-            {selected.direction === 'received' && selected.status === 'requested' && (
+            {selected.canReview && selected.status === 'requested' && (
               <Button
                 className="consultation-accept-button consultation-accept-button--detail"
                 variant="secondary"
                 onClick={() => acceptConsultation(selected.id)}
               >
-                {t('接受申请')}
+                {t('同意申请')}
               </Button>
             )}
             <Button

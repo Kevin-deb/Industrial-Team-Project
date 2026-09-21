@@ -13,7 +13,7 @@ export const remoteConsultationInvitedCaseMigration = {
     SELECT 'CON-IN-002','doctor-demo-003','requester'
     WHERE EXISTS(SELECT 1 FROM consultations WHERE id='CON-IN-002');
     INSERT OR IGNORE INTO consultation_participants(consultation_id,identity_id,participant_role)
-    SELECT 'CON-IN-002','doctor-demo-002','expert'
+    SELECT 'CON-IN-002','doctor-demo-002','reviewer'
     WHERE EXISTS(SELECT 1 FROM consultations WHERE id='CON-IN-002');
 
     INSERT OR IGNORE INTO consultation_material_uploads(id,consultation_id,title,description,file_name,uploaded_by,uploaded_at)

@@ -438,14 +438,15 @@ export function seedDemo(db: DatabaseSync): void {
       '申请、临时授权和专家确认将在后续迭代实现。',
     );
     for (const pair of [
-      ['CON-001', DEMO_DOCTOR_ID],
-      ['CON-001', 'doctor-demo-002'],
+      ['CON-001', DEMO_DOCTOR_ID, 'expert'],
+      ['CON-001', 'doctor-demo-002', 'reviewer'],
       ['CON-002', DEMO_DOCTOR_ID],
+      ['CON-002', 'doctor-demo-002', 'reviewer'],
       ['CON-002', 'doctor-demo-003'],
     ])
       db.prepare(
         'INSERT INTO consultation_participants(consultation_id,identity_id,participant_role) VALUES(?,?,?)',
-      ).run(pair[0]!, pair[1]!, 'expert');
+      ).run(pair[0]!, pair[1]!, pair[2] ?? 'expert');
     if (hasTable(db, 'consultation_material_uploads')) {
       const consultationMaterial = db.prepare(
         `INSERT OR IGNORE INTO consultation_material_uploads(
@@ -801,7 +802,7 @@ export function seedAuthFoundation(db: DatabaseSync): void {
     );
     for (const pair of [
       [DEMO_DOCTOR_ID, 'invited'],
-      ['doctor-demo-002', 'requester'],
+      ['doctor-demo-002', 'reviewer'],
       ['doctor-demo-003', 'expert'],
     ])
       db.prepare(
@@ -810,7 +811,7 @@ export function seedAuthFoundation(db: DatabaseSync): void {
     for (const pair of [
       [DEMO_DOCTOR_ID, 'invited'],
       ['doctor-demo-003', 'requester'],
-      ['doctor-demo-002', 'expert'],
+      ['doctor-demo-002', 'reviewer'],
     ])
       db.prepare(
         'INSERT OR IGNORE INTO consultation_participants(consultation_id,identity_id,participant_role) VALUES(?,?,?)',
