@@ -50,7 +50,7 @@ describe('global community unread indicators', () => {
     };
     vi.stubGlobal(
       'fetch',
-      vi.fn(async (input: RequestInfo | URL) => {
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
         if (url.includes('/social/preferences'))
           return envelope({ enabled: true, notificationsEnabled: true, updatedAt: '2026-09-21' });
@@ -64,6 +64,11 @@ describe('global community unread indicators', () => {
               createdAt: '2026-09-21T12:00:00+08:00',
             })),
           );
+        if (url.endsWith('/social/notifications/read') && init?.method === 'POST') {
+          const updatedCount = interactionUnread;
+          interactionUnread = 0;
+          return envelope({ readAt: '2026-09-21T12:00:30+08:00', updatedCount });
+        }
         if (url.includes('/social/conversations'))
           return envelope([
             {
@@ -93,6 +98,9 @@ describe('global community unread indicators', () => {
     fireEvent.click(bell);
     expect(await screen.findByRole('button', { name: /社区互动.*2 条未读/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /同行私信.*3 条未读/ })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /通知中心.*3 条未读/ })).toBeInTheDocument(),
+    );
 
     interactionUnread = 3;
     listener?.({

@@ -18,6 +18,7 @@ import type {
   SocialGroupTags,
   SocialMessagePage,
   SocialNotification,
+  NotificationReadResult,
   SocialPage,
   SocialPeer,
   SocialPostDetail,
@@ -329,6 +330,17 @@ export function useReadNotification() {
   return useMutation({
     mutationFn: (id: string) =>
       requestEApi(`/social/notifications/${encodeURIComponent(id)}/read`, {
+        method: 'POST',
+        body: { commandId: commandId() },
+      }),
+    onSuccess: async () => client.invalidateQueries({ queryKey: socialKeys.notifications }),
+  });
+}
+export function useReadAllNotifications() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      requestEApi<NotificationReadResult>('/social/notifications/read', {
         method: 'POST',
         body: { commandId: commandId() },
       }),

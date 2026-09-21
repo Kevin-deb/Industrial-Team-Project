@@ -119,6 +119,11 @@ export interface ConversationReadResult {
   readAt: string;
 }
 
+export interface NotificationReadResult {
+  updatedCount: number;
+  readAt: string;
+}
+
 export type SocialRealtimeEvent =
   | {
       type: 'social.notifications.changed';

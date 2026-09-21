@@ -42,6 +42,7 @@ import {
   UnreadBadge,
   useSocialUnread,
 } from './modules/community/unread';
+import { useReadAllNotifications } from './modules/community/queries';
 
 const navigation = [
   { path: '/', label: '工作台', en: 'Overview', icon: LayoutDashboard },
@@ -82,6 +83,7 @@ export function App() {
   const [dialog, setDialog] = useState<'notifications' | 'help' | null>(null);
   const { enabled: communityEnabled } = useCommunityPreference();
   const unread = useSocialUnread(communityEnabled);
+  const readAllNotifications = useReadAllNotifications();
   useEffect(() => {
     setSidebarOpen(false);
     window.scrollTo(0, 0);
@@ -241,7 +243,11 @@ export function App() {
                   ? `${t('通知中心')}，${unread.totalUnread} ${t('条未读')}`
                   : t('通知中心')
               }
-              onClick={() => setDialog('notifications')}
+              onClick={() => {
+                setDialog('notifications');
+                if (unread.interactionUnread > 0 && !readAllNotifications.isPending)
+                  readAllNotifications.mutate();
+              }}
             >
               <Bell size={20} />
               <UnreadBadge count={unread.totalUnread} />

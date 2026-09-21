@@ -294,6 +294,14 @@ export function registerSocialRoutes(
   app.get('/api/v1/social/me/notifications', async (request, reply) =>
     socialReply(request, reply, () => service.listNotifications(context())),
   );
+  app.post<{ Body: { commandId: string } }>(
+    '/api/v1/social/notifications/read',
+    { schema: { body: commandBody } },
+    async (request, reply) =>
+      socialReply(request, reply, () =>
+        service.markAllNotificationsRead(request.body.commandId, context()),
+      ),
+  );
   app.post<{ Params: { id: string }; Body: { commandId: string } }>(
     '/api/v1/social/notifications/:id/read',
     { schema: { params: idParams, body: commandBody } },

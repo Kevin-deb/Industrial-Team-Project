@@ -43,6 +43,10 @@ describe('CommunityPage', () => {
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.includes('/preferences')) return envelope({ enabled: true, notificationsEnabled: true });
+      if (url.endsWith('/notifications/read') && init?.method === 'POST') {
+        Array.from({ length: count }, (_, index) => readIds.add(`LIVE-${index}`));
+        return envelope({ readAt: '2026-09-16T12:01:00+08:00', updatedCount: count });
+      }
       if (url.includes('/notifications/') && url.endsWith('/read') && init?.method === 'POST') {
         readIds.add(url.split('/').at(-2) ?? '');
         return envelope({ readAt: '2026-09-16T12:01:00+08:00' });
@@ -57,8 +61,8 @@ describe('CommunityPage', () => {
     listener?.({ type: 'social.notifications.changed', occurredAt: '2026-09-16T12:00:00+08:00' } as SocialRealtimeEvent);
     await waitFor(() => expect(entry).toHaveTextContent('2'));
     fireEvent.click(entry);
-    fireEvent.click((await screen.findAllByRole('button', { name: /周明.*点赞了你的帖子/ }))[0]);
-    await waitFor(() => expect(entry).toHaveTextContent('1'));
+    expect(await screen.findByRole('dialog', { name: '我的消息' })).toBeInTheDocument();
+    await waitFor(() => expect(entry).toHaveTextContent('0'));
     delete window.carelinkRealtime;
   });
   it('shows unavailable content rather than loading forever after moderation', async () => {

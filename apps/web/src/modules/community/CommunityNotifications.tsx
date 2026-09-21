@@ -1,13 +1,19 @@
 import { Bell, X } from 'lucide-react';
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useI18n } from '../../shared/i18n';
-import { useNotifications, useReadNotification } from './queries';
+import { useNotifications, useReadAllNotifications, useReadNotification } from './queries';
 
 export function CommunityNotifications({ onClose }: { onClose: () => void }) {
   const { t, formatDate } = useI18n();
   const notices = useNotifications();
   const read = useReadNotification();
+  const readAll = useReadAllNotifications();
   const navigate = useNavigate();
+  const hasUnread = (notices.data?.data ?? []).some((item) => !item.readAt);
+  useEffect(() => {
+    if (hasUnread && !readAll.isPending) readAll.mutate();
+  }, [hasUnread, readAll.isPending, readAll.mutate]);
   return (
     <div className="community-dialog-backdrop">
       <section
