@@ -1,6 +1,7 @@
 /** Owned by the consultations module. Keep source keys stable and translate at render time. */
 export const consultationsMessages: Record<string, string> = {
   申请中: 'Requested',
+  待审核: 'Pending review',
   已安排: 'Scheduled',
   '汇聚不同专科的经验，为复杂的照护需求找到更完整的解答。':
     'Bring specialties together for a fuller view of complex care needs.',
@@ -19,6 +20,8 @@ export const consultationsMessages: Record<string, string> = {
   待确认专家: 'Specialists pending confirmation',
   '已发起远程会诊申请，等待专家确认参与。':
     'Remote consultation request submitted. Waiting for specialists to confirm participation.',
+  '已发起远程会诊申请，等待审核人同意后进入诊室。':
+    'Remote consultation request submitted. Waiting for the reviewer to approve before entering the room.',
   待会诊结束后自动生成报告: 'Report will be generated automatically after consultation',
   '以患者为中心，让协作更有序': 'Coordinated care, centered on the patient',
   '从会诊申请、专家邀请到综合意见归档，每个环节都围绕同一份照护需求展开。当前提供演示会诊目录与流程预览。':
@@ -35,6 +38,7 @@ export const consultationsMessages: Record<string, string> = {
   收到的申请: 'Received request',
   我发起的: 'Sent by me',
   接受申请: 'Accept request',
+  同意申请: 'Approve request',
   已接受: 'Accepted',
   赵雅琴: 'Zhao Yaqin',
   术后康复联合评估: 'Postoperative rehabilitation joint evaluation',
@@ -89,6 +93,7 @@ export const consultationsMessages: Record<string, string> = {
   会诊专科: 'Specialty',
   计划时间: 'Scheduled time',
   参与医生: 'Participating doctors',
+  审核人: 'Reviewer',
   参与人员: 'Participants',
   发起医生: 'Initiating doctor',
   参与专家: 'Participating specialist',
@@ -97,9 +102,14 @@ export const consultationsMessages: Record<string, string> = {
     'Select multiple specialists to join this remote consultation.',
   '搜索医生姓名、科室或职称，添加参与本次远程会诊的专家。':
     'Search by doctor name, department, or title, then add specialists to this remote consultation.',
+  '搜索医生姓名、科室或职称，设置一名审核人，并添加参与本次远程会诊的专家。':
+    'Search by doctor name, department, or title, set one reviewer, and add specialists to this remote consultation.',
   '搜索医生姓名、科室或职称': 'Search doctor name, department, or title',
   '移除 {name}': 'Remove {name}',
+  移除审核人: 'Remove reviewer',
+  请选择一名审核人: 'Select one reviewer',
   请至少添加一名参与医生: 'Add at least one participating doctor',
+  设为审核人: 'Set reviewer',
   已添加: 'Added',
   添加: 'Add',
   没有匹配的医生: 'No matching doctors',

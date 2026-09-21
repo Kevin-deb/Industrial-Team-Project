@@ -86,6 +86,9 @@ export interface Consultation {
   participants: string[];
   summary: string;
   direction?: 'sent' | 'received';
+  reviewerId?: string;
+  reviewerName?: string;
+  canReview?: boolean;
 }
 
 export interface ConsultationParticipant {

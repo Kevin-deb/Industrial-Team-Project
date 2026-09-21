@@ -1986,6 +1986,44 @@
   gap: 8px;
   min-height: 32px;
 }
+.consultation-reviewer-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  border: 1px solid #e5eef1;
+  border-radius: 9px;
+  background: #fff;
+  padding: 10px 11px;
+}
+.consultation-reviewer-box > strong {
+  color: #43616b;
+  font-size: 12px;
+}
+.consultation-reviewer-box > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #b9d0ee;
+  border-radius: 999px;
+  background: #f0f6ff;
+  color: #2b68ad;
+  font-size: 11px;
+  font-weight: 650;
+  padding: 6px 8px 6px 11px;
+}
+.consultation-reviewer-box button {
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 999px;
+  background: #dceaff;
+  color: #2b68ad;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
 .consultation-selected-doctors span {
   display: inline-flex;
   align-items: center;
@@ -2042,6 +2080,12 @@
   color: #7e949b;
   font-size: 10px;
   margin-top: 3px;
+}
+.consultation-doctor-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 .consultation-doctor-results .button {
   min-height: 30px;

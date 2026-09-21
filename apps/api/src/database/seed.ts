@@ -438,14 +438,15 @@ export function seedDemo(db: DatabaseSync): void {
       '申请、临时授权和专家确认将在后续迭代实现。',
     );
     for (const pair of [
-      ['CON-001', DEMO_DOCTOR_ID],
-      ['CON-001', 'doctor-demo-002'],
+      ['CON-001', DEMO_DOCTOR_ID, 'expert'],
+      ['CON-001', 'doctor-demo-002', 'reviewer'],
       ['CON-002', DEMO_DOCTOR_ID],
+      ['CON-002', 'doctor-demo-002', 'reviewer'],
       ['CON-002', 'doctor-demo-003'],
     ])
       db.prepare(
         'INSERT INTO consultation_participants(consultation_id,identity_id,participant_role) VALUES(?,?,?)',
-      ).run(pair[0]!, pair[1]!, 'expert');
+      ).run(pair[0]!, pair[1]!, pair[2] ?? 'expert');
     if (hasTable(db, 'consultation_material_uploads')) {
       const consultationMaterial = db.prepare(
         `INSERT OR IGNORE INTO consultation_material_uploads(
@@ -801,7 +802,7 @@ export function seedAuthFoundation(db: DatabaseSync): void {
     );
     for (const pair of [
       [DEMO_DOCTOR_ID, 'invited'],
-      ['doctor-demo-002', 'requester'],
+      ['doctor-demo-002', 'reviewer'],
       ['doctor-demo-003', 'expert'],
     ])
       db.prepare(
@@ -810,7 +811,7 @@ export function seedAuthFoundation(db: DatabaseSync): void {
     for (const pair of [
       [DEMO_DOCTOR_ID, 'invited'],
       ['doctor-demo-003', 'requester'],
-      ['doctor-demo-002', 'expert'],
+      ['doctor-demo-002', 'reviewer'],
     ])
       db.prepare(
         'INSERT OR IGNORE INTO consultation_participants(consultation_id,identity_id,participant_role) VALUES(?,?,?)',
@@ -869,6 +870,19 @@ export function seedAuthFoundation(db: DatabaseSync): void {
        VALUES(?,?,?,'patient:read',NULL,NULL,NULL,?)`,
     );
     for (const [id, identityId, patientId] of grants) grant.run(id, identityId, patientId, at);
+    const consultationGrants = [
+      ['grant-CON-IN-001-doctor-demo-001', 'doctor-demo-001', 'PAT-009', 'CON-IN-001'],
+      ['grant-CON-IN-001-doctor-demo-003', 'doctor-demo-003', 'PAT-009', 'CON-IN-001'],
+      ['grant-CON-IN-001-doctor-demo-004', 'doctor-demo-004', 'PAT-009', 'CON-IN-001'],
+      ['grant-CON-IN-002-doctor-demo-001', 'doctor-demo-001', 'PAT-005', 'CON-IN-002'],
+      ['grant-CON-IN-002-doctor-demo-002', 'doctor-demo-002', 'PAT-005', 'CON-IN-002'],
+    ] as const;
+    const consultationGrant = db.prepare(
+      `INSERT OR IGNORE INTO access_grants(id,identity_id,patient_id,scope,task_id,expires_at,revoked_at,created_at)
+       VALUES(?,?,?,'patient:read',?,'2026-12-31T23:59:59+08:00',NULL,?)`,
+    );
+    for (const [id, identityId, patientId, taskId] of consultationGrants)
+      consultationGrant.run(id, identityId, patientId, taskId, at);
     db.exec('COMMIT');
   } catch (error) {
     db.exec('ROLLBACK');
