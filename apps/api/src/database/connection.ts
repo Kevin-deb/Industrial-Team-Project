@@ -13,7 +13,13 @@ import {
   patientsRegistrationMigration,
 } from '../patients/index.js';
 import { encountersMigration } from '../encounters/index.js';
-import { clinicalMigration } from '../clinical/index.js';
+import {
+  clinicalEvolutionMigration,
+  clinicalLifecycleMigration,
+  clinicalMaterialsMigration,
+  clinicalMigration,
+  clinicalOrdersMigration,
+} from '../clinical/index.js';
 import {
   healthEvolutionMigration,
   healthMigration,
@@ -62,6 +68,10 @@ export const migrations = [
   },
   patientsArchiveMigration,
   patientsRegistrationMigration,
+  clinicalEvolutionMigration,
+  clinicalLifecycleMigration,
+  clinicalOrdersMigration,
+  clinicalMaterialsMigration,
   authMigration,
   demoInitialPasswordMigration,
   healthObservationConfirmationMigration,

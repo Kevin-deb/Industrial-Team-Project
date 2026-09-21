@@ -2,10 +2,25 @@ import type { DatabaseSync } from 'node:sqlite';
 import type { Encounter, Consultation } from '@doctor/contracts';
 import { patientScopeSql, type RequestContext } from '../platform/index.js';
 
+export interface ConsultationTask {
+  id: string;
+  patientId: string;
+  status: Consultation['status'];
+  completedAt: string | null;
+  requestedBy: string;
+  isParticipant: boolean;
+}
+
 export interface EncounterRepository {
   list(context: RequestContext): Encounter[];
   listConsultations(context: RequestContext): Consultation[];
   findReference(id: string, context: RequestContext): { id: string; patientId: string } | undefined;
+  findConsultationTask(id: string, context: RequestContext): ConsultationTask | undefined;
+  findConfirmedReport(
+    consultationId: string,
+    reportId: string,
+    context: RequestContext,
+  ): { id: string } | undefined;
 }
 export class SqliteEncounterRepository implements EncounterRepository {
   constructor(private readonly db: DatabaseSync) {}
@@ -58,5 +73,45 @@ export class SqliteEncounterRepository implements EncounterRepository {
       )
       .get({ id, ...context });
     return row ? { id: String(row.id), patientId: String(row.patient_id) } : undefined;
+  }
+
+  findConsultationTask(id: string, context: RequestContext): ConsultationTask | undefined {
+    const row = this.db
+      .prepare(
+        `SELECT c.id,c.patient_id,c.status,c.completed_at,c.requested_by,
+          (EXISTS(
+            SELECT 1 FROM consultation_participants cp
+            WHERE cp.consultation_id=c.id AND cp.identity_id=:actorId
+          ) OR c.requested_by=:actorId) is_participant
+         FROM consultations c JOIN patients p ON p.id=c.patient_id
+         WHERE c.id=:id AND ${patientScopeSql}`,
+      )
+      .get({ id, ...context });
+    if (!row) return undefined;
+    return {
+      id: String(row.id),
+      patientId: String(row.patient_id),
+      status: row.status as Consultation['status'],
+      completedAt: row.completed_at === null ? null : String(row.completed_at),
+      requestedBy: String(row.requested_by),
+      isParticipant: Number(row.is_participant) === 1,
+    };
+  }
+
+  findConfirmedReport(
+    consultationId: string,
+    reportId: string,
+    context: RequestContext,
+  ): { id: string } | undefined {
+    const row = this.db
+      .prepare(
+        `SELECT r.id FROM consultation_reports r
+         JOIN consultations c ON c.id=r.consultation_id
+         JOIN patients p ON p.id=c.patient_id
+         WHERE r.consultation_id=:consultationId AND r.id=:reportId AND r.status='confirmed'
+           AND ${patientScopeSql}`,
+      )
+      .get({ consultationId, reportId, ...context });
+    return row ? { id: String(row.id) } : undefined;
   }
 }

@@ -24,6 +24,7 @@ import {
   smtpConfigured,
   SqliteAuthRepository,
   SqlitePatientAccess,
+  SqlitePermissionAccess,
   SqlitePlatformRepository,
 } from './platform/index.js';
 import { features } from './platform/index.js';
@@ -105,7 +106,7 @@ export async function createApp(options: AppOptions = {}) {
   await app.register(fastifyWebsocket, { options: { maxPayload: 1024 } });
   const patients = new SqlitePatientRepository(db);
   const encounters = new SqliteEncounterRepository(db);
-  const clinical = new SqliteClinicalRepository(db);
+  const clinical = new SqliteClinicalRepository(db, new SqlitePermissionAccess(db), encounters);
   const healthRepository = new SqliteHealthRepository(db);
   const platform = new SqlitePlatformRepository(db);
   const ephemeralMediaRoot =
@@ -201,6 +202,9 @@ export async function createApp(options: AppOptions = {}) {
     const pathname = request.url.split('?')[0];
     const isPublic =
       pathname === '/api/v1/health' ||
+      pathname === '/api/v1/auth/password-login' ||
+      pathname === '/api/v1/auth/email-login/start' ||
+      pathname === '/api/v1/auth/email-login/complete' ||
       pathname === '/api/v1/auth/login' ||
       pathname === '/api/v1/auth/photo-login/start' ||
       pathname === '/api/v1/auth/email/verify' ||
@@ -309,7 +313,7 @@ export async function createApp(options: AppOptions = {}) {
     const current = context();
     const people = patients.list({ pageSize: 6 }, current);
     const schedule = encounters.list(current);
-    const records = clinical.listRecords(current);
+    const records = clinical.listRecords({}, current);
     const healthData = health.overview(current);
     const data: Dashboard = {
       stats: {

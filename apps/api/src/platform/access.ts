@@ -9,6 +9,10 @@ export interface PatientAccessPort {
   isResponsibleDoctor?(patientId: string, context: RequestContext): boolean;
 }
 
+export interface PermissionPort {
+  hasPermission(actorId: string, permission: string): boolean;
+}
+
 /** Internal SQL boundary. All callers use the fixed alias "p"; values are always bound. */
 export const patientScopeSql = `
   EXISTS (
@@ -38,5 +42,17 @@ export class SqlitePatientAccess implements PatientAccessPort {
     return !!this.db
       .prepare('SELECT 1 FROM patients WHERE id=? AND assigned_doctor_id=?')
       .get(patientId, context.actorId);
+  }
+}
+
+export class SqlitePermissionAccess implements PermissionPort {
+  constructor(private readonly db: DatabaseSync) {}
+  hasPermission(actorId: string, permission: string): boolean {
+    return !!this.db
+      .prepare(
+        `SELECT 1 FROM identity_roles ir JOIN role_permissions rp ON rp.role_id=ir.role_id
+         WHERE ir.identity_id=? AND rp.permission=?`,
+      )
+      .get(actorId, permission);
   }
 }

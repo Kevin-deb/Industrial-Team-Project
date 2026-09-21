@@ -10,18 +10,18 @@ import {
   Search,
   ShieldCheck,
 } from 'lucide-react';
-import type { MedicalRecord } from '@doctor/contracts';
+import type { MedicalRecord, MedicalRecordTemplateDefinition } from '@doctor/contracts';
 import { useApi } from '../../shared/api';
 import { Badge, Button, Card, EmptyState, LoadingState, PageHeader } from '../../shared/ui';
 import { FilterTabs, LinkAction, Metric, PlannedDialog, ReadOnlyNote, SectionTitle } from '../ui';
 import { RecordEditor } from './RecordEditor';
-import { recordTemplates as templates } from './templates';
 
 const labels = { draft: '草稿', 'pending-review': '待审核', archived: '已归档' };
 const tones = { draft: 'slate', 'pending-review': 'amber', archived: 'teal' } as const;
 export function RecordsPage() {
   const { t, formatDate } = useI18n();
   const { data, loading, error, reload } = useApi<MedicalRecord[]>('/records');
+  const templateCatalogue = useApi<MedicalRecordTemplateDefinition[]>('/record-templates');
   const [status, setStatus] = useState('all');
   const [query, setQuery] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -40,7 +40,8 @@ export function RecordsPage() {
       ),
     [data, query, status],
   );
-  const currentTemplate = templates.find((item) => item.id === template)!;
+  const templates = templateCatalogue.data ?? [];
+  const currentTemplate = templates.find((item) => item.id === template) ?? templates[0];
   return (
     <div className="feature-page">
       <PageHeader
@@ -54,8 +55,14 @@ export function RecordsPage() {
           </Button>
         }
       />
-      {loading || error ? (
-        <LoadingState error={error} onRetry={reload} />
+      {loading || templateCatalogue.loading || error || templateCatalogue.error ? (
+        <LoadingState
+          error={error || templateCatalogue.error}
+          onRetry={() => {
+            reload();
+            templateCatalogue.reload();
+          }}
+        />
       ) : (
         <>
           <div className="feature-metrics">
@@ -76,7 +83,7 @@ export function RecordsPage() {
               icon={ClipboardCheck}
               label={t('等待审核')}
               value={data?.filter((record) => record.status === 'pending-review').length ?? 0}
-              detail={t('审核及签名流程已规划')}
+              detail={t('本地可提交、审核、归档和修订')}
               tone="amber"
             />
             <Metric
@@ -191,20 +198,20 @@ export function RecordsPage() {
                       onClick={() => setTemplate(item.id)}
                       aria-pressed={template === item.id}
                     >
-                      {t(item.title)}
-                      <small>{t(item.subtitle)}</small>
+                      {t(item.titleKey)}
+                      <small>{t(item.subtitleKey)}</small>
                     </button>
                   ))}
                 </div>
                 <div className="feature-document">
                   <div className="feature-document-head">
-                    <h3>{t(currentTemplate.title)}</h3>
-                    <p>{t('结构预览 · 文本录入、保存及签名尚未上线')}</p>
+                    <h3>{t(currentTemplate!.titleKey)}</h3>
+                    <p>{t('结构预览 · 新建草稿时可选择此模板')}</p>
                   </div>
-                  {currentTemplate.fields.map((field) => (
+                  {currentTemplate!.fields.map((field) => (
                     <div className="feature-document-field" key={field.key}>
-                      <span>{t(field.label)}</span>
-                      <p>{t('正式开发后，由具备权限的医生在此填写并审核相关信息。')}</p>
+                      <span>{t(field.labelKey)}</span>
+                      <p>{t('创建病历草稿后，由当前医生填写此字段。')}</p>
                     </div>
                   ))}
                 </div>
@@ -214,7 +221,7 @@ export function RecordsPage() {
               <>
                 <SectionTitle
                   title={t('从记录到归档，每一步都有依据')}
-                  subtitle={t('以下展示计划中的状态流转；当前仅提供只读元数据。')}
+                  subtitle={t('当前本地演示支持提交、退回、批准、归档和修订留痕。')}
                 />
                 <div className="feature-workflow">
                   {[
@@ -252,12 +259,12 @@ export function RecordsPage() {
               {
                 icon: Layers3,
                 title: '版本与修订记录',
-                description: '保留病历变更历史，将每次修订关联至操作者。',
+                description: '打开病历即可查看版本历史、作者、时间和修订原因。',
               },
               {
                 icon: ShieldCheck,
                 title: '签名与归档',
-                description: '完整性验证、分级审核、签名及归档流程。',
+                description: '本地演示已支持审核、归档和修订；正式签名与临床规则仍待启用。',
               },
             ].map((item) => (
               <Card className="feature-service-card" key={item.title}>

@@ -1,5 +1,5 @@
 export const authMigration = {
-  version: 17,
+  version: 21,
   name: 'platform_authentication_and_clinician_profiles',
   sql: `
     CREATE TABLE users (
@@ -68,7 +68,7 @@ export const authMigration = {
 
 /** One-time demo credential migration. It does not run again after a user changes a password. */
 export const demoInitialPasswordMigration = {
-  version: 18,
+  version: 22,
   name: 'demo_clinician_initial_password_123456',
   sql: `
     UPDATE users SET password_hash='scrypt$carelink-doctor-demo-001$d62bc96f011692cea59ab0cbe46116276bb6792ed8580eb64df83f2d6c368c05',updated_at='2026-09-21T00:00:00.000Z' WHERE identity_id='doctor-demo-001';

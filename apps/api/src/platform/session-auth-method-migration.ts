@@ -1,5 +1,5 @@
 export const sessionAuthMethodMigration = {
-  version: 20,
+  version: 24,
   name: 'independent_password_email_and_face_sessions',
   sql: `
     ALTER TABLE user_sessions RENAME TO user_sessions_v19;

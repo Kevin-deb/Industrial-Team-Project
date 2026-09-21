@@ -1,5 +1,5 @@
 export const healthObservationConfirmationMigration = {
-  version: 19,
+  version: 23,
   name: 'health_observation_responsible_doctor_confirmation',
   sql: `
     ALTER TABLE health_observations RENAME TO health_observations_v18;
