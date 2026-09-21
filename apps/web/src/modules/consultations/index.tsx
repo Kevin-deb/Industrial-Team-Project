@@ -38,6 +38,12 @@ import {
 const statuses = { requested: '申请中', scheduled: '已安排', completed: '已完成' };
 const tones = { requested: 'amber', scheduled: 'blue', completed: 'teal' } as const;
 const textEncoder = new TextEncoder();
+type DraftMaterial = {
+  title: string;
+  fileName: string;
+  description: string;
+  objectUrl?: string;
+};
 
 function crc32(bytes: Uint8Array) {
   let crc = -1;
@@ -55,6 +61,34 @@ function dataUrlBytes(dataUrl: string) {
     return Uint8Array.from(binary, (char) => char.charCodeAt(0));
   }
   return textEncoder.encode(decodeURIComponent(data));
+}
+
+function dataUrlMime(dataUrl: string) {
+  return dataUrl.match(/^data:([^;,]+)/)?.[1] ?? 'application/octet-stream';
+}
+
+function downloadBlob(filename: string, blob: Blob) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function arrayBufferFromBytes(bytes: Uint8Array) {
+  const buffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buffer).set(bytes);
+  return buffer;
+}
+
+function readFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error ?? new Error('读取文件失败'));
+    reader.readAsDataURL(file);
+  });
 }
 
 function dosDateTime(date = new Date()) {
@@ -151,7 +185,13 @@ function RequestDialog({
   const [title, setTitle] = useState('疑难慢病多学科会诊');
   const [specialty, setSpecialty] = useState('全科医学 · 心血管内科 · 内分泌科');
   const [scheduledAt, setScheduledAt] = useState('2026-09-12T10:30');
-  const [materials, setMaterials] = useState(['门诊病历摘要']);
+  const [materials, setMaterials] = useState<DraftMaterial[]>([
+    {
+      title: '门诊病历摘要',
+      fileName: '门诊病历摘要.txt',
+      description: '发起会诊时补充的患者资料。',
+    },
+  ]);
   const [selectedDoctors, setSelectedDoctors] = useState<ConsultationDoctorOption[]>([]);
   const [doctorQuery, setDoctorQuery] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -185,9 +225,17 @@ function RequestDialog({
   const removeDoctor = (id: string) => {
     setSelectedDoctors((current) => current.filter((item) => item.id !== id));
   };
-  const addFiles = (files: FileList | null) => {
+  const addFiles = async (files: FileList | null) => {
     if (!files?.length) return;
-    setMaterials((current) => [...current, ...Array.from(files).map((file) => file.name)]);
+    const uploaded = await Promise.all(
+      Array.from(files).map(async (file) => ({
+        title: file.name,
+        fileName: file.name,
+        description: '发起会诊时上传的患者资料。',
+        objectUrl: await readFileAsDataUrl(file),
+      })),
+    );
+    setMaterials((current) => [...current, ...uploaded]);
   };
   const create = async () => {
     if (!selectedPatient || !selectedDoctors.length || submitting) return;
@@ -341,11 +389,11 @@ function RequestDialog({
         <label className="consultation-upload-box">
           <Upload size={18} />
           <span>{t('上传患者病历、影像等资料')}</span>
-          <input type="file" multiple onChange={(event) => addFiles(event.target.files)} />
+          <input type="file" multiple onChange={(event) => void addFiles(event.target.files)} />
         </label>
         <div className="consultation-material-list">
           {materials.map((material) => (
-            <span key={material}>{material}</span>
+            <span key={material.fileName}>{material.title}</span>
           ))}
         </div>
         <Button
@@ -383,21 +431,8 @@ function ConsultationRoom({
   const reportText = room?.report?.body ?? '';
   const isFinished = item?.status === 'completed';
   const downloadText = (filename: string, content: string) => {
-    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    link.click();
-    URL.revokeObjectURL(url);
+    downloadBlob(filename, new Blob([content], { type: 'text/plain;charset=utf-8' }));
   };
-  const readFileAsDataUrl = (file: File) =>
-    new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result));
-      reader.onerror = () => reject(reader.error ?? new Error('读取文件失败'));
-      reader.readAsDataURL(file);
-    });
   const addFiles = async (files: FileList | null) => {
     if (isFinished) return;
     if (!files?.length) return;
@@ -466,20 +501,16 @@ function ConsultationRoom({
             ),
           ),
     }));
-    const url = URL.createObjectURL(zipBlob(files));
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${item.id}-materials.zip`;
-    link.click();
-    URL.revokeObjectURL(url);
+    downloadBlob(`${item.id}-materials.zip`, zipBlob(files));
   };
   const downloadMaterial = (material: ConsultationMaterial) => {
     if (!item) return;
     if (material.objectUrl) {
-      const link = document.createElement('a');
-      link.href = material.objectUrl;
-      link.download = material.fileName || material.title;
-      link.click();
+      const bytes = dataUrlBytes(material.objectUrl);
+      downloadBlob(
+        material.fileName || material.title,
+        new Blob([arrayBufferFromBytes(bytes)], { type: dataUrlMime(material.objectUrl) }),
+      );
       return;
     }
     downloadText(
@@ -616,7 +647,7 @@ function ConsultationRoom({
               <FileCheck2 size={16} />
               {t('联合会诊报告')}
             </h3>
-            <p>{reportText ? t(reportText) : t('会诊结束后生成联合报告')}</p>
+            <p className="consultation-report-text">{reportText || t('会诊结束后生成联合报告')}</p>
             <div className="consultation-panel-actions">
               <Button variant="secondary" disabled={!reportText} onClick={downloadReport}>
                 <Download size={15} />

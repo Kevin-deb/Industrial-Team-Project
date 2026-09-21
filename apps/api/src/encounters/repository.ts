@@ -67,7 +67,7 @@ export interface EncounterRepository {
       scheduledAt: string;
       summary: string;
       participantIds: string[];
-      materials: string[];
+      materials: { title: string; fileName: string; description?: string; objectUrl?: string }[];
     },
     context: RequestContext,
   ): Consultation | undefined;
@@ -366,7 +366,7 @@ export class SqliteEncounterRepository implements EncounterRepository {
       scheduledAt: string;
       summary: string;
       participantIds: string[];
-      materials: string[];
+      materials: { title: string; fileName: string; description?: string; objectUrl?: string }[];
     },
     context: RequestContext,
   ): Consultation | undefined {
@@ -391,15 +391,16 @@ export class SqliteEncounterRepository implements EncounterRepository {
         this.db
           .prepare(
             `INSERT INTO consultation_material_uploads(
-              id,consultation_id,title,description,file_name,uploaded_by,uploaded_at
-            ) VALUES(?,?,?,?,?,?,?)`,
+              id,consultation_id,title,description,file_name,object_url,uploaded_by,uploaded_at
+            ) VALUES(?,?,?,?,?,?,?,?)`,
           )
           .run(
             `CMU-${id}-${index + 1}`,
             id,
-            material,
-            '发起会诊时上传的患者资料。',
-            material,
+            material.title,
+            material.description ?? '发起会诊时上传的患者资料。',
+            material.fileName,
+            material.objectUrl ?? null,
             context.actorId,
             context.now,
           );
@@ -516,9 +517,10 @@ export class SqliteEncounterRepository implements EncounterRepository {
     const existing = this.consultationReport(id);
     this.db.prepare("UPDATE consultations SET status='completed',completed_at=? WHERE id=?").run(context.now, id);
     if (existing) return existing;
+    const body = this.buildConsultationReportBody(id, row);
     const report: ConsultationReport = {
       id: `CR-${id}-${Date.now()}`,
-      body: '系统已根据会诊材料和实时讨论生成会诊意见：建议结合患者近期指标、既往病史与当前用药，形成分阶段诊疗和随访计划。联合会诊报告已生成待审核。',
+      body,
       status: 'confirmed',
       createdAt: context.now,
     };
@@ -708,12 +710,107 @@ export class SqliteEncounterRepository implements EncounterRepository {
     } catch {
       // Legacy demo records may contain plain text instead of JSON.
     }
+    if (this.isLegacyConsultationReport(body)) {
+      const consultation = this.db
+        .prepare('SELECT c.*,p.name patient_name FROM consultations c JOIN patients p ON p.id=c.patient_id WHERE c.id=?')
+        .get(id);
+      if (consultation) body = this.buildConsultationReportBody(id, consultation);
+    }
     return {
       id: String(row.id),
       body,
       status: String(row.status) as ConsultationReport['status'],
       createdAt: String(row.created_at),
     };
+  }
+
+  private buildConsultationReportBody(id: string, row: Record<string, unknown>): string {
+    const participants = this.consultationParticipants(id);
+    const materials = this.consultationMaterials(id);
+    const messages = this.consultationMessages(id);
+    const materialLines =
+      materials.length > 0
+        ? materials.map((material) => `- ${material.title}：${material.description}`).join('\n')
+        : '- 暂无上传或共享的会诊材料。';
+    const participantLines =
+      participants.length > 0
+        ? participants
+            .map(
+              (participant) =>
+                `- ${participant.name}（${participant.department} · ${participant.title}，${this.consultationRoleLabel(
+                  participant.role,
+                )}）`,
+            )
+            .join('\n')
+        : '- 暂无参会人员记录。';
+    const discussionLines =
+      messages.length > 0
+        ? messages
+            .map((message) => {
+              const attachment = message.imageName ? `（图片/附件：${message.imageName}）` : '';
+              return `- ${message.sentAt}｜${message.authorName}：${message.body}${attachment}`;
+            })
+            .join('\n')
+        : '- 暂无诊室讨论发言。';
+    return [
+      '联合会诊报告',
+      '',
+      `会诊编号：${id}`,
+      `会诊主题：${String(row.title)}`,
+      `患者姓名：${String(row.patient_name)}`,
+      `会诊学科：${String(row.specialty)}`,
+      `会诊时间：${String(row.scheduled_at)}`,
+      `会诊摘要：${String(row.summary)}`,
+      '',
+      '一、会诊材料',
+      materialLines,
+      '',
+      '二、参会人员',
+      participantLines,
+      '',
+      '三、会诊意见',
+      this.synthesizeConsultationOpinion(materials, messages),
+      '',
+      '四、会诊讨论记录',
+      discussionLines,
+      '',
+      '五、报告说明',
+      '本报告由系统根据当前会诊资料、参会人员和诊室讨论记录自动生成；后续如接入真实签署流程，可继续补充审核人与签名信息。',
+    ].join('\n');
+  }
+
+  private synthesizeConsultationOpinion(
+    materials: ConsultationMaterial[],
+    messages: ConsultationMessage[],
+  ): string {
+    const materialSummary =
+      materials.length > 0
+        ? `已查阅${materials.map((material) => material.title).join('、')}等资料。`
+        : '本次会诊暂无上传材料，建议先补充患者病历、检查结果或影像资料。';
+    if (messages.length === 0) {
+      return `${materialSummary}\n暂无专家讨论发言，暂不能形成完整联合意见。建议各专科医生补充意见后再归档报告。`;
+    }
+    const opinionLines = messages.map((message, index) => {
+      const attachment = message.imageName ? `；同时提交了${message.imageName}` : '';
+      return `${index + 1}. ${message.authorName}提出：${message.body}${attachment}`;
+    });
+    return [
+      materialSummary,
+      `系统共记录${messages.length}条会诊发言，主要意见如下：`,
+      ...opinionLines,
+      '综合建议：结合上述资料和各专科讨论结果，完善当前诊疗方案，明确后续检查、用药调整、康复随访或转诊安排，并在患者病程记录中同步归档。',
+    ].join('\n');
+  }
+
+  private consultationRoleLabel(role: string): string {
+    if (role === 'requester') return '发起医生';
+    if (role === 'invited') return '受邀医生';
+    if (role === 'expert') return '会诊专家';
+    return role;
+  }
+
+  private isLegacyConsultationReport(body: string): boolean {
+    return body.includes('系统已根据会诊材料和实时讨论生成会诊意见') && !body.includes('会诊讨论记录');
   }
 
   private identityName(id: string): string {

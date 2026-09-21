@@ -2195,6 +2195,9 @@
   font-size: 12px;
   line-height: 1.8;
 }
+.consultation-report-text {
+  white-space: pre-line;
+}
 .consultation-setting-panel > span {
   display: block;
   margin-top: 10px;

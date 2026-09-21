@@ -95,7 +95,7 @@ export async function createApp(options: AppOptions = {}) {
   const app = Fastify({
     logger: options.logger ?? false,
     logController: new LogController({ disableRequestLogging: true }),
-    bodyLimit: 1024 * 1024,
+    bodyLimit: 12 * 1024 * 1024,
     genReqId: () => randomUUID(),
     requestIdHeader: false,
     ajv: { customOptions: { removeAdditional: false } },
@@ -379,7 +379,7 @@ export async function createApp(options: AppOptions = {}) {
       scheduledAt?: string;
       summary?: string;
       participantIds?: string[];
-      materials?: string[];
+      materials?: Array<string | { title?: string; fileName?: string; description?: string; objectUrl?: string }>;
     };
   }>('/api/v1/consultations', async (request, reply) => {
     if (!Object.values(request.body ?? {}).some((value) => value !== undefined && value !== null && value !== ''))
@@ -395,7 +395,37 @@ export async function createApp(options: AppOptions = {}) {
     const specialty = String(request.body.specialty ?? '').trim();
     const scheduledAt = String(request.body.scheduledAt ?? '').trim();
     const participantIds = Array.isArray(request.body.participantIds) ? request.body.participantIds : [];
-    const materials = Array.isArray(request.body.materials) ? request.body.materials : [];
+    const rawMaterials = Array.isArray(request.body.materials) ? request.body.materials : [];
+    const materials = rawMaterials
+      .map((material) => {
+        if (typeof material === 'string') {
+          const title = material.trim();
+          return title
+            ? { title, fileName: title.endsWith('.txt') ? title : `${title}.txt`, description: '发起会诊时上传的患者资料。' }
+            : null;
+        }
+        const title = String(material.title ?? material.fileName ?? '').trim();
+        const fileName = String(material.fileName ?? title).trim();
+        const objectUrl = material.objectUrl ? String(material.objectUrl) : undefined;
+        return title
+          ? {
+              title,
+              fileName,
+              description: String(material.description ?? '发起会诊时上传的患者资料。'),
+              objectUrl,
+            }
+          : null;
+      })
+      .filter((material): material is { title: string; fileName: string; description: string; objectUrl?: string } => Boolean(material));
+    if (
+      materials.some(
+        (material) =>
+          material.objectUrl &&
+          !isLocalUrl(material.objectUrl) &&
+          !String(material.objectUrl).startsWith('data:'),
+      )
+    )
+      return fail(request, reply, 400, 'INVALID_REQUEST', '材料地址无效。');
     if (!patientId || !title || !specialty || !scheduledAt || !participantIds.length)
       return fail(request, reply, 400, 'INVALID_REQUEST', '会诊申请信息不完整。');
     const item = encounters.createConsultation(
@@ -406,7 +436,7 @@ export async function createApp(options: AppOptions = {}) {
         scheduledAt,
         summary: String(request.body.summary ?? '已发起远程会诊申请，等待专家确认参与。').trim(),
         participantIds: participantIds.map(String),
-        materials: materials.map(String).filter(Boolean),
+        materials,
       },
       context(),
     );
