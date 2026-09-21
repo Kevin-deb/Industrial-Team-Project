@@ -80,6 +80,27 @@ CREATE TABLE clinical_order_receipts (
       created_at TEXT NOT NULL,
       PRIMARY KEY(actor_id, operation, resource_id, request_key)
     );
+-- table: consultation_material_uploads
+CREATE TABLE consultation_material_uploads (
+      id TEXT PRIMARY KEY,
+      consultation_id TEXT NOT NULL REFERENCES consultations(id),
+      title TEXT NOT NULL,
+      description TEXT NOT NULL,
+      file_name TEXT NOT NULL,
+      object_url TEXT,
+      uploaded_by TEXT NOT NULL REFERENCES identities(id),
+      uploaded_at TEXT NOT NULL
+    );
+-- table: consultation_messages
+CREATE TABLE consultation_messages (
+      id TEXT PRIMARY KEY,
+      consultation_id TEXT NOT NULL REFERENCES consultations(id),
+      sender_identity_id TEXT NOT NULL REFERENCES identities(id),
+      body TEXT NOT NULL,
+      sent_at TEXT NOT NULL,
+      image_url TEXT,
+      image_name TEXT
+    );
 -- table: consultation_participants
 CREATE TABLE consultation_participants (
       consultation_id TEXT NOT NULL REFERENCES consultations(id), identity_id TEXT NOT NULL REFERENCES identities(id),
@@ -540,6 +561,10 @@ CREATE INDEX clinical_records_encounter ON medical_records(encounter_id) WHERE e
 CREATE INDEX clinical_records_patient_updated ON medical_records(patient_id,updated_at DESC);
 -- index: clinical_records_status_updated
 CREATE INDEX clinical_records_status_updated ON medical_records(status,updated_at DESC);
+-- index: consultation_material_uploads_task
+CREATE INDEX consultation_material_uploads_task ON consultation_material_uploads(consultation_id,uploaded_at DESC,id);
+-- index: consultation_messages_time
+CREATE INDEX consultation_messages_time ON consultation_messages(consultation_id,sent_at,id);
 -- index: email_challenges_user_time
 CREATE INDEX email_challenges_user_time ON email_challenges(user_id,created_at DESC);
 -- index: encounter_availability_doctor_date
@@ -609,4 +634,6 @@ INSERT INTO schema_migrations(version,name,applied_at) VALUES(26,'online_care_fi
 INSERT INTO schema_migrations(version,name,applied_at) VALUES(27,'online_care_typical_fixture_trim','2026-09-21T00:00:00.000Z');
 INSERT INTO schema_migrations(version,name,applied_at) VALUES(28,'online_care_typical_clinical_link','2026-09-21T00:00:00.000Z');
 INSERT INTO schema_migrations(version,name,applied_at) VALUES(29,'online_care_records_alignment','2026-09-21T00:00:00.000Z');
+INSERT INTO schema_migrations(version,name,applied_at) VALUES(30,'remote_consultation_persistence','2026-09-21T00:00:00.000Z');
+INSERT INTO schema_migrations(version,name,applied_at) VALUES(31,'remote_consultation_invited_case','2026-09-21T00:00:00.000Z');
 COMMIT;

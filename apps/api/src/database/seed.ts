@@ -4,6 +4,10 @@ import { hashSecret } from '../platform/auth.js';
 export const DEMO_DOCTOR_ID = 'doctor-demo-001';
 export const DEMO_DATE = '2026-09-10';
 
+function hasTable(db: DatabaseSync, table: string): boolean {
+  return !!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table);
+}
+
 /** Fixed synthetic fixtures; never call provider adapters or imply that notifications were sent. */
 export function seedDemo(db: DatabaseSync): void {
   if (db.prepare('SELECT id FROM identities WHERE id=?').get(DEMO_DOCTOR_ID)) return;
@@ -442,6 +446,40 @@ export function seedDemo(db: DatabaseSync): void {
       db.prepare(
         'INSERT INTO consultation_participants(consultation_id,identity_id,participant_role) VALUES(?,?,?)',
       ).run(pair[0]!, pair[1]!, 'expert');
+    if (hasTable(db, 'consultation_material_uploads')) {
+      const consultationMaterial = db.prepare(
+        `INSERT OR IGNORE INTO consultation_material_uploads(
+          id,consultation_id,title,description,file_name,uploaded_by,uploaded_at
+        ) VALUES(?,?,?,?,?,?,?)`,
+      );
+      for (const material of [
+        ['CMU-001', 'CON-001', '近三个月血压趋势', '患者家庭血压监测汇总。', '近三个月血压趋势.txt', DEMO_DOCTOR_ID, '2026-09-10T09:00:00+08:00'],
+        ['CMU-002', 'CON-001', '心电图摘要', '近期心电图核心结论。', '心电图摘要.txt', DEMO_DOCTOR_ID, '2026-09-10T09:05:00+08:00'],
+        ['CMU-003', 'CON-001', '当前用药清单', '患者现用药物与剂量。', '当前用药清单.txt', DEMO_DOCTOR_ID, '2026-09-10T09:10:00+08:00'],
+        ['CMU-004', 'CON-002', '血糖监测记录', '近两周空腹与餐后血糖。', '血糖监测记录.txt', DEMO_DOCTOR_ID, '2026-09-10T10:00:00+08:00'],
+        ['CMU-005', 'CON-002', '饮食运动记录', '患者近期饮食与运动摘要。', '饮食运动记录.txt', DEMO_DOCTOR_ID, '2026-09-10T10:05:00+08:00'],
+      ])
+        consultationMaterial.run(...material);
+    }
+    if (hasTable(db, 'consultation_messages')) {
+      const consultationMessage = db.prepare(
+        'INSERT OR IGNORE INTO consultation_messages(id,consultation_id,sender_identity_id,body,sent_at) VALUES(?,?,?,?,?)',
+      );
+      consultationMessage.run(
+        'CMSG-001',
+        'CON-001',
+        'doctor-demo-002',
+        '建议先核对近期指标和当前用药，再形成联合意见。',
+        '2026-09-10T15:05:00+08:00',
+      );
+      consultationMessage.run(
+        'CMSG-002',
+        'CON-001',
+        DEMO_DOCTOR_ID,
+        '已打开本次会诊材料，等待各专科补充意见。',
+        '2026-09-10T15:07:00+08:00',
+      );
+    }
     const obs = db.prepare(
       'INSERT INTO health_observations(id,patient_id,metric,value,unit,measured_at,received_at,source,source_label) VALUES(?,?,?,?,?,?,?,?,?)',
     );
@@ -735,6 +773,85 @@ export function seedAuthFoundation(db: DatabaseSync): void {
       'doctor-demo-003',
       at,
       'Synthetic demonstration baseline',
+    );
+
+    db.prepare(
+      'INSERT OR IGNORE INTO consultations(id,patient_id,requested_by,title,specialty,status,scheduled_at,summary) VALUES(?,?,?,?,?,?,?,?)',
+    ).run(
+      'CON-IN-001',
+      'PAT-004',
+      'doctor-demo-002',
+      '术后康复联合评估',
+      '康复医学科 · 骨科 · 全科医学',
+      'requested',
+      '2026-09-12T15:30:00+08:00',
+      '其他医生发来的会诊申请，需要确认是否参与并查看患者资料。',
+    );
+    db.prepare(
+      'INSERT OR IGNORE INTO consultations(id,patient_id,requested_by,title,specialty,status,scheduled_at,summary) VALUES(?,?,?,?,?,?,?,?)',
+    ).run(
+      'CON-IN-002',
+      'PAT-005',
+      'doctor-demo-003',
+      '糖尿病足风险联合会诊',
+      '内分泌科 · 全科医学 · 护理管理',
+      'requested',
+      '2026-09-13T09:30:00+08:00',
+      '其他医生邀请当前医生参与糖尿病足风险评估，需要查看资料后确认是否参会。',
+    );
+    for (const pair of [
+      [DEMO_DOCTOR_ID, 'invited'],
+      ['doctor-demo-002', 'requester'],
+      ['doctor-demo-003', 'expert'],
+    ])
+      db.prepare(
+        'INSERT OR IGNORE INTO consultation_participants(consultation_id,identity_id,participant_role) VALUES(?,?,?)',
+      ).run('CON-IN-001', pair[0]!, pair[1]!);
+    for (const pair of [
+      [DEMO_DOCTOR_ID, 'invited'],
+      ['doctor-demo-003', 'requester'],
+      ['doctor-demo-002', 'expert'],
+    ])
+      db.prepare(
+        'INSERT OR IGNORE INTO consultation_participants(consultation_id,identity_id,participant_role) VALUES(?,?,?)',
+      ).run('CON-IN-002', pair[0]!, pair[1]!);
+    for (const material of [
+      ['CMU-006', '病情摘要', '术后康复会诊病情摘要。', '病情摘要.txt'],
+      ['CMU-007', '检查结果', '影像与实验室检查摘要。', '检查结果.txt'],
+      ['CMU-008', '用药记录', '围术期及当前用药记录。', '用药记录.txt'],
+    ])
+      db.prepare(
+        `INSERT OR IGNORE INTO consultation_material_uploads(
+          id,consultation_id,title,description,file_name,uploaded_by,uploaded_at
+        ) VALUES(?,?,?,?,?,?,?)`,
+      ).run(material[0]!, 'CON-IN-001', material[1]!, material[2]!, material[3]!, 'doctor-demo-002', at);
+    for (const material of [
+      ['CMU-009', '足部照片摘要', '患者足部皮肤状态与破溃风险摘要。', '足部照片摘要.txt'],
+      ['CMU-010', '血糖波动记录', '近两周空腹及餐后血糖波动。', '血糖波动记录.txt'],
+      ['CMU-011', '护理评估表', '居家足部护理执行情况。', '护理评估表.txt'],
+    ])
+      db.prepare(
+        `INSERT OR IGNORE INTO consultation_material_uploads(
+          id,consultation_id,title,description,file_name,uploaded_by,uploaded_at
+        ) VALUES(?,?,?,?,?,?,?)`,
+      ).run(material[0]!, 'CON-IN-002', material[1]!, material[2]!, material[3]!, 'doctor-demo-003', at);
+    db.prepare(
+      'INSERT OR IGNORE INTO consultation_messages(id,consultation_id,sender_identity_id,body,sent_at) VALUES(?,?,?,?,?)',
+    ).run(
+      'CMSG-003',
+      'CON-IN-001',
+      'doctor-demo-002',
+      '已提交术后康复资料，请全科协助评估随访计划。',
+      '2026-09-11T15:20:00+08:00',
+    );
+    db.prepare(
+      'INSERT OR IGNORE INTO consultation_messages(id,consultation_id,sender_identity_id,body,sent_at) VALUES(?,?,?,?,?)',
+    ).run(
+      'CMSG-004',
+      'CON-IN-002',
+      'doctor-demo-003',
+      '患者近期足部麻木加重，邀请全科一起评估综合干预方案。',
+      '2026-09-12T16:40:00+08:00',
     );
 
     const grants = [

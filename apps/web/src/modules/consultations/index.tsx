@@ -17,8 +17,14 @@ import {
   X,
   Search,
 } from 'lucide-react';
-import type { Consultation } from '@doctor/contracts';
-import { useApi } from '../../shared/api';
+import type {
+  Consultation,
+  ConsultationContext,
+  ConsultationDoctorOption,
+  ConsultationMaterial,
+  Patient,
+} from '@doctor/contracts';
+import { requestApi, useApi } from '../../shared/api';
 import { Badge, Button, Card, EmptyState, LoadingState, Modal, PageHeader } from '../../shared/ui';
 import {
   DetailGrid,
@@ -31,91 +37,236 @@ import {
 
 const statuses = { requested: '申请中', scheduled: '已安排', completed: '已完成' };
 const tones = { requested: 'amber', scheduled: 'blue', completed: 'teal' } as const;
-type ConsultationSetup = {
-  materials: string[];
-  access: string;
-  accessUntil: string;
-  report: string;
-};
-type ConsultationCase = Consultation & { direction?: 'sent' | 'received' };
-type ConsultationMessage = {
-  id: string;
-  author: string;
-  body: string;
-  imageUrl?: string;
-  imageName?: string;
-};
-const generatedReportText =
-  '系统已根据会诊材料和实时讨论生成会诊意见：建议结合患者近期指标、既往病史与当前用药，形成分阶段诊疗和随访计划。联合会诊报告已生成待审核。';
-const availableDoctors = [
-  { id: 'doc-rehab-wang', name: '王辉', title: '主任医师', specialty: '康复医学科' },
-  { id: 'doc-ortho-zhou', name: '周敏', title: '副主任医师', specialty: '骨科' },
-  { id: 'doc-cardio-chen', name: '陈晓岚', title: '主任医师', specialty: '心血管内科' },
-  { id: 'doc-endo-liu', name: '刘嘉', title: '主治医师', specialty: '内分泌科' },
-  { id: 'doc-neuro-sun', name: '孙宁', title: '副主任医师', specialty: '神经内科' },
-];
-const setups: Record<string, ConsultationSetup> = {
-  'CON-001': {
-    materials: ['近三个月血压趋势', '心电图摘要', '当前用药清单'],
-    access: '共享基础档案、健康监测与本次会诊材料',
-    accessUntil: '2026-09-12T18:00:00+08:00',
-    report: '报告草稿待联合讨论后生成',
-  },
-  'CON-002': {
-    materials: ['血糖监测记录', '饮食运动记录', '既往随访摘要'],
-    access: '仅共享糖尿病随访相关资料',
-    accessUntil: '2026-09-11T18:00:00+08:00',
-    report: '待专家确认后建立报告模板',
-  },
-};
+const textEncoder = new TextEncoder();
 
-function setupFor(item: Consultation) {
-  return (
-    setups[item.id] ?? {
-      materials: ['病情摘要', '检查结果', '用药记录'],
-      access: '按本次会诊任务共享必要资料',
-      accessUntil: item.scheduledAt,
-      report: '会诊结束后生成联合报告',
-    }
-  );
+function crc32(bytes: Uint8Array) {
+  let crc = -1;
+  for (const byte of bytes) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit += 1) crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
+  }
+  return (crc ^ -1) >>> 0;
+}
+
+function dataUrlBytes(dataUrl: string) {
+  const [, meta = '', data = ''] = dataUrl.match(/^data:([^,]*),(.*)$/) ?? [];
+  if (meta.includes(';base64')) {
+    const binary = atob(data);
+    return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+  }
+  return textEncoder.encode(decodeURIComponent(data));
+}
+
+function dosDateTime(date = new Date()) {
+  const dosTime = (date.getHours() << 11) | (date.getMinutes() << 5) | Math.floor(date.getSeconds() / 2);
+  const dosDate = ((date.getFullYear() - 1980) << 9) | ((date.getMonth() + 1) << 5) | date.getDate();
+  return { dosDate, dosTime };
+}
+
+function uint32(value: number) {
+  return [value & 255, (value >>> 8) & 255, (value >>> 16) & 255, (value >>> 24) & 255];
+}
+
+function uint16(value: number) {
+  return [value & 255, (value >>> 8) & 255];
+}
+
+function zipBlob(files: Array<{ name: string; bytes: Uint8Array }>) {
+  const localParts: Uint8Array[] = [];
+  const centralParts: Uint8Array[] = [];
+  let offset = 0;
+  const { dosDate, dosTime } = dosDateTime();
+  for (const file of files) {
+    const name = textEncoder.encode(file.name);
+    const checksum = crc32(file.bytes);
+    const local = Uint8Array.from([
+      ...uint32(0x04034b50),
+      ...uint16(20),
+      ...uint16(0),
+      ...uint16(0),
+      ...uint16(dosTime),
+      ...uint16(dosDate),
+      ...uint32(checksum),
+      ...uint32(file.bytes.length),
+      ...uint32(file.bytes.length),
+      ...uint16(name.length),
+      ...uint16(0),
+      ...name,
+      ...file.bytes,
+    ]);
+    const central = Uint8Array.from([
+      ...uint32(0x02014b50),
+      ...uint16(20),
+      ...uint16(20),
+      ...uint16(0),
+      ...uint16(0),
+      ...uint16(dosTime),
+      ...uint16(dosDate),
+      ...uint32(checksum),
+      ...uint32(file.bytes.length),
+      ...uint32(file.bytes.length),
+      ...uint16(name.length),
+      ...uint16(0),
+      ...uint16(0),
+      ...uint16(0),
+      ...uint16(0),
+      ...uint32(0),
+      ...uint32(offset),
+      ...name,
+    ]);
+    localParts.push(local);
+    centralParts.push(central);
+    offset += local.length;
+  }
+  const centralSize = centralParts.reduce((sum, part) => sum + part.length, 0);
+  const end = Uint8Array.from([
+    ...uint32(0x06054b50),
+    ...uint16(0),
+    ...uint16(0),
+    ...uint16(files.length),
+    ...uint16(files.length),
+    ...uint32(centralSize),
+    ...uint32(offset),
+    ...uint16(0),
+  ]);
+  const parts = [...localParts, ...centralParts, end].map((part) => {
+    const buffer = new ArrayBuffer(part.byteLength);
+    new Uint8Array(buffer).set(part);
+    return buffer;
+  });
+  return new Blob(parts, { type: 'application/zip' });
 }
 
 function RequestDialog({
   onClose,
-  onCreate,
+  onCreated,
 }: {
   onClose: () => void;
-  onCreate: (item: ConsultationCase, setup: ConsultationSetup) => void;
+  onCreated: () => void;
 }) {
   const { t } = useI18n();
   const [patientName, setPatientName] = useState('李明华');
   const [patientId, setPatientId] = useState('PAT-008');
+  const [patientPicker, setPatientPicker] = useState<'name' | 'id' | null>(null);
   const [title, setTitle] = useState('疑难慢病多学科会诊');
   const [specialty, setSpecialty] = useState('全科医学 · 心血管内科 · 内分泌科');
   const [scheduledAt, setScheduledAt] = useState('2026-09-12T10:30');
   const [materials, setMaterials] = useState(['门诊病历摘要']);
-  const [selectedDoctorIds, setSelectedDoctorIds] = useState(['doc-cardio-chen', 'doc-endo-liu']);
-  const selectedDoctors = availableDoctors.filter((doctor) => selectedDoctorIds.includes(doctor.id));
+  const [selectedDoctors, setSelectedDoctors] = useState<ConsultationDoctorOption[]>([]);
   const [doctorQuery, setDoctorQuery] = useState('');
-  const filteredDoctors = availableDoctors.filter((doctor) =>
-    `${doctor.name} ${doctor.specialty} ${doctor.title}`.includes(doctorQuery.trim()),
+  const [submitting, setSubmitting] = useState(false);
+  const patients = useApi<Patient[]>('/patients?pageSize=100');
+  const doctors = useApi<ConsultationDoctorOption[]>(
+    `/consultation-doctors?q=${encodeURIComponent(doctorQuery.trim())}`,
   );
-  const addDoctor = (id: string) => {
-    setSelectedDoctorIds((current) => (current.includes(id) ? current : [...current, id]));
+  const visiblePatients = useMemo(() => {
+    const keyword = (patientPicker === 'id' ? patientId : patientName).trim().toLowerCase();
+    return (patients.data ?? [])
+      .filter((patient) =>
+        keyword
+          ? `${patient.name} ${patient.id} ${patient.diagnosis}`.toLowerCase().includes(keyword)
+          : true,
+      )
+      .slice(0, 8);
+  }, [patientId, patientName, patientPicker, patients.data]);
+  const selectedPatient = useMemo(
+    () => (patients.data ?? []).find((patient) => patient.id === patientId && patient.name === patientName),
+    [patientId, patientName, patients.data],
+  );
+  const filteredDoctors = doctors.data ?? [];
+  const selectPatient = (patient: Patient) => {
+    setPatientName(patient.name);
+    setPatientId(patient.id);
+    setPatientPicker(null);
+  };
+  const addDoctor = (doctor: ConsultationDoctorOption) => {
+    setSelectedDoctors((current) => (current.some((item) => item.id === doctor.id) ? current : [...current, doctor]));
   };
   const removeDoctor = (id: string) => {
-    setSelectedDoctorIds((current) => current.filter((item) => item !== id));
+    setSelectedDoctors((current) => current.filter((item) => item.id !== id));
   };
   const addFiles = (files: FileList | null) => {
     if (!files?.length) return;
     setMaterials((current) => [...current, ...Array.from(files).map((file) => file.name)]);
   };
+  const create = async () => {
+    if (!selectedPatient || !selectedDoctors.length || submitting) return;
+    setSubmitting(true);
+    try {
+      await requestApi<Consultation>('/consultations', {
+        method: 'POST',
+        body: JSON.stringify({
+          patientId,
+          title,
+          specialty,
+          scheduledAt: new Date(scheduledAt).toISOString(),
+          summary: '已发起远程会诊申请，等待专家确认参与。',
+          participantIds: selectedDoctors.map((doctor) => doctor.id),
+          materials,
+        }),
+      });
+      onCreated();
+      onClose();
+    } finally {
+      setSubmitting(false);
+    }
+  };
   return (
     <FeatureDialog title={t('发起专家会诊')} subtitle={t('填写会诊申请')} onClose={onClose}>
       <div className="consultation-request-form">
+        <label className="consultation-patient-picker">
+          <span>{t('患者姓名')}</span>
+          <input
+            value={patientName}
+            onFocus={() => setPatientPicker('name')}
+            onChange={(event) => {
+              setPatientName(event.target.value);
+              setPatientPicker('name');
+            }}
+            onBlur={() => window.setTimeout(() => setPatientPicker(null), 120)}
+            placeholder={t('搜索患者姓名')}
+          />
+          {patientPicker === 'name' && (
+            <div className="consultation-patient-results">
+              {visiblePatients.map((patient) => (
+                <button type="button" key={patient.id} onMouseDown={() => selectPatient(patient)}>
+                  <strong>{patient.name}</strong>
+                  <span>
+                    {patient.id} · {patient.diagnosis}
+                  </span>
+                </button>
+              ))}
+              {!visiblePatients.length && <p>{t(patients.loading ? '正在加载患者' : '没有匹配的患者')}</p>}
+            </div>
+          )}
+        </label>
+        <label className="consultation-patient-picker">
+          <span>{t('患者编号')}</span>
+          <input
+            value={patientId}
+            onFocus={() => setPatientPicker('id')}
+            onChange={(event) => {
+              setPatientId(event.target.value);
+              setPatientPicker('id');
+            }}
+            onBlur={() => window.setTimeout(() => setPatientPicker(null), 120)}
+            placeholder={t('搜索患者编号')}
+          />
+          {patientPicker === 'id' && (
+            <div className="consultation-patient-results">
+              {visiblePatients.map((patient) => (
+                <button type="button" key={patient.id} onMouseDown={() => selectPatient(patient)}>
+                  <strong>{patient.id}</strong>
+                  <span>
+                    {patient.name} · {patient.diagnosis}
+                  </span>
+                </button>
+              ))}
+              {!visiblePatients.length && <p>{t(patients.loading ? '正在加载患者' : '没有匹配的患者')}</p>}
+            </div>
+          )}
+        </label>
         {[
-          ['患者姓名', patientName, setPatientName],
-          ['患者编号', patientId, setPatientId],
           ['会诊标题', title, setTitle],
           ['会诊专科', specialty, setSpecialty],
         ].map(([label, value, setter]) => (
@@ -169,16 +320,16 @@ function RequestDialog({
           </div>
           <div className="consultation-doctor-results">
             {filteredDoctors.map((doctor) => {
-              const selected = selectedDoctorIds.includes(doctor.id);
+              const selected = selectedDoctors.some((item) => item.id === doctor.id);
               return (
                 <article key={doctor.id}>
                   <div>
                   <strong>{t(doctor.name)}</strong>
                   <small>
-                    {t(doctor.specialty)} · {t(doctor.title)}
+                    {t(doctor.department)} · {t(doctor.title)}
                   </small>
                   </div>
-                  <Button variant="secondary" disabled={selected} onClick={() => addDoctor(doctor.id)}>
+                  <Button variant="secondary" disabled={selected} onClick={() => addDoctor(doctor)}>
                     {t(selected ? '已添加' : '添加')}
                   </Button>
                 </article>
@@ -198,34 +349,11 @@ function RequestDialog({
           ))}
         </div>
         <Button
-          onClick={() => {
-            const id = `CON-LOCAL-${Date.now().toString().slice(-4)}`;
-            onCreate(
-              {
-                id,
-                patientId,
-                patientName,
-                title,
-                specialty,
-                status: 'requested',
-                scheduledAt: new Date(scheduledAt).toISOString(),
-                participants: ['当前医生', ...selectedDoctors.map((doctor) => doctor.name)],
-                summary: '已发起远程会诊申请，等待专家确认参与。',
-                direction: 'sent',
-              },
-              {
-                materials,
-                access: '按本次会诊任务共享必要资料',
-                accessUntil: new Date(scheduledAt).toISOString(),
-                report: '待会诊结束后自动生成报告',
-              },
-            );
-            onClose();
-          }}
-          disabled={!selectedDoctors.length}
+          onClick={create}
+          disabled={!selectedPatient || !selectedDoctors.length || submitting}
         >
           <FilePlus2 size={16} />
-          {t('提交会诊申请')}
+          {t(submitting ? '提交中' : '提交会诊申请')}
         </Button>
       </div>
     </FeatureDialog>
@@ -233,34 +361,27 @@ function RequestDialog({
 }
 
 function ConsultationRoom({
-  item,
-  setup,
-  report,
+  id,
   onBack,
-  onFinish,
+  onChanged,
 }: {
-  item: ConsultationCase;
-  setup: ConsultationSetup;
-  report: string;
+  id: string;
   onBack: () => void;
-  onFinish: (id: string, report: string) => void;
+  onChanged: () => void;
 }) {
   const { t, formatDate } = useI18n();
-  const [materials, setMaterials] = useState(setup.materials);
+  const contextData = useApi<ConsultationContext>(`/consultations/${encodeURIComponent(id)}/context`);
   const [draft, setDraft] = useState('');
   const [previewImage, setPreviewImage] = useState<{ url: string; name?: string } | null>(null);
   const [confirmFinish, setConfirmFinish] = useState(false);
   const [participantsOpen, setParticipantsOpen] = useState(true);
-  const [messages, setMessages] = useState<ConsultationMessage[]>([
-    {
-      id: 'm1',
-      author: item.participants[0] ?? '会诊专家',
-      body: '建议先核对近期指标和当前用药，再形成联合意见。',
-    },
-    { id: 'm2', author: '我', body: '已打开本次会诊材料，等待各专科补充意见。' },
-  ]);
-  const isFinished = item.status === 'completed';
-  const reportText = report || (isFinished ? generatedReportText : '');
+  const room = contextData.data;
+  const item = room?.consultation;
+  const materials = room?.materials ?? [];
+  const messages = room?.messages ?? [];
+  const participants = room?.participants ?? [];
+  const reportText = room?.report?.body ?? '';
+  const isFinished = item?.status === 'completed';
   const downloadText = (filename: string, content: string) => {
     const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -270,55 +391,120 @@ function ConsultationRoom({
     link.click();
     URL.revokeObjectURL(url);
   };
-  const addFiles = (files: FileList | null) => {
+  const readFileAsDataUrl = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(reader.error ?? new Error('读取文件失败'));
+      reader.readAsDataURL(file);
+    });
+  const addFiles = async (files: FileList | null) => {
     if (isFinished) return;
     if (!files?.length) return;
-    setMaterials((current) => [...current, ...Array.from(files).map((file) => file.name)]);
+    await Promise.all(
+      Array.from(files).map(async (file) =>
+        requestApi<ConsultationMaterial>(`/consultations/${encodeURIComponent(id)}/materials`, {
+          method: 'POST',
+          body: JSON.stringify({
+            title: file.name,
+            fileName: file.name,
+            description: '会诊过程中补充上传的资料。',
+            objectUrl: await readFileAsDataUrl(file),
+          }),
+        }),
+      ),
+    );
+    contextData.reload();
   };
-  const send = () => {
+  const send = async () => {
     if (isFinished) return;
     const body = draft.trim();
     if (!body) return;
-    setMessages((current) => [...current, { id: `m${current.length + 1}`, author: '我', body }]);
+    await requestApi(`/consultations/${encodeURIComponent(id)}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ body }),
+    });
     setDraft('');
+    contextData.reload();
   };
   const sendImage = (files: FileList | null) => {
     if (isFinished) return;
     const file = files?.[0];
     if (!file) return;
-    setMessages((current) => [
-      ...current,
-      {
-        id: `m${current.length + 1}`,
-        author: '我',
-        body: file.name,
-        imageUrl: URL.createObjectURL(file),
-        imageName: file.name,
-      },
-    ]);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      await requestApi(`/consultations/${encodeURIComponent(id)}/messages`, {
+        method: 'POST',
+        body: JSON.stringify({
+          body: file.name,
+          imageUrl: String(reader.result),
+          imageName: file.name,
+        }),
+      });
+      contextData.reload();
+    };
+    reader.readAsDataURL(file);
   };
-  const finish = () => {
-    onFinish(item.id, generatedReportText);
+  const finish = async () => {
+    await requestApi(`/consultations/${encodeURIComponent(id)}/complete`, { method: 'POST' });
     setConfirmFinish(false);
+    contextData.reload();
+    onChanged();
   };
   const downloadMaterials = () => {
-    downloadText(
-      `${item.id}-materials.txt`,
-      [`${item.title} · ${item.patientName}`, '', ...materials.map((material) => `- ${material}`)].join('\n'),
-    );
+    if (!item) return;
+    if (!materials.length) return;
+    const files = materials.map((material, index) => ({
+      name: material.objectUrl
+        ? material.fileName || `${index + 1}-${material.title}`
+        : `${String(index + 1).padStart(2, '0')}-${material.fileName.replace(/\.[^.]+$/, '')}.txt`,
+      bytes: material.objectUrl
+        ? dataUrlBytes(material.objectUrl)
+        : textEncoder.encode(
+            [`${t('会诊材料')}：${t(material.title)}`, `${item.title} · ${item.patientName}`, '', t(material.description)].join(
+              '\n',
+            ),
+          ),
+    }));
+    const url = URL.createObjectURL(zipBlob(files));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${item.id}-materials.zip`;
+    link.click();
+    URL.revokeObjectURL(url);
   };
-  const downloadMaterial = (material: string) => {
+  const downloadMaterial = (material: ConsultationMaterial) => {
+    if (!item) return;
+    if (material.objectUrl) {
+      const link = document.createElement('a');
+      link.href = material.objectUrl;
+      link.download = material.fileName || material.title;
+      link.click();
+      return;
+    }
     downloadText(
-      `${item.id}-${material}.txt`,
-      [`${t('会诊材料')}：${t(material)}`, `${item.title} · ${item.patientName}`, '', t(material)].join(
+      `${item.id}-${material.fileName.replace(/\.[^.]+$/, '')}.txt`,
+      [`${t('会诊材料')}：${t(material.title)}`, `${item.title} · ${item.patientName}`, '', t(material.description)].join(
         '\n',
       ),
     );
   };
+  const deleteMaterial = async (material: ConsultationMaterial) => {
+    if (isFinished) return;
+    if (!window.confirm(t('确定删除这份会诊材料吗？'))) return;
+    await requestApi(
+      `/consultations/${encodeURIComponent(id)}/materials/${encodeURIComponent(material.id)}`,
+      { method: 'DELETE' },
+    );
+    contextData.reload();
+  };
   const downloadReport = () => {
+    if (!item) return;
     if (!reportText) return;
     downloadText(`${item.id}-consultation-report.txt`, reportText);
   };
+  if (contextData.loading || contextData.error || !room || !item)
+    return <LoadingState error={contextData.error} onRetry={contextData.reload} />;
   return (
     <div className="consultation-room-page">
       <header className="encounter-room-header">
@@ -356,14 +542,14 @@ function ConsultationRoom({
             </button>
             {participantsOpen && (
               <div className="consultation-participant-list">
-                {item.participants.map((name, index) => (
-                  <article key={`${name}-${index}`}>
+                {participants.map((participant, index) => (
+                  <article key={participant.id}>
                     <span className="consultation-participant-avatar">
-                      {t(name).slice(0, 1)}
+                      {t(participant.name).slice(0, 1)}
                     </span>
                     <div>
-                      <strong>{t(name)}</strong>
-                      <small>{index === 0 ? t('发起医生') : t('参与专家')}</small>
+                      <strong>{t(participant.name)}</strong>
+                      <small>{index === 0 ? t('发起医生') : `${t(participant.department)} · ${t(participant.title)}`}</small>
                     </div>
                   </article>
                 ))}
@@ -377,20 +563,28 @@ function ConsultationRoom({
             </h3>
             <ul>
               {materials.map((material) => (
-                <li className="consultation-material-item" key={material}>
-                  <span>{t(material)}</span>
+                <li className="consultation-material-item" key={material.id}>
+                  <span>{t(material.title)}</span>
                   <button
                     type="button"
                     onClick={() => downloadMaterial(material)}
-                    aria-label={t('下载 {name}', { name: material })}
+                    aria-label={t('下载 {name}', { name: material.title })}
                   >
                     <Download size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isFinished}
+                    onClick={() => deleteMaterial(material)}
+                    aria-label={t('删除 {name}', { name: material.title })}
+                  >
+                    <X size={14} />
                   </button>
                 </li>
               ))}
             </ul>
             <div className="consultation-panel-actions">
-              <Button variant="secondary" onClick={downloadMaterials}>
+              <Button variant="secondary" disabled={!materials.length} onClick={downloadMaterials}>
                 <Download size={15} />
                 {t('下载全部材料')}
               </Button>
@@ -411,10 +605,10 @@ function ConsultationRoom({
               <ShieldCheck size={16} />
               {t('临时访问授权')}
             </h3>
-            <p>{t(setup.access)}</p>
+            <p>{t(room.access)}</p>
             <span>
               {t('有效期至')}{' '}
-              {formatDate(setup.accessUntil, { dateStyle: 'medium', timeStyle: 'short' })}
+              {formatDate(room.accessUntil, { dateStyle: 'medium', timeStyle: 'short' })}
             </span>
           </section>
           <section className="consultation-setting-panel">
@@ -422,7 +616,7 @@ function ConsultationRoom({
               <FileCheck2 size={16} />
               {t('联合会诊报告')}
             </h3>
-            <p>{reportText ? t(reportText) : t(setup.report)}</p>
+            <p>{reportText ? t(reportText) : t('会诊结束后生成联合报告')}</p>
             <div className="consultation-panel-actions">
               <Button variant="secondary" disabled={!reportText} onClick={downloadReport}>
                 <Download size={15} />
@@ -438,13 +632,13 @@ function ConsultationRoom({
               {messages.map((message) => (
                 <div
                   className={`consultation-message ${
-                    message.author === '我'
+                    message.authorName === '林知远'
                       ? 'consultation-message--doctor'
                       : 'consultation-message--expert'
                   }`}
                   key={message.id}
                 >
-                  <strong>{t(message.author)}</strong>
+                  <strong>{t(message.authorName === '林知远' ? '我' : message.authorName)}</strong>
                   {message.imageUrl ? (
                     <figure className="encounter-message-image">
                       <button
@@ -561,63 +755,26 @@ export function ConsultationsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [roomId, setRoomId] = useState<string | null>(null);
   const [requestOpen, setRequestOpen] = useState(false);
-  const [localCases, setLocalCases] = useState<ConsultationCase[]>([]);
-  const [statusOverrides, setStatusOverrides] = useState<Record<string, Consultation['status']>>(
-    {},
-  );
-  const [reportsByCase, setReportsByCase] = useState<Record<string, string>>({});
-  const [incomingCases, setIncomingCases] = useState<ConsultationCase[]>([
-    {
-      id: 'CON-IN-001',
-      patientId: 'PAT-009',
-      patientName: '赵雅琴',
-      title: '术后康复联合评估',
-      specialty: '康复医学科 · 骨科 · 全科医学',
-      status: 'requested',
-      scheduledAt: '2026-09-12T15:30:00+08:00',
-      participants: ['康复医学科王医生', '骨科周医生', '当前医生'],
-      summary: '其他医生发来的会诊申请，需要确认是否参与并查看患者资料。',
-      direction: 'received',
-    },
-  ]);
-  const [localSetups, setLocalSetups] = useState<Record<string, ConsultationSetup>>({});
-  const allCases = useMemo<ConsultationCase[]>(
-    () => [
-      ...localCases,
-      ...incomingCases,
-      ...((data ?? []).map((item) => ({ ...item, direction: 'sent' as const })) ?? []),
-    ].map((item) => ({ ...item, status: statusOverrides[item.id] ?? item.status })),
-    [data, incomingCases, localCases, statusOverrides],
-  );
-  const setupOf = useCallback(
-    (item: ConsultationCase) => localSetups[item.id] ?? setupFor(item),
-    [localSetups],
-  );
+  const allCases = useMemo<Consultation[]>(() => data ?? [], [data]);
   const selected = allCases.find((item) => item.id === selectedId) ?? null;
-  const activeRoom = allCases.find((item) => item.id === roomId) ?? null;
   const close = useCallback(() => setSelectedId(null), []);
-  const acceptConsultation = useCallback((id: string) => {
-    setStatusOverrides((current) => ({ ...current, [id]: 'scheduled' }));
-    setIncomingCases((current) =>
-      current.map((row) => (row.id === id ? { ...row, status: 'scheduled' } : row)),
-    );
-  }, []);
-  const finishConsultation = useCallback((id: string, report: string) => {
-    setStatusOverrides((current) => ({ ...current, [id]: 'completed' }));
-    setReportsByCase((current) => ({ ...current, [id]: report }));
-  }, []);
+  const acceptConsultation = useCallback(
+    async (id: string) => {
+      await requestApi<Consultation>(`/consultations/${encodeURIComponent(id)}/accept`, { method: 'POST' });
+      reload();
+    },
+    [reload],
+  );
   const cases = useMemo(
     () => allCases.filter((item) => status === 'all' || item.status === status),
     [allCases, status],
   );
-  if (activeRoom)
+  if (roomId)
     return (
       <ConsultationRoom
-        item={activeRoom}
-        setup={setupOf(activeRoom)}
-        report={reportsByCase[activeRoom.id] ?? ''}
+        id={roomId}
         onBack={() => setRoomId(null)}
-        onFinish={finishConsultation}
+        onChanged={reload}
       />
     );
   return (
@@ -720,7 +877,7 @@ export function ConsultationsPage() {
               description={t('查看其他分类，或浏览下方的会诊流程规划。')}
             />
           )}
-          <Card className="feature-card-pad">
+          <Card className="feature-card-pad consultation-workflow-card">
             <div style={{ marginTop: 8 }}>
               <SectionTitle
                 title={t('会诊协作流程')}
@@ -749,10 +906,7 @@ export function ConsultationsPage() {
       {requestOpen && (
         <RequestDialog
           onClose={() => setRequestOpen(false)}
-          onCreate={(item, setup) => {
-            setLocalCases((current) => [item, ...current]);
-            setLocalSetups((current) => ({ ...current, [item.id]: setup }));
-          }}
+          onCreated={reload}
         />
       )}
       {selected && (

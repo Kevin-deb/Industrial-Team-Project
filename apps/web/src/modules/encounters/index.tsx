@@ -6,6 +6,7 @@ import {
   CalendarDays,
   CalendarPlus,
   CheckCheck,
+  ClipboardList,
   Clock3,
   Download,
   FileText,
@@ -24,11 +25,15 @@ import {
   X,
 } from 'lucide-react';
 import type {
+  CreateMedicalRecordRequest,
   Encounter,
   EncounterAvailabilityWindow,
   EncounterContext,
   EncounterNotice,
   EncounterMessage as ApiEncounterMessage,
+  MedicalRecordDetail,
+  MedicalRecordTemplateDefinition,
+  MedicalRecordTemplateId,
 } from '@doctor/contracts';
 import { requestApi, useApi } from '../../shared/api';
 import { Badge, Button, EmptyState, LoadingState, PageHeader } from '../../shared/ui';
@@ -185,6 +190,207 @@ function ClinicalSummary({ brief }: { brief: ClinicalBrief }) {
         ))}
       </dl>
     </section>
+  );
+}
+
+function emptyRecordBody(template: MedicalRecordTemplateDefinition) {
+  return Object.fromEntries(template.fields.map((field) => [field.key, ''])) as Record<string, string>;
+}
+
+function bodyFromBrief(template: MedicalRecordTemplateDefinition, brief: ClinicalBrief, encounter: Encounter) {
+  const body = emptyRecordBody(template);
+  if (template.id === 'outpatient') {
+    body.chiefComplaint = brief.chiefComplaint;
+    body.presentIllness = brief.presentIllness;
+    body.medicalAndAllergyHistory = [
+      `既往史：${brief.pastHistory}`,
+      `手术史：${brief.surgicalHistory}`,
+      `用药史：${brief.medicationHistory}`,
+      `过敏史：${brief.allergyHistory}`,
+    ].join('\n');
+    body.examinationAndInvestigations = '在线问诊资料待医生补充，必要时建议线下查体或完善辅助检查。';
+    body.assessmentAndPlan = `围绕“${encounter.reason}”继续评估，结合沟通记录完善诊疗计划。`;
+  } else if (template.id === 'followup') {
+    body.followUpPurpose = encounter.reason;
+    body.healthMonitoringData = '患者通过在线诊疗提交资料，待医生结合健康数据补充。';
+    body.currentMedicationAndAdherence = brief.medicationHistory;
+    body.lifestyleAndCare = '生活方式与照护情况待问诊过程中补充。';
+    body.nextFollowUpArrangement = '根据本次问诊结果安排后续随访。';
+  } else if (template.id === 'consult') {
+    body.consultationRequestAndPurpose = encounter.reason;
+    body.participatingClinicians = '在线诊疗医生';
+    body.caseSummary = `${brief.chiefComplaint}\n${brief.presentIllness}`;
+    body.discussionNotes = '诊间沟通后补充。';
+    body.combinedOpinionAndNextSteps = '待医生形成综合意见。';
+  }
+  return body;
+}
+
+function EncounterRecordDialog({
+  encounter,
+  brief,
+  onClose,
+  onSaved,
+}: {
+  encounter: Encounter;
+  brief: ClinicalBrief;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const { t } = useI18n();
+  const { data: templates, loading, error } = useApi<MedicalRecordTemplateDefinition[]>('/record-templates');
+  const [templateId, setTemplateId] = useState<MedicalRecordTemplateId>('outpatient');
+  const [title, setTitle] = useState(`${encounter.patientName}在线问诊病历`);
+  const [diagnosis, setDiagnosis] = useState(encounter.reason);
+  const [body, setBody] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
+  const template = templates?.find((item) => item.id === templateId) ?? templates?.[0];
+
+  useEffect(() => {
+    if (!template || Object.keys(body).length) return;
+    setTemplateId(template.id);
+    setBody(bodyFromBrief(template, brief, encounter));
+  }, [body, brief, encounter, template]);
+
+  function changeTemplate(nextId: MedicalRecordTemplateId) {
+    const nextTemplate = templates?.find((item) => item.id === nextId);
+    if (!nextTemplate) return;
+    setTemplateId(nextId);
+    setBody(bodyFromBrief(nextTemplate, brief, encounter));
+  }
+
+  async function saveRecord() {
+    if (!template) return;
+    setSaving(true);
+    setNotice(null);
+    try {
+      const payload: CreateMedicalRecordRequest = {
+        patientId: encounter.patientId,
+        encounterId: encounter.id,
+        templateId: template.id,
+        title: title.trim(),
+        diagnosis: diagnosis.trim(),
+        body,
+      };
+      const saved = await requestApi<MedicalRecordDetail>('/records', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      setNotice({ tone: 'success', text: `病历已保存：${saved.data.id}` });
+      onSaved();
+    } catch (reason) {
+      setNotice({
+        tone: 'error',
+        text: reason instanceof Error ? reason.message : '保存病历失败，请稍后重试。',
+      });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <FeatureDialog
+      title={t('开立电子病历')}
+      subtitle={`${encounter.patientName} · ${encounter.id}`}
+      onClose={onClose}
+      wide
+    >
+      {loading || error || !template ? (
+        <LoadingState error={error || (!loading ? '无法加载病历模板' : null)} />
+      ) : (
+        <form
+          className="record-editor"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void saveRecord();
+          }}
+        >
+          <div className="record-editor-grid">
+            <label>
+              <span>{t('患者')}</span>
+              <input value={`${encounter.patientName} · ${encounter.patientId}`} disabled readOnly />
+            </label>
+            <label>
+              <span>{t('关联问诊')}</span>
+              <input value={`${encounter.id} · ${encounter.reason}`} disabled readOnly />
+            </label>
+            <label>
+              <span>{t('病历模板')}</span>
+              <select
+                aria-label={t('选择病历模板')}
+                value={template.id}
+                onChange={(event) => changeTemplate(event.target.value as MedicalRecordTemplateId)}
+              >
+                {(templates ?? []).map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {t(item.titleKey)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>{t('病历标题')}</span>
+              <input
+                aria-label={t('病历标题')}
+                maxLength={120}
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+              />
+            </label>
+            <label className="record-editor-span">
+              <span>{t('诊断')}</span>
+              <input
+                aria-label={t('诊断')}
+                maxLength={200}
+                value={diagnosis}
+                onChange={(event) => setDiagnosis(event.target.value)}
+              />
+            </label>
+          </div>
+          <div className="record-editor-fields">
+            <div className="record-editor-section-title">
+              <div>
+                <strong>{t(template.titleKey)}</strong>
+                <span>{t(template.subtitleKey)}</span>
+              </div>
+              <Badge tone="blue">{t('来自电子病历模板')}</Badge>
+            </div>
+            {template.fields.map((field) => (
+              <label key={field.key}>
+                <span>
+                  {t(field.labelKey)}
+                  {field.requiredOnSubmit ? t('（提交必填）') : ''}
+                </span>
+                <textarea
+                  aria-label={t(field.labelKey)}
+                  maxLength={field.maxLength}
+                  rows={4}
+                  value={body[field.key] ?? ''}
+                  onChange={(event) =>
+                    setBody((value) => ({ ...value, [field.key]: event.target.value }))
+                  }
+                />
+              </label>
+            ))}
+          </div>
+          {notice && (
+            <div className={`record-editor-notice ${notice.tone}`} role="status">
+              {t(notice.text)}
+            </div>
+          )}
+          <div className="record-editor-actions">
+            <Button variant="secondary" type="button" onClick={onClose}>
+              {t('关闭')}
+            </Button>
+            <Button type="submit" disabled={saving || !title.trim() || !diagnosis.trim()}>
+              <FileText size={16} />
+              {t(saving ? '保存中' : '保存到电子病历')}
+            </Button>
+          </div>
+        </form>
+      )}
+    </FeatureDialog>
   );
 }
 
@@ -663,6 +869,7 @@ function EncounterRoom({
   const [callStarted, setCallStarted] = useState(false);
   const [folderOpen, setFolderOpen] = useState(true);
   const [recordsOpen, setRecordsOpen] = useState(false);
+  const [recordDialogOpen, setRecordDialogOpen] = useState(false);
   const [previewImage, setPreviewImage] = useState<{ url: string; name?: string } | null>(null);
   const [doctorStream, setDoctorStream] = useState<MediaStream | null>(null);
   const [cameraError, setCameraError] = useState('');
@@ -863,6 +1070,10 @@ function EncounterRoom({
       <div className="encounter-room-layout">
         <aside className="encounter-room-sidebar">
           <div className="encounter-room-actions">
+            <Button variant="secondary" onClick={() => setRecordDialogOpen(true)}>
+              <ClipboardList size={14} />
+              {t('开病历')}
+            </Button>
             <Button
               className="encounter-end-button"
               variant="secondary"
@@ -1103,6 +1314,17 @@ function EncounterRoom({
             {previewImage.name && <figcaption>{previewImage.name}</figcaption>}
           </figure>
         </div>
+      )}
+      {recordDialogOpen && (
+        <EncounterRecordDialog
+          encounter={encounter}
+          brief={brief}
+          onClose={() => setRecordDialogOpen(false)}
+          onSaved={() => {
+            roomContext.reload();
+            setFolderOpen(true);
+          }}
+        />
       )}
     </div>
   );

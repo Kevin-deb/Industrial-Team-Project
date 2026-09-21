@@ -19,6 +19,8 @@ import {
   onlineCareRecordsAlignmentMigration,
   onlineCareTrimMigration,
   onlineCareTypicalLinkMigration,
+  remoteConsultationInvitedCaseMigration,
+  remoteConsultationPersistenceMigration,
 } from '../encounters/index.js';
 import {
   clinicalEvolutionMigration,
@@ -88,6 +90,8 @@ export const migrations = [
   onlineCareTrimMigration,
   onlineCareTypicalLinkMigration,
   onlineCareRecordsAlignmentMigration,
+  remoteConsultationPersistenceMigration,
+  remoteConsultationInvitedCaseMigration,
 ];
 
 const legacyAuthOrder = [

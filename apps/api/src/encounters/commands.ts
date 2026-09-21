@@ -44,22 +44,6 @@ export const encountersCommands: readonly PlannedCommand[] = [
   },
   {
     method: 'POST',
-    path: '/consultations',
-    domain: 'encounters',
-    capability: 'remote-consultation',
-    tables: ['consultations', 'consultation_participants', 'access_grants'],
-    providers: [],
-  },
-  {
-    method: 'POST',
-    path: '/consultations/:id/accept',
-    domain: 'encounters',
-    capability: 'remote-consultation',
-    tables: ['consultations', 'access_grants'],
-    providers: [],
-  },
-  {
-    method: 'POST',
     path: '/consultations/:id/attachments',
     domain: 'encounters',
     capability: 'remote-consultation',
@@ -72,14 +56,6 @@ export const encountersCommands: readonly PlannedCommand[] = [
     domain: 'encounters',
     capability: 'remote-consultation',
     tables: ['consultation_reports'],
-    providers: [],
-  },
-  {
-    method: 'POST',
-    path: '/consultations/:id/complete',
-    domain: 'encounters',
-    capability: 'remote-consultation',
-    tables: ['consultations', 'consultation_reports', 'access_grants'],
     providers: [],
   },
 ];

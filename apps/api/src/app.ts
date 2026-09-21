@@ -363,6 +363,124 @@ export async function createApp(options: AppOptions = {}) {
   app.get('/api/v1/consultations', async (request) =>
     envelope(request, encounters.listConsultations(context())),
   );
+  app.get<{ Querystring: { q?: string } }>('/api/v1/consultation-doctors', async (request) =>
+    envelope(request, encounters.listConsultationDoctors(String(request.query.q ?? ''), context())),
+  );
+  app.get<{ Params: { id: string } }>('/api/v1/consultations/:id/context', async (request, reply) => {
+    const data = encounters.consultationContext(request.params.id, context());
+    if (!data) return fail(request, reply, 404, 'NOT_FOUND', '未找到该会诊。');
+    return envelope(request, data);
+  });
+  app.post<{
+    Body: {
+      patientId?: string;
+      title?: string;
+      specialty?: string;
+      scheduledAt?: string;
+      summary?: string;
+      participantIds?: string[];
+      materials?: string[];
+    };
+  }>('/api/v1/consultations', async (request, reply) => {
+    if (!Object.values(request.body ?? {}).some((value) => value !== undefined && value !== null && value !== ''))
+      return reply.code(501).send({
+        error: {
+          code: 'FEATURE_NOT_IMPLEMENTED',
+          message: '该功能尚未上线。当前为只读演示框架，未保存任何业务更改。',
+        },
+        meta: { requestId: request.id, mode: 'demo' },
+      });
+    const patientId = String(request.body.patientId ?? '').trim();
+    const title = String(request.body.title ?? '').trim();
+    const specialty = String(request.body.specialty ?? '').trim();
+    const scheduledAt = String(request.body.scheduledAt ?? '').trim();
+    const participantIds = Array.isArray(request.body.participantIds) ? request.body.participantIds : [];
+    const materials = Array.isArray(request.body.materials) ? request.body.materials : [];
+    if (!patientId || !title || !specialty || !scheduledAt || !participantIds.length)
+      return fail(request, reply, 400, 'INVALID_REQUEST', '会诊申请信息不完整。');
+    const item = encounters.createConsultation(
+      {
+        patientId,
+        title,
+        specialty,
+        scheduledAt,
+        summary: String(request.body.summary ?? '已发起远程会诊申请，等待专家确认参与。').trim(),
+        participantIds: participantIds.map(String),
+        materials: materials.map(String).filter(Boolean),
+      },
+      context(),
+    );
+    if (!item) return fail(request, reply, 404, 'NOT_FOUND', '未找到患者或没有访问权限。');
+    return envelope(request, item);
+  });
+  app.post<{ Params: { id: string } }>('/api/v1/consultations/:id/accept', async (request, reply) => {
+    const item = encounters.acceptConsultation(request.params.id, context());
+    if (!item) return fail(request, reply, 409, 'CONSULTATION_LOCKED', '会诊不存在或当前状态不能接受。');
+    return envelope(request, item);
+  });
+  app.post<{
+    Params: { id: string };
+    Body: { body?: string; imageUrl?: string; imageName?: string };
+  }>('/api/v1/consultations/:id/messages', async (request, reply) => {
+    const body = String(request.body.body ?? '').trim();
+    const imageUrl = request.body.imageUrl;
+    const imageName = request.body.imageName;
+    if (!body && !imageUrl) return fail(request, reply, 400, 'INVALID_REQUEST', '消息内容不能为空。');
+    if (imageUrl && !isLocalUrl(imageUrl) && !String(imageUrl).startsWith('data:image/'))
+      return fail(request, reply, 400, 'INVALID_REQUEST', '图片地址无效。');
+    const message = encounters.addConsultationMessage(
+      request.params.id,
+      { body: body || String(imageName ?? '图片消息'), imageUrl, imageName },
+      context(),
+    );
+    if (!message)
+      return fail(request, reply, 409, 'CONSULTATION_LOCKED', '会诊未接受、已结束或不可访问。');
+    return envelope(request, message);
+  });
+  app.post<{
+    Params: { id: string };
+    Body: { title?: string; description?: string; fileName?: string; objectUrl?: string };
+  }>('/api/v1/consultations/:id/materials', async (request, reply) => {
+    const title = String(request.body.title ?? request.body.fileName ?? '').trim();
+    if (!title) return fail(request, reply, 400, 'INVALID_REQUEST', '材料名称不能为空。');
+    if (
+      request.body.objectUrl &&
+      !isLocalUrl(request.body.objectUrl) &&
+      !String(request.body.objectUrl).startsWith('data:')
+    )
+      return fail(request, reply, 400, 'INVALID_REQUEST', '材料地址无效。');
+    const material = encounters.addConsultationMaterial(
+      request.params.id,
+      {
+        title,
+        description: request.body.description,
+        fileName: request.body.fileName,
+        objectUrl: request.body.objectUrl,
+      },
+      context(),
+    );
+    if (!material)
+      return fail(request, reply, 409, 'CONSULTATION_LOCKED', '会诊未接受、已结束或不可访问。');
+    return envelope(request, material);
+  });
+  app.delete<{ Params: { id: string; materialId: string } }>(
+    '/api/v1/consultations/:id/materials/:materialId',
+    async (request, reply) => {
+      const deleted = encounters.deleteConsultationMaterial(
+        request.params.id,
+        request.params.materialId,
+        context(),
+      );
+      if (!deleted)
+        return fail(request, reply, 409, 'CONSULTATION_LOCKED', '材料不存在，或会诊未接受/已结束。');
+      return envelope(request, { deleted: true });
+    },
+  );
+  app.post<{ Params: { id: string } }>('/api/v1/consultations/:id/complete', async (request, reply) => {
+    const report = encounters.completeConsultation(request.params.id, context());
+    if (!report) return fail(request, reply, 409, 'CONSULTATION_LOCKED', '会诊不存在或尚未接受。');
+    return envelope(request, report);
+  });
   registerHealthRoutes(app, health, context);
   registerSocialRoutes(
     app,

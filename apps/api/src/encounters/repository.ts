@@ -2,6 +2,12 @@ import type { DatabaseSync } from 'node:sqlite';
 import type {
   Encounter,
   Consultation,
+  ConsultationContext,
+  ConsultationDoctorOption,
+  ConsultationMaterial,
+  ConsultationMessage,
+  ConsultationParticipant,
+  ConsultationReport,
   EncounterAvailabilityWindow,
   EncounterClinicalBrief,
   EncounterContext,
@@ -51,6 +57,33 @@ export interface EncounterRepository {
   ): EncounterNotice | undefined;
   acceptNotice(id: string, context: RequestContext): EncounterNotice | undefined;
   listConsultations(context: RequestContext): Consultation[];
+  consultationContext(id: string, context: RequestContext): ConsultationContext | undefined;
+  listConsultationDoctors(query: string, context: RequestContext): ConsultationDoctorOption[];
+  createConsultation(
+    input: {
+      patientId: string;
+      title: string;
+      specialty: string;
+      scheduledAt: string;
+      summary: string;
+      participantIds: string[];
+      materials: string[];
+    },
+    context: RequestContext,
+  ): Consultation | undefined;
+  acceptConsultation(id: string, context: RequestContext): Consultation | undefined;
+  addConsultationMessage(
+    id: string,
+    input: { body: string; imageUrl?: string; imageName?: string },
+    context: RequestContext,
+  ): ConsultationMessage | undefined;
+  addConsultationMaterial(
+    id: string,
+    input: { title: string; description?: string; fileName?: string; objectUrl?: string },
+    context: RequestContext,
+  ): ConsultationMaterial | undefined;
+  deleteConsultationMaterial(id: string, materialId: string, context: RequestContext): boolean;
+  completeConsultation(id: string, context: RequestContext): ConsultationReport | undefined;
   findReference(id: string, context: RequestContext): { id: string; patientId: string } | undefined;
   findConsultationTask(id: string, context: RequestContext): ConsultationTask | undefined;
   findConfirmedReport(
@@ -279,25 +312,233 @@ export class SqliteEncounterRepository implements EncounterRepository {
   listConsultations(context: RequestContext): Consultation[] {
     return this.db
       .prepare(
-        `SELECT c.*,p.name patient_name FROM consultations c JOIN patients p ON p.id=c.patient_id WHERE ${patientScopeSql} ORDER BY c.scheduled_at`,
+        `SELECT c.*,p.name patient_name FROM consultations c JOIN patients p ON p.id=c.patient_id
+         WHERE ${patientScopeSql}
+           AND (
+             c.requested_by=:actorId OR EXISTS (
+               SELECT 1 FROM consultation_participants cp
+               WHERE cp.consultation_id=c.id AND cp.identity_id=:actorId
+             )
+           )
+         ORDER BY c.scheduled_at`,
       )
       .all({ ...context })
-      .map((r) => ({
-        id: String(r.id),
-        patientId: String(r.patient_id),
-        patientName: String(r.patient_name),
-        title: String(r.title),
-        specialty: String(r.specialty),
-        status: r.status as Consultation['status'],
-        scheduledAt: String(r.scheduled_at),
-        summary: String(r.summary),
-        participants: this.db
-          .prepare(
-            'SELECT i.display_name FROM consultation_participants cp JOIN identities i ON i.id=cp.identity_id WHERE cp.consultation_id=? ORDER BY i.id',
-          )
-          .all(String(r.id))
-          .map((p) => String(p.display_name)),
+      .map((row) => this.mapConsultation(row, context));
+  }
+
+  consultationContext(id: string, context: RequestContext): ConsultationContext | undefined {
+    const row = this.findConsultationRow(id, context);
+    if (!row) return undefined;
+    const consultation = this.mapConsultation(row, context);
+    return {
+      consultation,
+      participants: this.consultationParticipants(id),
+      materials: this.consultationMaterials(id),
+      messages: this.consultationMessages(id),
+      report: this.consultationReport(id),
+      access: '按本次会诊任务共享必要资料',
+      accessUntil: String(row.scheduled_at),
+    };
+  }
+
+  listConsultationDoctors(query: string, context: RequestContext): ConsultationDoctorOption[] {
+    const pattern = `%${query.trim()}%`;
+    return this.db
+      .prepare(
+        `SELECT id,display_name,title,department FROM identities
+         WHERE id<>:actorId AND (:query='' OR display_name LIKE :pattern OR department LIKE :pattern OR title LIKE :pattern)
+         ORDER BY department,display_name LIMIT 20`,
+      )
+      .all({ actorId: context.actorId, query: query.trim(), pattern })
+      .map((row) => ({
+        id: String(row.id),
+        name: String(row.display_name),
+        title: String(row.title),
+        department: String(row.department),
       }));
+  }
+
+  createConsultation(
+    input: {
+      patientId: string;
+      title: string;
+      specialty: string;
+      scheduledAt: string;
+      summary: string;
+      participantIds: string[];
+      materials: string[];
+    },
+    context: RequestContext,
+  ): Consultation | undefined {
+    const patient = this.db
+      .prepare(`SELECT p.id,p.name FROM patients p WHERE p.id=:patientId AND ${patientScopeSql}`)
+      .get({ patientId: input.patientId, ...context });
+    if (!patient) return undefined;
+    const id = `CON-${Date.now()}`;
+    const participants = Array.from(new Set([context.actorId, ...input.participantIds])).filter(Boolean);
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      this.db
+        .prepare(
+          'INSERT INTO consultations(id,patient_id,requested_by,title,specialty,status,scheduled_at,summary) VALUES(?,?,?,?,?,?,?,?)',
+        )
+        .run(id, input.patientId, context.actorId, input.title, input.specialty, 'requested', input.scheduledAt, input.summary);
+      for (const participantId of participants)
+        this.db
+          .prepare('INSERT OR IGNORE INTO consultation_participants(consultation_id,identity_id,participant_role) VALUES(?,?,?)')
+          .run(id, participantId, participantId === context.actorId ? 'requester' : 'expert');
+      input.materials.forEach((material, index) => {
+        this.db
+          .prepare(
+            `INSERT INTO consultation_material_uploads(
+              id,consultation_id,title,description,file_name,uploaded_by,uploaded_at
+            ) VALUES(?,?,?,?,?,?,?)`,
+          )
+          .run(
+            `CMU-${id}-${index + 1}`,
+            id,
+            material,
+            '发起会诊时上传的患者资料。',
+            material,
+            context.actorId,
+            context.now,
+          );
+      });
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+    return this.mapConsultation(
+      {
+        id,
+        patient_id: input.patientId,
+        patient_name: String(patient.name),
+        requested_by: context.actorId,
+        title: input.title,
+        specialty: input.specialty,
+        status: 'requested',
+        scheduled_at: input.scheduledAt,
+        summary: input.summary,
+      },
+      context,
+    );
+  }
+
+  acceptConsultation(id: string, context: RequestContext): Consultation | undefined {
+    const row = this.findConsultationRow(id, context);
+    if (!row || String(row.status) === 'completed') return undefined;
+    this.db.prepare("UPDATE consultations SET status='scheduled' WHERE id=?").run(id);
+    this.db
+      .prepare('UPDATE consultation_participants SET joined_at=? WHERE consultation_id=? AND identity_id=?')
+      .run(context.now, id, context.actorId);
+    return this.mapConsultation({ ...row, status: 'scheduled' }, context);
+  }
+
+  addConsultationMessage(
+    id: string,
+    input: { body: string; imageUrl?: string; imageName?: string },
+    context: RequestContext,
+  ): ConsultationMessage | undefined {
+    const row = this.findConsultationRow(id, context);
+    if (!row || String(row.status) === 'requested' || String(row.status) === 'completed') return undefined;
+    const message = {
+      id: `CMSG-${id}-${Date.now()}`,
+      authorId: context.actorId,
+      authorName: this.identityName(context.actorId),
+      body: input.body,
+      sentAt: context.now,
+      imageUrl: input.imageUrl,
+      imageName: input.imageName,
+    };
+    this.db
+      .prepare(
+        'INSERT INTO consultation_messages(id,consultation_id,sender_identity_id,body,sent_at,image_url,image_name) VALUES(?,?,?,?,?,?,?)',
+      )
+      .run(message.id, id, context.actorId, message.body, message.sentAt, message.imageUrl ?? null, message.imageName ?? null);
+    return message;
+  }
+
+  addConsultationMaterial(
+    id: string,
+    input: { title: string; description?: string; fileName?: string; objectUrl?: string },
+    context: RequestContext,
+  ): ConsultationMaterial | undefined {
+    const row = this.findConsultationRow(id, context);
+    if (!row || String(row.status) === 'requested' || String(row.status) === 'completed') return undefined;
+    const material = {
+      id: `CMU-${id}-${Date.now()}`,
+      title: input.title,
+      description: input.description ?? '会诊过程中补充上传的资料。',
+      fileName: input.fileName ?? input.title,
+      uploadedAt: context.now,
+    };
+    this.db
+      .prepare(
+        `INSERT INTO consultation_material_uploads(
+          id,consultation_id,title,description,file_name,object_url,uploaded_by,uploaded_at
+        ) VALUES(?,?,?,?,?,?,?,?)`,
+      )
+      .run(
+        material.id,
+        id,
+        material.title,
+        material.description,
+        material.fileName,
+        input.objectUrl ?? null,
+        context.actorId,
+        material.uploadedAt,
+      );
+    return material;
+  }
+
+  deleteConsultationMaterial(id: string, materialId: string, context: RequestContext): boolean {
+    const row = this.findConsultationRow(id, context);
+    if (!row || String(row.status) === 'requested' || String(row.status) === 'completed') return false;
+    const upload = this.db
+      .prepare('SELECT 1 FROM consultation_material_uploads WHERE id=? AND consultation_id=?')
+      .get(materialId, id);
+    if (upload) {
+      this.db.prepare('DELETE FROM consultation_material_uploads WHERE id=? AND consultation_id=?').run(materialId, id);
+      return true;
+    }
+    const material = this.db
+      .prepare('SELECT 1 FROM clinical_materials WHERE id=? AND consultation_id=?')
+      .get(materialId, id);
+    if (!material) return false;
+    this.db.prepare('DELETE FROM clinical_materials WHERE id=? AND consultation_id=?').run(materialId, id);
+    return true;
+  }
+
+  completeConsultation(id: string, context: RequestContext): ConsultationReport | undefined {
+    const row = this.findConsultationRow(id, context);
+    if (!row || String(row.status) === 'requested') return undefined;
+    const existing = this.consultationReport(id);
+    this.db.prepare("UPDATE consultations SET status='completed',completed_at=? WHERE id=?").run(context.now, id);
+    if (existing) return existing;
+    const report: ConsultationReport = {
+      id: `CR-${id}-${Date.now()}`,
+      body: '系统已根据会诊材料和实时讨论生成会诊意见：建议结合患者近期指标、既往病史与当前用药，形成分阶段诊疗和随访计划。联合会诊报告已生成待审核。',
+      status: 'confirmed',
+      createdAt: context.now,
+    };
+    this.db
+      .prepare(
+        `INSERT INTO consultation_reports(
+          id,consultation_id,version,body_json,status,confirmed_by,confirmed_at,created_at
+        ) VALUES(?,?,?,?,?,?,?,?)`,
+      )
+      .run(
+        report.id,
+        id,
+        1,
+        JSON.stringify({ body: report.body }),
+        report.status,
+        context.actorId,
+        context.now,
+        report.createdAt,
+      );
+    return report;
   }
 
   findReference(id: string, context: RequestContext) {
@@ -357,6 +598,127 @@ export class SqliteEncounterRepository implements EncounterRepository {
          WHERE e.id=:id AND ${patientScopeSql}`,
       )
       .get({ id, ...context });
+  }
+
+  private findConsultationRow(id: string, context: RequestContext) {
+    return this.db
+      .prepare(
+        `SELECT c.*,p.name patient_name FROM consultations c JOIN patients p ON p.id=c.patient_id
+         WHERE c.id=:id AND ${patientScopeSql}`,
+      )
+      .get({ id, ...context });
+  }
+
+  private mapConsultation(row: Record<string, unknown>, context: RequestContext): Consultation {
+    const id = String(row.id);
+    return {
+      id,
+      patientId: String(row.patient_id),
+      patientName: String(row.patient_name),
+      title: String(row.title),
+      specialty: String(row.specialty),
+      status: row.status as Consultation['status'],
+      scheduledAt: String(row.scheduled_at),
+      summary: String(row.summary),
+      participants: this.consultationParticipants(id).map((participant) => participant.name),
+      direction: String(row.requested_by) === context.actorId ? 'sent' : 'received',
+    };
+  }
+
+  private consultationParticipants(id: string): ConsultationParticipant[] {
+    return this.db
+      .prepare(
+        `SELECT i.id,i.display_name,i.title,i.department,cp.participant_role
+         FROM consultation_participants cp JOIN identities i ON i.id=cp.identity_id
+         WHERE cp.consultation_id=? ORDER BY cp.participant_role DESC,i.id`,
+      )
+      .all(id)
+      .map((row) => ({
+        id: String(row.id),
+        name: String(row.display_name),
+        title: String(row.title),
+        department: String(row.department),
+        role: String(row.participant_role),
+      }));
+  }
+
+  private consultationMaterials(id: string): ConsultationMaterial[] {
+    const uploads = this.db
+      .prepare('SELECT * FROM consultation_material_uploads WHERE consultation_id=? ORDER BY uploaded_at,id')
+      .all(id)
+      .map((row) => ({
+        id: String(row.id),
+        title: String(row.title),
+        description: String(row.description),
+        fileName: String(row.file_name),
+        uploadedAt: String(row.uploaded_at),
+        objectUrl: row.object_url === null ? undefined : String(row.object_url),
+      }));
+    const recordMaterials = this.db
+      .prepare(
+        `SELECT m.*,r.title record_title,r.diagnosis
+         FROM clinical_materials m
+         JOIN medical_records r ON r.id=m.record_id
+         WHERE m.consultation_id=?
+         ORDER BY m.created_at DESC,m.id`,
+      )
+      .all(id)
+      .map((row) => ({
+        id: String(row.id),
+        title: `电子病历：${String(row.record_title)} v${Number(row.record_version)}`,
+        description: `${String(row.purpose)}；共享区段：${(JSON.parse(String(row.shared_sections_json)) as string[]).join('、')}`,
+        fileName: `${String(row.record_id)}-v${Number(row.record_version)}.txt`,
+        uploadedAt: String(row.created_at),
+      }));
+    return [...recordMaterials, ...uploads].sort((left, right) =>
+      left.uploadedAt === right.uploadedAt
+        ? left.id.localeCompare(right.id)
+        : left.uploadedAt.localeCompare(right.uploadedAt),
+    );
+  }
+
+  private consultationMessages(id: string): ConsultationMessage[] {
+    return this.db
+      .prepare(
+        `SELECT m.*,i.display_name FROM consultation_messages m
+         JOIN identities i ON i.id=m.sender_identity_id
+         WHERE m.consultation_id=? ORDER BY m.sent_at,m.id`,
+      )
+      .all(id)
+      .map((row) => ({
+        id: String(row.id),
+        authorId: String(row.sender_identity_id),
+        authorName: String(row.display_name),
+        body: String(row.body),
+        sentAt: String(row.sent_at),
+        imageUrl: row.image_url === null ? undefined : String(row.image_url),
+        imageName: row.image_name === null ? undefined : String(row.image_name),
+      }));
+  }
+
+  private consultationReport(id: string): ConsultationReport | null {
+    const row = this.db
+      .prepare('SELECT * FROM consultation_reports WHERE consultation_id=? ORDER BY version DESC LIMIT 1')
+      .get(id);
+    if (!row) return null;
+    let body = String(row.body_json);
+    try {
+      const parsed = JSON.parse(body) as { body?: string; conclusion?: string };
+      body = parsed.body ?? parsed.conclusion ?? body;
+    } catch {
+      // Legacy demo records may contain plain text instead of JSON.
+    }
+    return {
+      id: String(row.id),
+      body,
+      status: String(row.status) as ConsultationReport['status'],
+      createdAt: String(row.created_at),
+    };
+  }
+
+  private identityName(id: string): string {
+    const row = this.db.prepare('SELECT display_name FROM identities WHERE id=?').get(id);
+    return row ? String(row.display_name) : '我';
   }
 
   private brief(encounterId: string, reason: string): EncounterClinicalBrief {

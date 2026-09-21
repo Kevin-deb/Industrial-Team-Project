@@ -38,15 +38,42 @@ INSERT INTO "care_plans"("id","patient_id","doctor_id","title","status","goals_j
 INSERT INTO "care_plans"("id","patient_id","doctor_id","title","status","goals_json","next_review","completion_percent","current_version","created_at","updated_at") VALUES('PLAN-007','PAT-006','doctor-demo-001','呼吸健康记录','active','["记录日常活动情况","按时参加随访"]','2026-09-20',50,1,'2026-09-01T09:00:00+08:00','2026-09-10T12:00:00+08:00');
 INSERT INTO "care_plans"("id","patient_id","doctor_id","title","status","goals_json","next_review","completion_percent","current_version","created_at","updated_at") VALUES('PLAN-008','PAT-008','doctor-demo-001','定期随访安排','draft','["确认复查资料","记录居家测量"]','2026-09-25',20,1,'2026-09-01T09:00:00+08:00','2026-09-10T12:00:00+08:00');
 
--- consultation_participants: 4 row(s)
+-- consultation_material_uploads: 11 row(s)
+INSERT INTO "consultation_material_uploads"("id","consultation_id","title","description","file_name","object_url","uploaded_by","uploaded_at") VALUES('CMU-001','CON-001','近三个月血压趋势','患者家庭血压监测汇总。','近三个月血压趋势.txt',NULL,'doctor-demo-001','2026-09-10T09:00:00+08:00');
+INSERT INTO "consultation_material_uploads"("id","consultation_id","title","description","file_name","object_url","uploaded_by","uploaded_at") VALUES('CMU-002','CON-001','心电图摘要','近期心电图核心结论。','心电图摘要.txt',NULL,'doctor-demo-001','2026-09-10T09:05:00+08:00');
+INSERT INTO "consultation_material_uploads"("id","consultation_id","title","description","file_name","object_url","uploaded_by","uploaded_at") VALUES('CMU-003','CON-001','当前用药清单','患者现用药物与剂量。','当前用药清单.txt',NULL,'doctor-demo-001','2026-09-10T09:10:00+08:00');
+INSERT INTO "consultation_material_uploads"("id","consultation_id","title","description","file_name","object_url","uploaded_by","uploaded_at") VALUES('CMU-004','CON-002','血糖监测记录','近两周空腹与餐后血糖。','血糖监测记录.txt',NULL,'doctor-demo-001','2026-09-10T10:00:00+08:00');
+INSERT INTO "consultation_material_uploads"("id","consultation_id","title","description","file_name","object_url","uploaded_by","uploaded_at") VALUES('CMU-005','CON-002','饮食运动记录','患者近期饮食与运动摘要。','饮食运动记录.txt',NULL,'doctor-demo-001','2026-09-10T10:05:00+08:00');
+INSERT INTO "consultation_material_uploads"("id","consultation_id","title","description","file_name","object_url","uploaded_by","uploaded_at") VALUES('CMU-006','CON-IN-001','病情摘要','术后康复会诊病情摘要。','病情摘要.txt',NULL,'doctor-demo-002','2026-09-01T00:00:00.000Z');
+INSERT INTO "consultation_material_uploads"("id","consultation_id","title","description","file_name","object_url","uploaded_by","uploaded_at") VALUES('CMU-007','CON-IN-001','检查结果','影像与实验室检查摘要。','检查结果.txt',NULL,'doctor-demo-002','2026-09-01T00:00:00.000Z');
+INSERT INTO "consultation_material_uploads"("id","consultation_id","title","description","file_name","object_url","uploaded_by","uploaded_at") VALUES('CMU-008','CON-IN-001','用药记录','围术期及当前用药记录。','用药记录.txt',NULL,'doctor-demo-002','2026-09-01T00:00:00.000Z');
+INSERT INTO "consultation_material_uploads"("id","consultation_id","title","description","file_name","object_url","uploaded_by","uploaded_at") VALUES('CMU-009','CON-IN-002','足部照片摘要','患者足部皮肤状态与破溃风险摘要。','足部照片摘要.txt',NULL,'doctor-demo-003','2026-09-01T00:00:00.000Z');
+INSERT INTO "consultation_material_uploads"("id","consultation_id","title","description","file_name","object_url","uploaded_by","uploaded_at") VALUES('CMU-010','CON-IN-002','血糖波动记录','近两周空腹及餐后血糖波动。','血糖波动记录.txt',NULL,'doctor-demo-003','2026-09-01T00:00:00.000Z');
+INSERT INTO "consultation_material_uploads"("id","consultation_id","title","description","file_name","object_url","uploaded_by","uploaded_at") VALUES('CMU-011','CON-IN-002','护理评估表','居家足部护理执行情况。','护理评估表.txt',NULL,'doctor-demo-003','2026-09-01T00:00:00.000Z');
+
+-- consultation_messages: 4 row(s)
+INSERT INTO "consultation_messages"("id","consultation_id","sender_identity_id","body","sent_at","image_url","image_name") VALUES('CMSG-001','CON-001','doctor-demo-002','建议先核对近期指标和当前用药，再形成联合意见。','2026-09-10T15:05:00+08:00',NULL,NULL);
+INSERT INTO "consultation_messages"("id","consultation_id","sender_identity_id","body","sent_at","image_url","image_name") VALUES('CMSG-002','CON-001','doctor-demo-001','已打开本次会诊材料，等待各专科补充意见。','2026-09-10T15:07:00+08:00',NULL,NULL);
+INSERT INTO "consultation_messages"("id","consultation_id","sender_identity_id","body","sent_at","image_url","image_name") VALUES('CMSG-003','CON-IN-001','doctor-demo-002','已提交术后康复资料，请全科协助评估随访计划。','2026-09-11T15:20:00+08:00',NULL,NULL);
+INSERT INTO "consultation_messages"("id","consultation_id","sender_identity_id","body","sent_at","image_url","image_name") VALUES('CMSG-004','CON-IN-002','doctor-demo-003','患者近期足部麻木加重，邀请全科一起评估综合干预方案。','2026-09-12T16:40:00+08:00',NULL,NULL);
+
+-- consultation_participants: 10 row(s)
 INSERT INTO "consultation_participants"("consultation_id","identity_id","participant_role","joined_at","left_at") VALUES('CON-001','doctor-demo-001','expert',NULL,NULL);
 INSERT INTO "consultation_participants"("consultation_id","identity_id","participant_role","joined_at","left_at") VALUES('CON-001','doctor-demo-002','expert',NULL,NULL);
 INSERT INTO "consultation_participants"("consultation_id","identity_id","participant_role","joined_at","left_at") VALUES('CON-002','doctor-demo-001','expert',NULL,NULL);
 INSERT INTO "consultation_participants"("consultation_id","identity_id","participant_role","joined_at","left_at") VALUES('CON-002','doctor-demo-003','expert',NULL,NULL);
+INSERT INTO "consultation_participants"("consultation_id","identity_id","participant_role","joined_at","left_at") VALUES('CON-IN-001','doctor-demo-001','invited',NULL,NULL);
+INSERT INTO "consultation_participants"("consultation_id","identity_id","participant_role","joined_at","left_at") VALUES('CON-IN-001','doctor-demo-002','requester',NULL,NULL);
+INSERT INTO "consultation_participants"("consultation_id","identity_id","participant_role","joined_at","left_at") VALUES('CON-IN-001','doctor-demo-003','expert',NULL,NULL);
+INSERT INTO "consultation_participants"("consultation_id","identity_id","participant_role","joined_at","left_at") VALUES('CON-IN-002','doctor-demo-001','invited',NULL,NULL);
+INSERT INTO "consultation_participants"("consultation_id","identity_id","participant_role","joined_at","left_at") VALUES('CON-IN-002','doctor-demo-002','expert',NULL,NULL);
+INSERT INTO "consultation_participants"("consultation_id","identity_id","participant_role","joined_at","left_at") VALUES('CON-IN-002','doctor-demo-003','requester',NULL,NULL);
 
--- consultations: 2 row(s)
+-- consultations: 4 row(s)
 INSERT INTO "consultations"("id","patient_id","requested_by","title","specialty","status","scheduled_at","summary","completed_at") VALUES('CON-001','PAT-004','doctor-demo-001','老年心血管多学科会诊','心血管内科 · 全科医学','scheduled','2026-09-10T15:00:00+08:00','展示会诊资料、专家协作与报告草稿的未来工作流程。',NULL);
 INSERT INTO "consultations"("id","patient_id","requested_by","title","specialty","status","scheduled_at","summary","completed_at") VALUES('CON-002','PAT-002','doctor-demo-001','糖尿病综合健康评估','内分泌科 · 全科医学','requested','2026-09-11T10:00:00+08:00','申请、临时授权和专家确认将在后续迭代实现。',NULL);
+INSERT INTO "consultations"("id","patient_id","requested_by","title","specialty","status","scheduled_at","summary","completed_at") VALUES('CON-IN-001','PAT-004','doctor-demo-002','术后康复联合评估','康复医学科 · 骨科 · 全科医学','requested','2026-09-12T15:30:00+08:00','其他医生发来的会诊申请，需要确认是否参与并查看患者资料。',NULL);
+INSERT INTO "consultations"("id","patient_id","requested_by","title","specialty","status","scheduled_at","summary","completed_at") VALUES('CON-IN-002','PAT-005','doctor-demo-003','糖尿病足风险联合会诊','内分泌科 · 全科医学 · 护理管理','requested','2026-09-13T09:30:00+08:00','其他医生邀请当前医生参与糖尿病足风险评估，需要查看资料后确认是否参会。',NULL);
 
 -- doctors: 5 row(s)
 INSERT INTO "doctors"("identity_id","license_number","specialty","phone","government_id_type","government_id_masked","credential_status","personnel_status","enabled","created_at","updated_at") VALUES('doctor-demo-001','DEMO-LIC-001','全科医学','13800000001','居民身份证','**************1001','verified','verified',1,'2026-09-01T00:00:00.000Z','2026-09-01T00:00:00.000Z');

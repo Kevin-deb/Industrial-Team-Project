@@ -85,4 +85,56 @@ export interface Consultation {
   scheduledAt: string;
   participants: string[];
   summary: string;
+  direction?: 'sent' | 'received';
+}
+
+export interface ConsultationParticipant {
+  id: string;
+  name: string;
+  title: string;
+  department: string;
+  role: string;
+}
+
+export interface ConsultationMaterial {
+  id: string;
+  title: string;
+  description: string;
+  fileName: string;
+  uploadedAt: string;
+  objectUrl?: string;
+}
+
+export interface ConsultationMessage {
+  id: string;
+  authorId: string;
+  authorName: string;
+  body: string;
+  sentAt: string;
+  imageUrl?: string;
+  imageName?: string;
+}
+
+export interface ConsultationReport {
+  id: string;
+  body: string;
+  status: 'draft' | 'confirmed' | 'archived';
+  createdAt: string;
+}
+
+export interface ConsultationContext {
+  consultation: Consultation;
+  participants: ConsultationParticipant[];
+  materials: ConsultationMaterial[];
+  messages: ConsultationMessage[];
+  report: ConsultationReport | null;
+  access: string;
+  accessUntil: string;
+}
+
+export interface ConsultationDoctorOption {
+  id: string;
+  name: string;
+  title: string;
+  department: string;
 }
