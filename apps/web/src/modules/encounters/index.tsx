@@ -1,5 +1,5 @@
 import { useI18n } from '../../shared/i18n';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
   Camera,
@@ -14,6 +14,7 @@ import {
   ImagePlus,
   Mic,
   MessageSquare,
+  Plus,
   PhoneCall,
   PhoneOff,
   Search,
@@ -32,14 +33,31 @@ import {
   LinkAction,
   Metric,
   PersonAvatar,
-  PlannedDialog,
   ReadOnlyNote,
 } from '../ui';
 
-const statuses = { waiting: '待接诊', scheduled: '待接诊', completed: '已完成' };
-const tones = { waiting: 'amber', scheduled: 'amber', completed: 'teal' } as const;
-const isPendingEncounter = (status: Encounter['status']) =>
-  status === 'waiting' || status === 'scheduled';
+type EncounterDisplayStatus = 'waiting' | 'active' | 'completed';
+const textServiceWindowMs = 48 * 60 * 60 * 1000;
+const statuses: Record<EncounterDisplayStatus, string> = {
+  waiting: '待接诊',
+  active: '接诊中',
+  completed: '已完成',
+};
+const tones: Record<EncounterDisplayStatus, 'amber' | 'blue' | 'teal'> = {
+  waiting: 'amber',
+  active: 'blue',
+  completed: 'teal',
+};
+function encounterDisplayStatus(encounter: Encounter, nowMs = Date.now()): EncounterDisplayStatus {
+  if (encounter.status === 'completed') return 'completed';
+  if (encounter.type === 'text') {
+    const start = Date.parse(encounter.scheduledAt);
+    if (Number.isFinite(start) && nowMs >= start && nowMs <= start + textServiceWindowMs) {
+      return 'active';
+    }
+  }
+  return 'waiting';
+}
 type ClinicalBrief = {
   chiefComplaint: string;
   presentIllness: string;
@@ -65,6 +83,125 @@ type SavedEncounterRecord = {
   audioSaved: boolean;
   videoSaved: boolean;
 };
+type AvailabilityWindow = {
+  id: string;
+  date: string;
+  type: Encounter['type'];
+  start: string;
+  end: string;
+  capacity: number;
+  booked: number;
+};
+type NoticeLog = {
+  id: string;
+  encounterId: string;
+  patientName: string;
+  kind: '资料提醒' | '按时进入提醒' | '改期通知';
+  content: string;
+  status: '待患者确认' | '患者已接受' | '已发送';
+};
+const extraDemoEncounters: Encounter[] = [
+  {
+    id: 'ENC-005',
+    patientId: 'PAT-004',
+    patientName: '张淑兰',
+    type: 'video',
+    status: 'waiting',
+    scheduledAt: '2026-09-11T08:40:00+08:00',
+    reason: '胸闷症状复查',
+    durationMinutes: 20,
+  },
+  {
+    id: 'ENC-006',
+    patientId: 'PAT-005',
+    patientName: '刘桂芬',
+    type: 'text',
+    status: 'waiting',
+    scheduledAt: '2026-09-20T09:20:00+08:00',
+    reason: '饮食运动计划调整',
+    durationMinutes: 15,
+  },
+  {
+    id: 'ENC-007',
+    patientId: 'PAT-007',
+    patientName: '孙雅琴',
+    type: 'video',
+    status: 'waiting',
+    scheduledAt: '2026-09-11T10:30:00+08:00',
+    reason: '膝关节疼痛康复咨询',
+    durationMinutes: 20,
+  },
+  {
+    id: 'ENC-008',
+    patientId: 'PAT-001',
+    patientName: '陈建国',
+    type: 'text',
+    status: 'completed',
+    scheduledAt: '2026-09-08T16:00:00+08:00',
+    reason: '家庭血压记录复核',
+    durationMinutes: 15,
+  },
+  {
+    id: 'ENC-009',
+    patientId: 'PAT-002',
+    patientName: '王秀英',
+    type: 'video',
+    status: 'waiting',
+    scheduledAt: '2026-09-12T11:10:00+08:00',
+    reason: '餐后血糖波动评估',
+    durationMinutes: 20,
+  },
+  {
+    id: 'ENC-010',
+    patientId: 'PAT-006',
+    patientName: '赵德华',
+    type: 'text',
+    status: 'waiting',
+    scheduledAt: '2026-09-20T14:30:00+08:00',
+    reason: '咳嗽气短用药咨询',
+    durationMinutes: 15,
+  },
+  {
+    id: 'ENC-011',
+    patientId: 'PAT-003',
+    patientName: '李志明',
+    type: 'video',
+    status: 'completed',
+    scheduledAt: '2026-09-07T09:00:00+08:00',
+    reason: '头晕症状随访',
+    durationMinutes: 20,
+  },
+  {
+    id: 'ENC-012',
+    patientId: 'PAT-004',
+    patientName: '张淑兰',
+    type: 'text',
+    status: 'waiting',
+    scheduledAt: '2026-09-21T08:00:00+08:00',
+    reason: '冠心病用药答疑',
+    durationMinutes: 15,
+  },
+  {
+    id: 'ENC-013',
+    patientId: 'PAT-005',
+    patientName: '刘桂芬',
+    type: 'video',
+    status: 'waiting',
+    scheduledAt: '2026-09-14T09:50:00+08:00',
+    reason: '糖尿病随访视频问诊',
+    durationMinutes: 20,
+  },
+  {
+    id: 'ENC-014',
+    patientId: 'PAT-007',
+    patientName: '孙雅琴',
+    type: 'text',
+    status: 'completed',
+    scheduledAt: '2026-09-06T13:30:00+08:00',
+    reason: '康复训练反馈',
+    durationMinutes: 15,
+  },
+];
 const clinicalBriefs: Record<string, ClinicalBrief> = {
   'ENC-001': {
     chiefComplaint: '近两日反复偏头痛',
@@ -127,6 +264,50 @@ const patientHistories: Record<string, HistoryRecord[]> = {
       diagnosis: '2型糖尿病',
       outcome: '评估餐后血糖，强调饮食与运动管理。',
     },
+    {
+      id: 'MR-PAT002-02',
+      title: '低血糖风险评估',
+      date: '2026-07-16',
+      department: '内分泌科',
+      diagnosis: '2型糖尿病伴血糖波动',
+      outcome: '调整晚餐后加餐建议，提醒随身携带糖块并记录低血糖时间。',
+    },
+  ],
+  'PAT-004': [
+    {
+      id: 'MR-PAT004-01',
+      title: '胸闷症状复查',
+      date: '2026-08-28',
+      department: '心血管内科',
+      diagnosis: '冠心病稳定期',
+      outcome: '复核心电图与用药依从性，建议继续观察活动耐量变化。',
+    },
+    {
+      id: 'MR-PAT004-02',
+      title: '冠心病用药答疑',
+      date: '2026-07-22',
+      department: '心血管内科',
+      diagnosis: '冠心病二级预防',
+      outcome: '解释抗血小板药物服用注意事项，提醒出现黑便或出血及时就医。',
+    },
+  ],
+  'PAT-005': [
+    {
+      id: 'MR-PAT005-01',
+      title: '饮食运动计划调整',
+      date: '2026-09-02',
+      department: '内分泌科',
+      diagnosis: '糖尿病前期管理',
+      outcome: '建议每周至少五次中等强度步行，晚餐主食量减少三分之一。',
+    },
+    {
+      id: 'MR-PAT005-02',
+      title: '体重管理线上随访',
+      date: '2026-08-05',
+      department: '营养门诊',
+      diagnosis: '超重伴代谢风险',
+      outcome: '建立饮食日志，四周后复核体重、腰围与空腹血糖。',
+    },
   ],
   'PAT-006': [
     {
@@ -136,6 +317,32 @@ const patientHistories: Record<string, HistoryRecord[]> = {
       department: '呼吸内科',
       diagnosis: '慢性支气管炎',
       outcome: '季节变化时加强观察，按需使用吸入药物。',
+    },
+    {
+      id: 'MR-PAT006-02',
+      title: '咳嗽用药咨询',
+      date: '2026-06-29',
+      department: '呼吸内科',
+      diagnosis: '感染后咳嗽',
+      outcome: '短期对症处理，若出现发热、喘憋或痰中带血需线下就诊。',
+    },
+  ],
+  'PAT-007': [
+    {
+      id: 'MR-PAT007-01',
+      title: '膝关节疼痛康复咨询',
+      date: '2026-08-17',
+      department: '康复医学科',
+      diagnosis: '膝骨关节炎康复期',
+      outcome: '指导股四头肌训练，避免长时间爬楼与负重深蹲。',
+    },
+    {
+      id: 'MR-PAT007-02',
+      title: '康复训练反馈',
+      date: '2026-07-09',
+      department: '康复医学科',
+      diagnosis: '膝关节慢性疼痛',
+      outcome: '疼痛较前减轻，建议继续低冲击运动并记录疼痛评分。',
     },
   ],
   'PAT-003': [
@@ -147,8 +354,45 @@ const patientHistories: Record<string, HistoryRecord[]> = {
       diagnosis: '高脂血症',
       outcome: '继续降脂治疗，三个月后复查血脂。',
     },
+    {
+      id: 'MR-PAT003-02',
+      title: '头晕症状随访',
+      date: '2026-06-26',
+      department: '神经内科',
+      diagnosis: '眩晕待查',
+      outcome: '建议监测血压并记录发作时长，若伴肢体无力需急诊评估。',
+    },
   ],
 };
+const initialAvailabilityWindows: AvailabilityWindow[] = [
+  {
+    id: 'AW-001',
+    date: '2026-09-21',
+    type: 'text',
+    start: '08:00',
+    end: '20:00',
+    capacity: 8,
+    booked: 3,
+  },
+  {
+    id: 'AW-002',
+    date: '2026-09-21',
+    type: 'video',
+    start: '09:00',
+    end: '11:30',
+    capacity: 6,
+    booked: 2,
+  },
+  {
+    id: 'AW-003',
+    date: '2026-09-22',
+    type: 'video',
+    start: '14:00',
+    end: '17:00',
+    capacity: 5,
+    booked: 1,
+  },
+];
 
 function clinicalBrief(encounter: Encounter) {
   return (
@@ -368,7 +612,372 @@ function SavedRecordsPanel({
   );
 }
 
-function EncounterRoom({ encounter, onBack }: { encounter: Encounter; onBack: () => void }) {
+function AppointmentManagementDialog({
+  encounters,
+  nowMs,
+  onClose,
+  onRescheduleAccepted,
+}: {
+  encounters: Encounter[];
+  nowMs: number;
+  onClose: () => void;
+  onRescheduleAccepted: (id: string, nextScheduledAt: string) => void;
+}) {
+  const { t, formatDate } = useI18n();
+  const firstWaiting = encounters.find((item) => encounterDisplayStatus(item, nowMs) !== 'completed');
+  const [windows, setWindows] = useState(initialAvailabilityWindows);
+  const [newWindow, setNewWindow] = useState({
+    date: '2026-09-22',
+    type: 'video' as Encounter['type'],
+    start: '09:00',
+    end: '09:20',
+    capacity: 4,
+  });
+  const [selectedEncounterId, setSelectedEncounterId] = useState(firstWaiting?.id ?? '');
+  const [nextDate, setNextDate] = useState('2026-09-22');
+  const [nextTime, setNextTime] = useState('10:00');
+  const [noticeText, setNoticeText] = useState('请患者在问诊前补充近期检查结果和当前用药。');
+  const [noticeFeedback, setNoticeFeedback] = useState('');
+  const [notices, setNotices] = useState<NoticeLog[]>([
+    {
+      id: 'NOTICE-001',
+      encounterId: 'ENC-012',
+      patientName: '张淑兰',
+      kind: '按时进入提醒',
+      content: '已提醒患者在服务窗口内保持在线。',
+      status: '已发送',
+    },
+  ]);
+  const selectedEncounter = encounters.find((item) => item.id === selectedEncounterId);
+  const addWindow = useCallback(() => {
+    setWindows((current) => [
+      {
+        id: `AW-${Date.now()}`,
+        date: newWindow.date,
+        type: newWindow.type,
+        start: newWindow.start,
+        end: newWindow.end,
+        capacity: newWindow.capacity,
+        booked: 0,
+      },
+      ...current,
+    ]);
+  }, [newWindow]);
+  const sendNotice = useCallback(
+    (kind: NoticeLog['kind']) => {
+      if (!selectedEncounter) return;
+      setNotices((current) => [
+        {
+          id: `NOTICE-${Date.now()}`,
+          encounterId: selectedEncounter.id,
+          patientName: selectedEncounter.patientName,
+          kind,
+          content:
+            kind === '改期通知'
+              ? `建议改至 ${nextDate} ${nextTime}，等待患者确认。`
+              : noticeText,
+          status: kind === '改期通知' ? '待患者确认' : '已发送',
+        },
+        ...current,
+      ]);
+      if (kind !== '改期通知') {
+        setNoticeFeedback('已通知患者');
+      }
+    },
+    [nextDate, nextTime, noticeText, selectedEncounter],
+  );
+  useEffect(() => {
+    if (!noticeFeedback) return undefined;
+    const timer = window.setTimeout(() => setNoticeFeedback(''), 2600);
+    return () => window.clearTimeout(timer);
+  }, [noticeFeedback]);
+  const acceptReschedule = useCallback(
+    (notice: NoticeLog) => {
+      const nextScheduledAt = `${nextDate}T${nextTime}:00+08:00`;
+      onRescheduleAccepted(notice.encounterId, nextScheduledAt);
+      setNotices((current) =>
+        current.map((item) =>
+          item.id === notice.id
+            ? {
+                ...item,
+                status: '患者已接受',
+                content: `${item.content} 平台已自动调整接诊时段。`,
+              }
+            : item,
+        ),
+      );
+    },
+    [nextDate, nextTime, onRescheduleAccepted],
+  );
+  const pendingCount = encounters.filter(
+    (item) => encounterDisplayStatus(item, nowMs) === 'waiting',
+  ).length;
+  const activeTextCount = encounters.filter(
+    (item) => encounterDisplayStatus(item, nowMs) === 'active',
+  ).length;
+  return (
+    <FeatureDialog
+      title="预约管理"
+      subtitle="管理可接诊时段、排班容量、患者提醒与改期确认"
+      onClose={onClose}
+      wide
+    >
+      <div className="appointment-manager">
+        <div className="appointment-summary">
+          <div>
+            <span>{t('待接诊')}</span>
+            <strong>{pendingCount}</strong>
+          </div>
+          <div>
+            <span>{t('接诊中')}</span>
+            <strong>{activeTextCount}</strong>
+          </div>
+          <div>
+            <span>{t('今日可接诊容量')}</span>
+            <strong>
+              {windows
+                .filter((item) => item.date === '2026-09-21')
+                .reduce((total, item) => total + item.capacity, 0)}
+            </strong>
+          </div>
+        </div>
+
+        <section className="appointment-section">
+          <div className="appointment-section-title">
+            <h3>{t('设置可接诊时段')}</h3>
+            <p>{t('医生只维护自己的可服务时间，不确认患者人选。')}</p>
+          </div>
+          <div className="appointment-form-row">
+            <label>
+              <span>{t('日期')}</span>
+              <input
+                type="date"
+                value={newWindow.date}
+                onChange={(event) => setNewWindow((current) => ({ ...current, date: event.target.value }))}
+              />
+            </label>
+            <label>
+              <span>{t('方式')}</span>
+              <select
+                value={newWindow.type}
+                onChange={(event) =>
+                  setNewWindow((current) => ({
+                    ...current,
+                    type: event.target.value as Encounter['type'],
+                  }))
+                }
+              >
+                <option value="text">{t('图文问诊')}</option>
+                <option value="video">{t('视频问诊')}</option>
+              </select>
+            </label>
+            <label>
+              <span>{t('开始')}</span>
+              <input
+                type="time"
+                value={newWindow.start}
+                onChange={(event) => setNewWindow((current) => ({ ...current, start: event.target.value }))}
+              />
+            </label>
+            <label>
+              <span>{t('结束')}</span>
+              <input
+                type="time"
+                value={newWindow.end}
+                onChange={(event) => setNewWindow((current) => ({ ...current, end: event.target.value }))}
+              />
+            </label>
+            <label>
+              <span>{t('容量')}</span>
+              <input
+                type="number"
+                min="1"
+                max="20"
+                value={newWindow.capacity}
+                onChange={(event) =>
+                  setNewWindow((current) => ({
+                    ...current,
+                    capacity: Number(event.target.value) || 1,
+                  }))
+                }
+              />
+            </label>
+            <Button onClick={addWindow}>
+              <Plus size={16} />
+              {t('添加时段')}
+            </Button>
+          </div>
+          <div className="appointment-window-list">
+            {windows.map((window) => (
+              <article key={window.id}>
+                <div>
+                  <strong>{formatDate(window.date)}</strong>
+                  <span>
+                    {window.start}-{window.end} ·{' '}
+                    {window.type === 'video' ? t('视频问诊') : t('图文问诊')}
+                  </span>
+                </div>
+                <label>
+                  <span>{t('容量')}</span>
+                  <input
+                    type="number"
+                    min={window.booked}
+                    value={window.capacity}
+                    onChange={(event) =>
+                      setWindows((current) =>
+                        current.map((item) =>
+                          item.id === window.id
+                            ? { ...item, capacity: Math.max(window.booked, Number(event.target.value) || 1) }
+                            : item,
+                        ),
+                      )
+                    }
+                  />
+                </label>
+                <Badge tone={window.booked >= window.capacity ? 'amber' : 'teal'}>
+                  {t('已约 {booked}/{capacity}', {
+                    booked: window.booked,
+                    capacity: window.capacity,
+                  })}
+                </Badge>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="appointment-section">
+          <div className="appointment-section-title">
+            <h3>{t('查看预约排班')}</h3>
+            <p>{t('按当前接诊队列展示图文 48h 窗口和视频固定时段。')}</p>
+          </div>
+          <div className="appointment-schedule-list">
+            {encounters.slice(0, 8).map((encounter) => {
+              const displayStatus = encounterDisplayStatus(encounter, nowMs);
+              return (
+                <article key={encounter.id}>
+                  <div>
+                    <strong>{encounter.patientName}</strong>
+                    <span>
+                      {encounter.id} ·{' '}
+                      {encounter.type === 'video' ? t('视频问诊') : t('图文问诊')}
+                    </span>
+                  </div>
+                  <span>
+                    {encounterDate(encounter, formatDate)} · {encounterTime(encounter, formatDate)}
+                  </span>
+                  <Badge tone={tones[displayStatus]}>{t(statuses[displayStatus])}</Badge>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="appointment-section">
+          <div className="appointment-section-title">
+            <h3>{t('患者通知与改期')}</h3>
+            <p>{t('医生发起通知，患者接受改期后平台自动更新时间。')}</p>
+          </div>
+          <div className="appointment-notice-grid">
+            <label>
+              <span>{t('选择接诊')}</span>
+              <select
+                value={selectedEncounterId}
+                onChange={(event) => setSelectedEncounterId(event.target.value)}
+              >
+                {encounters
+                  .filter((item) => encounterDisplayStatus(item, nowMs) !== 'completed')
+                  .map((encounter) => (
+                    <option value={encounter.id} key={encounter.id}>
+                      {encounter.patientName} · {encounter.id}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <label className="appointment-notice-text">
+              <span>{t('提醒内容')}</span>
+              <textarea
+                value={noticeText}
+                onChange={(event) => setNoticeText(event.target.value)}
+              />
+            </label>
+            <div className="appointment-notice-actions">
+              <Button
+                className="appointment-notice-button appointment-notice-button--material"
+                variant="secondary"
+                onClick={() => sendNotice('资料提醒')}
+              >
+                {t('提醒补充资料')}
+              </Button>
+              <Button
+                className="appointment-notice-button appointment-notice-button--entry"
+                variant="secondary"
+                onClick={() => sendNotice('按时进入提醒')}
+              >
+                {t('提醒按时进入')}
+              </Button>
+              {noticeFeedback && (
+                <span className="appointment-notice-feedback">{t(noticeFeedback)}</span>
+              )}
+            </div>
+            <div className="appointment-reschedule">
+              <label>
+                <span>{t('改期日期')}</span>
+                <input
+                  type="date"
+                  value={nextDate}
+                  onChange={(event) => setNextDate(event.target.value)}
+                />
+              </label>
+              <label>
+                <span>{t('改期时间')}</span>
+                <input
+                  type="time"
+                  value={nextTime}
+                  onChange={(event) => setNextTime(event.target.value)}
+                />
+              </label>
+              <Button onClick={() => sendNotice('改期通知')}>{t('发送改期通知')}</Button>
+            </div>
+          </div>
+          <div className="appointment-notice-list">
+            {notices.map((notice) => (
+              <article key={notice.id}>
+                <div>
+                  <strong>
+                    {notice.patientName} · {t(notice.kind)}
+                  </strong>
+                  <p>{t(notice.content)}</p>
+                </div>
+                <div>
+                  <Badge tone={notice.status === '患者已接受' ? 'teal' : 'amber'}>
+                    {t(notice.status)}
+                  </Badge>
+                  {notice.kind === '改期通知' && notice.status === '待患者确认' && (
+                    <Button variant="secondary" onClick={() => acceptReschedule(notice)}>
+                      {t('模拟患者接受')}
+                    </Button>
+                  )}
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      </div>
+    </FeatureDialog>
+  );
+}
+
+function EncounterRoom({
+  encounter,
+  savedRecords,
+  onBack,
+  onComplete,
+}: {
+  encounter: Encounter;
+  savedRecords: SavedEncounterRecord[];
+  onBack: () => void;
+  onComplete: (id: string, record: SavedEncounterRecord) => void;
+}) {
   const { t, formatDate } = useI18n();
   const brief = clinicalBrief(encounter);
   const [draft, setDraft] = useState('');
@@ -376,11 +985,82 @@ function EncounterRoom({ encounter, onBack }: { encounter: Encounter; onBack: ()
   const [callStarted, setCallStarted] = useState(false);
   const [folderOpen, setFolderOpen] = useState(true);
   const [recordsOpen, setRecordsOpen] = useState(false);
-  const [savedRecords, setSavedRecords] = useState<SavedEncounterRecord[]>([]);
   const [previewImage, setPreviewImage] = useState<{ url: string; name?: string } | null>(null);
+  const [doctorStream, setDoctorStream] = useState<MediaStream | null>(null);
+  const [cameraError, setCameraError] = useState('');
+  const doctorVideoRef = useRef<HTMLVideoElement | null>(null);
+  const doctorStreamRef = useRef<MediaStream | null>(null);
   const isVideo = encounter.type === 'video';
+  const isCompleted = encounter.status === 'completed';
+  const displayStatus = encounterDisplayStatus(encounter);
   const priorRecords = useMemo(() => historyRecords(encounter), [encounter]);
+  const playDoctorVideo = useCallback(
+    (node: HTMLVideoElement | null = doctorVideoRef.current) => {
+      if (!node || !doctorStream) return;
+      if (node.srcObject !== doctorStream) {
+        node.srcObject = doctorStream;
+      }
+      void node.play().catch(() => {
+        setCameraError('摄像头已连接，请点击摄像头画面播放预览');
+      });
+    },
+    [doctorStream],
+  );
+  const attachDoctorVideo = useCallback(
+    (node: HTMLVideoElement | null) => {
+      doctorVideoRef.current = node;
+      playDoctorVideo(node);
+    },
+    [playDoctorVideo],
+  );
+  useEffect(() => {
+    playDoctorVideo();
+  }, [playDoctorVideo]);
+  useEffect(() => {
+    return () => {
+      doctorStreamRef.current?.getTracks().forEach((track) => track.stop());
+      doctorStreamRef.current = null;
+    };
+  }, []);
+  const replaceDoctorStream = useCallback((stream: MediaStream | null) => {
+    if (doctorStreamRef.current !== stream) {
+      doctorStreamRef.current?.getTracks().forEach((track) => track.stop());
+    }
+    doctorStreamRef.current = stream;
+    setDoctorStream(stream);
+  }, []);
+  const startCamera = useCallback(async () => {
+    if (isCompleted) return false;
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError('当前浏览器不支持摄像头预览');
+      return false;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      replaceDoctorStream(stream);
+      setCameraError('');
+      return true;
+    } catch {
+      setCameraError('摄像头未开启，请允许浏览器访问摄像头');
+      return false;
+    }
+  }, [isCompleted, replaceDoctorStream]);
+  const stopCamera = useCallback(() => {
+    replaceDoctorStream(null);
+    setCameraError('');
+  }, [replaceDoctorStream]);
+  const toggleCall = useCallback(async () => {
+    if (callStarted) {
+      setCallStarted(false);
+      stopCamera();
+      return;
+    }
+    if (isCompleted) return;
+    await startCamera();
+    setCallStarted(true);
+  }, [callStarted, isCompleted, startCamera, stopCamera]);
   const sendMessage = useCallback(() => {
+    if (isCompleted) return;
     const body = draft.trim();
     if (!body) return;
     setMessages((current) => [
@@ -393,9 +1073,10 @@ function EncounterRoom({ encounter, onBack }: { encounter: Encounter; onBack: ()
       },
     ]);
     setDraft('');
-  }, [draft, encounter.id, formatDate]);
+  }, [draft, encounter.id, formatDate, isCompleted]);
   const sendImage = useCallback(
     (files: FileList | null) => {
+      if (isCompleted) return;
       const file = files?.[0];
       if (!file) return;
       setMessages((current) => [
@@ -410,29 +1091,37 @@ function EncounterRoom({ encounter, onBack }: { encounter: Encounter; onBack: ()
         },
       ]);
     },
-    [encounter.id, formatDate],
+    [encounter.id, formatDate, isCompleted],
   );
   const endEncounter = useCallback(() => {
+    if (isCompleted) return;
     setCallStarted(false);
-    setSavedRecords((current) => {
-      if (current.some((record) => record.id === `${encounter.id}-saved`)) return current;
-      return [
-        {
-          id: `${encounter.id}-saved`,
-          title: '本次问诊记录',
-          savedAt: new Date().toISOString(),
-          mode: encounter.type,
-          messageCount: messages.filter((message) => message.sender !== 'system').length,
-          audioSaved: encounter.type === 'video',
-          videoSaved: encounter.type === 'video',
-        },
-        ...current,
-      ];
+    stopCamera();
+    onComplete(encounter.id, {
+      id: `${encounter.id}-saved`,
+      title: '本次问诊记录',
+      savedAt: new Date().toISOString(),
+      mode: encounter.type,
+      messageCount: messages.filter((message) => message.sender !== 'system').length,
+      audioSaved: encounter.type === 'video',
+      videoSaved: encounter.type === 'video',
     });
     setRecordsOpen(true);
-  }, [encounter.id, encounter.type, messages]);
+  }, [encounter.id, encounter.type, isCompleted, messages, onComplete, stopCamera]);
   const exportRecord = useCallback(() => {
-    const record = savedRecords[0];
+    const record =
+      savedRecords[0] ??
+      (isCompleted
+        ? {
+            id: `${encounter.id}-completed-export`,
+            title: '本次问诊记录',
+            savedAt: new Date().toISOString(),
+            mode: encounter.type,
+            messageCount: messages.filter((message) => message.sender !== 'system').length,
+            audioSaved: encounter.type === 'video',
+            videoSaved: encounter.type === 'video',
+          }
+        : null);
     if (!record) return;
     const content = [
       `问诊编号：${encounter.id}`,
@@ -460,7 +1149,7 @@ function EncounterRoom({ encounter, onBack }: { encounter: Encounter; onBack: ()
     link.download = `${encounter.id}-consultation-record.txt`;
     link.click();
     URL.revokeObjectURL(url);
-  }, [brief, encounter, formatDate, messages, savedRecords]);
+  }, [brief, encounter, formatDate, isCompleted, messages, savedRecords]);
   return (
     <div className="encounter-room-page">
       <header className="encounter-room-header">
@@ -477,18 +1166,27 @@ function EncounterRoom({ encounter, onBack }: { encounter: Encounter; onBack: ()
           </div>
         </div>
         <div className="encounter-room-header-meta">
-          <Badge tone={tones[encounter.status]}>{t(statuses[encounter.status])}</Badge>
+          <Badge tone={tones[displayStatus]}>{t(statuses[displayStatus])}</Badge>
           <span>{isVideo ? t('视频接诊') : t('图文接诊')}</span>
         </div>
       </header>
       <div className="encounter-room-layout">
         <aside className="encounter-room-sidebar">
           <div className="encounter-room-actions">
-            <Button className="encounter-end-button" variant="secondary" onClick={endEncounter}>
+            <Button
+              className="encounter-end-button"
+              variant="secondary"
+              onClick={endEncounter}
+              disabled={isCompleted}
+            >
               <Square size={14} />
-              {t('结束问诊')}
+              {t(isCompleted ? '问诊已结束' : '结束问诊')}
             </Button>
-            <Button variant="secondary" onClick={exportRecord} disabled={!savedRecords.length}>
+            <Button
+              variant="secondary"
+              onClick={exportRecord}
+              disabled={!savedRecords.length && !isCompleted}
+            >
               <Download size={14} />
               {t('导出记录')}
             </Button>
@@ -528,30 +1226,81 @@ function EncounterRoom({ encounter, onBack }: { encounter: Encounter; onBack: ()
               <div className="encounter-video-grid">
                 <div className="encounter-video-tile encounter-video-tile--patient">
                   <PersonAvatar name={encounter.patientName} size="large" />
-                  <span>{callStarted ? t('患者已接入视频') : t('等待系统呼叫患者')}</span>
+                  <span>
+                    {t(
+                      isCompleted
+                        ? '问诊已结束，视频通话不可继续'
+                        : callStarted
+                          ? '患者已接入视频'
+                          : '等待系统呼叫患者',
+                    )}
+                  </span>
                 </div>
                 <div className="encounter-video-tile encounter-video-tile--doctor">
-                  <div className="encounter-video-avatar">{t('我')}</div>
-                  <span>{t(callStarted ? '医生画面' : '本机摄像头待开启')}</span>
+                  {doctorStream ? (
+                    <video
+                      className="encounter-doctor-video"
+                      ref={attachDoctorVideo}
+                      autoPlay
+                      muted
+                      playsInline
+                      onLoadedMetadata={(event) => {
+                        void event.currentTarget.play();
+                      }}
+                      onClick={(event) => {
+                        void event.currentTarget.play();
+                      }}
+                    />
+                  ) : (
+                    <div className="encounter-video-avatar">{t('我')}</div>
+                  )}
+                  <span>
+                    {cameraError
+                      ? t(cameraError)
+                      : t(doctorStream ? '医生摄像头已开启' : '本机摄像头待开启')}
+                  </span>
                 </div>
               </div>
               <div className="encounter-call-status">
-                <strong>{t(callStarted ? '视频接诊中' : '等待呼叫')}</strong>
+                <strong>
+                  {t(isCompleted ? '问诊已完成' : callStarted ? '视频接诊中' : '等待呼叫')}
+                </strong>
                 <span>
-                  {t(callStarted ? '双方已进入视频诊间' : '点击开始呼叫后进入视频接诊流程')}
+                  {t(
+                    isCompleted
+                      ? '本次问诊记录已保存，诊间已锁定'
+                      : callStarted
+                        ? '双方已进入视频诊间'
+                        : '点击开始呼叫后进入视频接诊流程',
+                  )}
                 </span>
               </div>
               <div className="encounter-call-controls">
-                <button aria-label={t('麦克风')}>
+                <button aria-label={t('麦克风')} disabled={isCompleted}>
                   <Mic size={18} />
                 </button>
-                <button aria-label={t('摄像头')}>
+                <button
+                  type="button"
+                  className={doctorStream ? 'is-active' : ''}
+                  aria-label={t('摄像头')}
+                  disabled={isCompleted}
+                  onClick={() => {
+                    if (doctorStream) {
+                      stopCamera();
+                    } else {
+                      void startCamera();
+                    }
+                  }}
+                >
                   <Camera size={18} />
                 </button>
                 <Button
                   className={callStarted ? 'encounter-danger-button' : ''}
                   variant={callStarted ? 'secondary' : 'primary'}
-                  onClick={() => setCallStarted((value) => !value)}
+                  disabled={isCompleted}
+                  onClick={() => {
+                    void toggleCall();
+                  }}
                 >
                   {callStarted ? <PhoneOff size={17} /> : <PhoneCall size={17} />}
                   {t(callStarted ? '结束通话' : '开始视频接诊')}
@@ -565,7 +1314,9 @@ function EncounterRoom({ encounter, onBack }: { encounter: Encounter; onBack: ()
                   <h3>{t('图文诊间')}</h3>
                   <p>{t('48h服务窗口 · 最多20条消息')}</p>
                 </div>
-                <Badge tone="blue">{t('进行中')}</Badge>
+                <Badge tone={isCompleted ? 'teal' : 'blue'}>
+                  {t(isCompleted ? '已完成' : '进行中')}
+                </Badge>
               </div>
               <div className="encounter-message-list" aria-live="polite">
                 {messages.map((message) => (
@@ -601,12 +1352,16 @@ function EncounterRoom({ encounter, onBack }: { encounter: Encounter; onBack: ()
                 ))}
               </div>
               <div className="encounter-compose">
-                <label className="message-image-button">
+                <label
+                  className={`message-image-button ${isCompleted ? 'is-disabled' : ''}`}
+                  aria-disabled={isCompleted}
+                >
                   <ImagePlus size={17} />
                   {t('图片')}
                   <input
                     type="file"
                     accept="image/*"
+                    disabled={isCompleted}
                     onChange={(event) => {
                       sendImage(event.target.files);
                       event.currentTarget.value = '';
@@ -615,6 +1370,7 @@ function EncounterRoom({ encounter, onBack }: { encounter: Encounter; onBack: ()
                 </label>
                 <textarea
                   value={draft}
+                  disabled={isCompleted}
                   onChange={(event) => setDraft(event.target.value)}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter' && !event.shiftKey) {
@@ -622,10 +1378,12 @@ function EncounterRoom({ encounter, onBack }: { encounter: Encounter; onBack: ()
                       sendMessage();
                     }
                   }}
-                  placeholder={t('输入回复患者的内容')}
+                  placeholder={t(
+                    isCompleted ? '问诊已结束，不能继续发送消息' : '输入回复患者的内容',
+                  )}
                   aria-label={t('输入回复患者的内容')}
                 />
-                <Button onClick={sendMessage}>
+                <Button onClick={sendMessage} disabled={isCompleted}>
                   <Send size={16} />
                   {t('发送')}
                 </Button>
@@ -665,25 +1423,70 @@ export function EncountersPage() {
   const { data, loading, error, reload } = useApi<Encounter[]>('/encounters');
   const [status, setStatus] = useState('all');
   const [query, setQuery] = useState('');
+  const [typeFilter, setTypeFilter] = useState<'all' | Encounter['type']>('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [roomId, setRoomId] = useState<string | null>(null);
-  const selected = data?.find((item) => item.id === selectedId) ?? null;
-  const activeRoom = data?.find((item) => item.id === roomId) ?? null;
+  const [statusOverrides, setStatusOverrides] = useState<Record<string, Encounter['status']>>({});
+  const [scheduleOverrides, setScheduleOverrides] = useState<Record<string, string>>({});
+  const [savedRecordsByEncounter, setSavedRecordsByEncounter] = useState<
+    Record<string, SavedEncounterRecord[]>
+  >({});
+  const encounterRows = useMemo(() => {
+    const byId = new Map<string, Encounter>();
+    [...(data ?? []), ...extraDemoEncounters].forEach((item) => {
+      if (!byId.has(item.id)) byId.set(item.id, item);
+    });
+    return Array.from(byId.values())
+      .map((item) => ({
+        ...item,
+        scheduledAt: scheduleOverrides[item.id] ?? item.scheduledAt,
+        status: statusOverrides[item.id] ?? (item.status === 'scheduled' ? 'waiting' : item.status),
+      }))
+      .sort((left, right) => Date.parse(left.scheduledAt) - Date.parse(right.scheduledAt));
+  }, [data, scheduleOverrides, statusOverrides]);
+  const nowMs = Date.now();
+  const selected = encounterRows.find((item) => item.id === selectedId) ?? null;
+  const activeRoom = encounterRows.find((item) => item.id === roomId) ?? null;
   const selectedBrief = selected ? clinicalBrief(selected) : null;
-  const [planned, setPlanned] = useState<string | null>(null);
+  const [appointmentOpen, setAppointmentOpen] = useState(false);
   const close = useCallback(() => setSelectedId(null), []);
-  const closePlanned = useCallback(() => setPlanned(null), []);
+  const completeEncounter = useCallback((id: string, record: SavedEncounterRecord) => {
+    setStatusOverrides((current) => ({ ...current, [id]: 'completed' }));
+    setSavedRecordsByEncounter((current) => {
+      const records = current[id] ?? [];
+      if (records.some((item) => item.id === record.id)) return current;
+      return { ...current, [id]: [record, ...records] };
+    });
+  }, []);
+  const applyReschedule = useCallback((id: string, nextScheduledAt: string) => {
+    setScheduleOverrides((current) => ({ ...current, [id]: nextScheduledAt }));
+    setStatusOverrides((current) => ({ ...current, [id]: 'waiting' }));
+  }, []);
   const encounters = useMemo(
     () =>
-      (data ?? []).filter(
-        (item) =>
-          (status === 'all' ||
-            (status === 'pending' ? isPendingEncounter(item.status) : item.status === status)) &&
-          `${item.patientName} ${item.patientId} ${item.id}`.includes(query.trim()),
-      ),
-    [data, query, status],
+      encounterRows.filter((item) => {
+        const displayStatus = encounterDisplayStatus(item, nowMs);
+        return (
+          (status === 'all' || displayStatus === status) &&
+          (typeFilter === 'all' || item.type === typeFilter) &&
+          (!dateFrom || item.scheduledAt.slice(0, 10) >= dateFrom) &&
+          (!dateTo || item.scheduledAt.slice(0, 10) <= dateTo) &&
+          `${item.patientName} ${item.patientId} ${item.id}`.includes(query.trim())
+        );
+      }),
+    [dateFrom, dateTo, encounterRows, nowMs, query, status, typeFilter],
   );
-  if (activeRoom) return <EncounterRoom encounter={activeRoom} onBack={() => setRoomId(null)} />;
+  if (activeRoom)
+    return (
+      <EncounterRoom
+        encounter={activeRoom}
+        savedRecords={savedRecordsByEncounter[activeRoom.id] ?? []}
+        onBack={() => setRoomId(null)}
+        onComplete={completeEncounter}
+      />
+    );
   return (
     <div className="feature-page">
       <PageHeader
@@ -691,7 +1494,7 @@ export function EncountersPage() {
         title={t('在线诊疗')}
         description={t('有序接诊，从容沟通。让优质的医疗服务跨越距离。')}
         action={
-          <Button onClick={() => setPlanned('预约管理')}>
+          <Button onClick={() => setAppointmentOpen(true)}>
             <CalendarPlus size={16} />
             {t('预约管理')}
           </Button>
@@ -705,27 +1508,33 @@ export function EncountersPage() {
             <Metric
               icon={CalendarDays}
               label={t('演示接诊安排')}
-              value={data?.length ?? 0}
+              value={encounterRows.length}
               detail={t('查看当前工作队列')}
             />
             <Metric
               icon={Clock3}
               label={t('等待接诊')}
-              value={data?.filter((item) => isPendingEncounter(item.status)).length ?? 0}
-              detail={t('包含待响应与已约定时段')}
+              value={
+                encounterRows.filter((item) => encounterDisplayStatus(item, nowMs) === 'waiting')
+                  .length
+              }
+              detail={t('包含待响应的图文与视频接诊')}
               tone="amber"
             />
             <Metric
               icon={Video}
               label={t('视频预约')}
-              value={data?.filter((item) => item.type === 'video').length ?? 0}
+              value={encounterRows.filter((item) => item.type === 'video').length}
               detail={t('音视频服务将在后续接入')}
               tone="blue"
             />
             <Metric
               icon={CheckCheck}
               label={t('已完成记录')}
-              value={data?.filter((item) => item.status === 'completed').length ?? 0}
+              value={
+                encounterRows.filter((item) => encounterDisplayStatus(item, nowMs) === 'completed')
+                  .length
+              }
               detail={t('虚构历史诊疗安排')}
             />
           </div>
@@ -734,11 +1543,20 @@ export function EncountersPage() {
               value={status}
               onChange={setStatus}
               options={[
-                { value: 'all', label: '全部接诊', count: data?.length },
+                { value: 'all', label: '全部接诊', count: encounterRows.length },
                 {
-                  value: 'pending',
+                  value: 'waiting',
                   label: '待接诊',
-                  count: data?.filter((item) => isPendingEncounter(item.status)).length,
+                  count: encounterRows.filter(
+                    (item) => encounterDisplayStatus(item, nowMs) === 'waiting',
+                  ).length,
+                },
+                {
+                  value: 'active',
+                  label: '接诊中',
+                  count: encounterRows.filter(
+                    (item) => encounterDisplayStatus(item, nowMs) === 'active',
+                  ).length,
                 },
                 { value: 'completed', label: '已完成' },
               ]}
@@ -749,9 +1567,39 @@ export function EncountersPage() {
                 aria-label={t('搜索患者或接诊编号')}
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder={t('搜索患者或接诊编号')}
+                placeholder={t('搜索患者姓名或接诊编号')}
               />
             </label>
+            <label className="encounter-filter-field">
+              <span>{t('就诊方式')}</span>
+              <select
+                className="feature-select"
+                value={typeFilter}
+                onChange={(event) => setTypeFilter(event.target.value as 'all' | Encounter['type'])}
+              >
+                <option value="all">{t('全部方式')}</option>
+                <option value="text">{t('图文问诊')}</option>
+                <option value="video">{t('视频问诊')}</option>
+              </select>
+            </label>
+            <div className="encounter-filter-field encounter-filter-field--range">
+              <span>{t('接诊日期')}</span>
+              <input
+                className="feature-select"
+                type="date"
+                value={dateFrom}
+                aria-label={t('开始日期')}
+                onChange={(event) => setDateFrom(event.target.value)}
+              />
+              <span className="encounter-filter-separator">{t('至')}</span>
+              <input
+                className="feature-select"
+                type="date"
+                value={dateTo}
+                aria-label={t('结束日期')}
+                onChange={(event) => setDateTo(event.target.value)}
+              />
+            </div>
           </div>
           <div className="encounter-grid">
             {encounters.map((encounter, index) => (
@@ -779,7 +1627,10 @@ export function EncountersPage() {
                     {encounterTime(encounter, formatDate)}
                   </span>
                 </div>
-                <Badge tone={tones[encounter.status]}>{t(statuses[encounter.status])}</Badge>
+                {(() => {
+                  const displayStatus = encounterDisplayStatus(encounter, nowMs);
+                  return <Badge tone={tones[displayStatus]}>{t(statuses[displayStatus])}</Badge>;
+                })()}
                 <LinkAction onClick={() => setSelectedId(encounter.id)}>
                   {t('查看接诊详情')}
                 </LinkAction>
@@ -792,17 +1643,6 @@ export function EncountersPage() {
               description={t('调整筛选条件查看其他演示记录。')}
             />
           )}
-          <div className="feature-coming-panel">
-            <Video size={26} />
-            <div>
-              <h3>{t('更自然的在线沟通，即将到来')}</h3>
-              <p>
-                {t(
-                  '图文消息、视频通话、经授权的录音录像及诊后随访已纳入开发计划。当前可浏览演示接诊安排。',
-                )}
-              </p>
-            </div>
-          </div>
           <ReadOnlyNote />
         </>
       )}
@@ -818,7 +1658,10 @@ export function EncountersPage() {
               <h3>{selected.patientName}</h3>
               <p>{selected.patientId}</p>
             </div>
-            <Badge tone={tones[selected.status]}>{t(statuses[selected.status])}</Badge>
+            {(() => {
+              const displayStatus = encounterDisplayStatus(selected, nowMs);
+              return <Badge tone={tones[displayStatus]}>{t(statuses[displayStatus])}</Badge>;
+            })()}
           </div>
           <DetailGrid
             items={[
@@ -848,36 +1691,15 @@ export function EncountersPage() {
             </Button>
           </div>
           {selectedBrief && <ClinicalSummary brief={selectedBrief} />}
-          <div className="feature-coming-panel">
-            {selected.type === 'video' ? <Video size={25} /> : <MessageSquare size={25} />}
-            <div>
-              <h3>
-                {selected.type === 'video' ? t('视频诊室') : t('图文诊室')}
-                {t('· 尚未上线')}
-              </h3>
-              <p>
-                {selected.type === 'video'
-                  ? t('RTC 服务、设备检测、患者知情同意与诊室访问控制将在后续接入。')
-                  : t('消息发送、附件上传、送达状态与离线提醒将在后续接入。')}
-              </p>
-            </div>
-          </div>
-          <ReadOnlyNote>{t('当前页面用于浏览预约信息，不会发起通话或发送诊疗消息。')}</ReadOnlyNote>
         </FeatureDialog>
       )}
-      {planned && (
-        <PlannedDialog title={planned} iteration="Iteration 1–3" onClose={closePlanned}>
-          <p>
-            {t(
-              'Iteration 1 实现基础图文接诊，Iteration 3 接入图像、视频与会诊协作。预约管理聚焦设置可接诊时段、患者通知与改期确认；医生不确认预约人选。',
-            )}
-          </p>
-          <p>
-            {t(
-              '医生发起改期通知后，由患者确认是否接受；双方达成一致后，平台自动调整接诊时段并留下审计记录。',
-            )}
-          </p>
-        </PlannedDialog>
+      {appointmentOpen && (
+        <AppointmentManagementDialog
+          encounters={encounterRows}
+          nowMs={nowMs}
+          onClose={() => setAppointmentOpen(false)}
+          onRescheduleAccepted={applyReschedule}
+        />
       )}
     </div>
   );
