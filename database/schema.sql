@@ -352,6 +352,18 @@ CREATE TABLE patient_archive_versions (
       payload_json TEXT NOT NULL, authored_by TEXT NOT NULL REFERENCES identities(id), created_at TEXT NOT NULL,
       change_reason TEXT NOT NULL, UNIQUE(patient_id,version)
     );
+-- table: patient_management_history
+CREATE TABLE patient_management_history (
+      id TEXT PRIMARY KEY,
+      patient_id TEXT NOT NULL REFERENCES patients(id),
+      operation TEXT NOT NULL CHECK(operation IN ('archive','release','transfer')),
+      previous_doctor_id TEXT REFERENCES identities(id),
+      new_doctor_id TEXT REFERENCES identities(id),
+      actor_id TEXT NOT NULL REFERENCES identities(id),
+      reason TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      resulting_version INTEGER NOT NULL
+    );
 -- table: patient_registration_requests
 CREATE TABLE patient_registration_requests (
     actor_id TEXT NOT NULL REFERENCES identities(id),
@@ -371,7 +383,8 @@ CREATE TABLE patients (
       medical_history_json TEXT NOT NULL, care_summary TEXT NOT NULL,
       is_synthetic INTEGER NOT NULL DEFAULT 1 CHECK(is_synthetic=1)
     , symptoms_json TEXT NOT NULL DEFAULT '[]', allergy_status TEXT NOT NULL DEFAULT 'unknown'
-      CHECK(allergy_status IN ('unknown','none','recorded')));
+      CHECK(allergy_status IN ('unknown','none','recorded')), lifecycle_status TEXT NOT NULL DEFAULT 'active'
+      CHECK(lifecycle_status IN ('active','released','archived')));
 -- table: record_reviews
 CREATE TABLE record_reviews (
       id TEXT PRIMARY KEY, record_id TEXT NOT NULL REFERENCES medical_records(id), record_version INTEGER NOT NULL,
@@ -581,6 +594,8 @@ CREATE INDEX health_observation_confirmations_observation
 -- index: health_observations_patient_time
 CREATE INDEX health_observations_patient_time
       ON health_observations(patient_id,measured_at);
+-- index: patient_management_history_patient
+CREATE INDEX patient_management_history_patient ON patient_management_history(patient_id,created_at);
 -- index: patients_doctor_status
 CREATE INDEX patients_doctor_status ON patients(assigned_doctor_id,status);
 -- index: social_attachments_owner_state
@@ -636,4 +651,5 @@ INSERT INTO schema_migrations(version,name,applied_at) VALUES(28,'online_care_ty
 INSERT INTO schema_migrations(version,name,applied_at) VALUES(29,'online_care_records_alignment','2026-09-21T00:00:00.000Z');
 INSERT INTO schema_migrations(version,name,applied_at) VALUES(30,'remote_consultation_persistence','2026-09-21T00:00:00.000Z');
 INSERT INTO schema_migrations(version,name,applied_at) VALUES(31,'remote_consultation_invited_case','2026-09-21T00:00:00.000Z');
+INSERT INTO schema_migrations(version,name,applied_at) VALUES(32,'patients_lifecycle_management','2026-09-21T00:00:00.000Z');
 COMMIT;

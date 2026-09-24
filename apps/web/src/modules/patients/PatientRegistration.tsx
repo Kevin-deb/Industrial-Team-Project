@@ -23,6 +23,14 @@ const initialPatient: PatientArchive = {
   allergyStatus: 'unknown',
   version: 1,
   canEdit: true,
+  responsibleDoctorName: null,
+  lifecycleStatus: 'active',
+  accessRole: 'responsible',
+  canBatch: true,
+  canArchive: true,
+  canRelease: true,
+  canTransfer: true,
+  batchDisabledReason: null,
 };
 
 export function PatientRegistration({

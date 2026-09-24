@@ -1,4 +1,17 @@
 export type PatientStatus = 'stable' | 'attention' | 'follow-up';
+export type PatientLifecycleStatus = 'active' | 'released' | 'archived';
+export type PatientAccessRole = 'responsible' | 'collaborative-readonly';
+
+export interface PatientAccessMetadata {
+  responsibleDoctorName: string | null;
+  lifecycleStatus: PatientLifecycleStatus;
+  accessRole: PatientAccessRole;
+  canBatch: boolean;
+  canArchive: boolean;
+  canRelease: boolean;
+  canTransfer: boolean;
+  batchDisabledReason: string | null;
+}
 
 export interface Patient {
   id: string;
@@ -26,7 +39,7 @@ export interface PatientQuery {
   groupBy?: 'disease' | 'status';
 }
 
-export interface PatientDirectoryItem extends Patient {
+export interface PatientDirectoryItem extends Patient, PatientAccessMetadata {
   version: number;
   canEdit: boolean;
   groupKey?: string;
@@ -52,7 +65,7 @@ export interface BatchPatientStatusResult {
 export type AllergyStatus = 'unknown' | 'none' | 'recorded';
 
 /** Additional detail fields keep the existing patient summary contract compatible. */
-export interface PatientArchive extends Patient {
+export interface PatientArchive extends Patient, PatientAccessMetadata {
   symptoms: string[];
   allergyStatus: AllergyStatus;
   version: number;
@@ -80,7 +93,30 @@ export interface CreatePatientRequest extends UpdatePatientRequest {
   nextFollowUp?: string;
 }
 
-export type PatientSnapshot = Omit<PatientArchive, 'canEdit'>;
+export interface PatientLifecycleRequest {
+  expectedVersion: number;
+  changeReason: string;
+}
+export interface TransferPatientRequest extends PatientLifecycleRequest {
+  newResponsibleDoctorId: string;
+}
+export interface TransferDoctor {
+  id: string;
+  name: string;
+  department: string;
+}
+
+export type PatientSnapshot = Omit<
+  PatientArchive,
+  | 'canEdit'
+  | 'responsibleDoctorName'
+  | 'accessRole'
+  | 'canBatch'
+  | 'canArchive'
+  | 'canRelease'
+  | 'canTransfer'
+  | 'batchDisabledReason'
+>;
 export interface PatientArchiveVersion {
   version: number;
   authoredBy: string;

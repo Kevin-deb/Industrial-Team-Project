@@ -8,6 +8,7 @@ import { Badge, Button, EmptyState, LoadingState } from '../../shared/ui';
 import { DetailGrid, FeatureDialog, FilterTabs, PersonAvatar } from '../ui';
 import { PatientEditor } from './PatientEditor';
 import { PatientHistory } from './PatientHistory';
+import { PatientLifecycle } from './PatientLifecycle';
 import { allergyLabels, statusLabels, statusTones } from './fields';
 
 function PatientRecords({ patientId }: { patientId: string }) {
@@ -178,6 +179,21 @@ export function PatientDetail({
                   </Badge>
                   <DetailGrid
                     items={[
+                      { label: '责任医生', value: patient.responsibleDoctorName ?? t('暂未分配') },
+                      {
+                        label: '当前访问权限',
+                        value: t(patient.accessRole === 'responsible' ? '责任医生' : '协作只读'),
+                      },
+                      {
+                        label: '档案生命周期',
+                        value: t(
+                          patient.lifecycleStatus === 'active'
+                            ? '管理中'
+                            : patient.lifecycleStatus === 'archived'
+                              ? '已归档'
+                              : '已解除管理',
+                        ),
+                      },
                       { label: '联系电话', value: patient.phone || t('未记录') },
                       { label: '健康分类', value: shown.diagnosis },
                       {
@@ -208,6 +224,17 @@ export function PatientDetail({
                     </p>
                   ))}
                   {!patient.symptoms.length && <p>{t('未记录')}</p>}
+                  {patient.batchDisabledReason && (
+                    <p className="patients-access-explanation">{t(patient.batchDisabledReason)}</p>
+                  )}
+                  <PatientLifecycle
+                    patient={patient}
+                    onComplete={(losesAccess) => {
+                      onSaved();
+                      if (losesAccess) onClose();
+                      else reload();
+                    }}
+                  />
                 </>
               )}
               {section === 'history' && (

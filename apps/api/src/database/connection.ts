@@ -11,6 +11,7 @@ import {
   patientsMigration,
   patientsArchiveMigration,
   patientsRegistrationMigration,
+  patientsLifecycleMigration,
 } from '../patients/index.js';
 import {
   encountersMigration,
@@ -92,6 +93,7 @@ export const migrations = [
   onlineCareRecordsAlignmentMigration,
   remoteConsultationPersistenceMigration,
   remoteConsultationInvitedCaseMigration,
+  patientsLifecycleMigration,
 ];
 
 const legacyAuthOrder = [
@@ -124,9 +126,7 @@ function upgradeLegacyAuthMigrationOrder(database: DatabaseSync): void {
       database
         .prepare('UPDATE schema_migrations SET version=? WHERE version=?')
         .run(newVersion, oldVersion);
-    for (const migration of migrations.filter(
-      ({ version }) => version >= 17 && version <= 20,
-    )) {
+    for (const migration of migrations.filter(({ version }) => version >= 17 && version <= 20)) {
       database.exec(migration.sql);
       database
         .prepare('INSERT INTO schema_migrations(version,name,applied_at) VALUES(?,?,?)')

@@ -217,3 +217,53 @@
     justify-content: space-between;
   }
 }
+.patients-access-note,
+.patients-access-explanation {
+  color: #52666d;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.patients-access-cell {
+  min-width: 170px;
+  width: 230px;
+  max-width: 230px;
+  vertical-align: middle;
+}
+.patients-access-cell > * {
+  display: block;
+  margin: 0 0 5px;
+}
+.patients-access-cell small {
+  color: #64777d;
+  line-height: 1.35;
+}
+.patients-access-detail {
+  min-height: 1.35em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.patients-lifecycle {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #dce5e7;
+  display: grid;
+  gap: 14px;
+}
+.patients-lifecycle h4 {
+  margin: 0;
+}
+.patients-lifecycle-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.patients-lifecycle label {
+  display: grid;
+  gap: 7px;
+  font-size: 13px;
+}
+.patients-lifecycle-options label {
+  display: flex;
+  align-items: center;
+}
