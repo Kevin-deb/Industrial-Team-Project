@@ -4,6 +4,8 @@ import type {
   PatientQuery,
   UpdatePatientRequest,
   CreatePatientRequest,
+  PatientLifecycleRequest,
+  TransferPatientRequest,
 } from '@doctor/contracts';
 import type { PlatformRepository, RequestContext } from '../platform/index.js';
 import type { SqlitePatientRepository } from './repository.js';
@@ -170,6 +172,120 @@ export function registerPatientRoutes(
         total: result.total,
         groups: result.groups,
       });
+    },
+  );
+  app.get('/api/v1/patients/transfer-targets', async (request) =>
+    envelope(request, deps.patients.transferTargets(deps.context())),
+  );
+  const lifecycleBody = {
+    type: 'object',
+    additionalProperties: false,
+    required: ['expectedVersion', 'changeReason'],
+    properties: { expectedVersion: { type: 'integer', minimum: 1 }, changeReason: text(500, 1) },
+  };
+  for (const operation of ['archive', 'release'] as const) {
+    app.post<{ Params: { id: string }; Body: PatientLifecycleRequest }>(
+      `/api/v1/patients/:id/${operation}`,
+      {
+        schema: { params, body: lifecycleBody },
+      },
+      async (request, reply) => {
+        const context = deps.context();
+        const result = deps.patients.lifecycle(
+          request.params.id,
+          operation,
+          request.body,
+          context,
+          () =>
+            audit(
+              context,
+              operation === 'archive' ? 'patient.archive' : 'patient.release-management',
+              request.params.id,
+              'success',
+            ),
+        );
+        if (result.kind === 'not-found')
+          return fail(
+            request,
+            reply,
+            404,
+            'PATIENT_NOT_FOUND',
+            '未找到患者，或该患者不在当前医生的授权范围。',
+          );
+        if (result.kind === 'forbidden') {
+          audit(
+            context,
+            operation === 'archive' ? 'patient.archive' : 'patient.release-management',
+            request.params.id,
+            'denied',
+          );
+          return fail(
+            request,
+            reply,
+            403,
+            'PATIENT_LIFECYCLE_DENIED',
+            '只有当前责任医生可以执行此操作。',
+          );
+        }
+        if (result.kind === 'stale')
+          return reply.code(412).send({
+            error: { code: 'STALE_PATIENT_VERSION', message: '档案已更新，请刷新后重试。' },
+            meta: { requestId: request.id, mode: 'demo' },
+          });
+        if (result.kind === 'invalid')
+          return fail(request, reply, 422, 'CHANGE_REASON_REQUIRED', '必须填写操作原因。');
+        if (result.kind === 'invalid-target')
+          return fail(request, reply, 422, 'INVALID_TRANSFER_TARGET', '无效的责任医生。');
+        return envelope(request, { committed: true, version: result.version });
+      },
+    );
+  }
+  app.post<{ Params: { id: string }; Body: TransferPatientRequest }>(
+    '/api/v1/patients/:id/transfer',
+    {
+      schema: {
+        params,
+        body: {
+          ...lifecycleBody,
+          required: ['expectedVersion', 'changeReason', 'newResponsibleDoctorId'],
+          properties: { ...lifecycleBody.properties, newResponsibleDoctorId: text(80, 1) },
+        },
+      },
+    },
+    async (request, reply) => {
+      const context = deps.context();
+      const result = deps.patients.lifecycle(
+        request.params.id,
+        'transfer',
+        request.body,
+        context,
+        () => audit(context, 'patient.transfer-responsibility', request.params.id, 'success'),
+      );
+      if (result.kind === 'not-found')
+        return fail(
+          request,
+          reply,
+          404,
+          'PATIENT_NOT_FOUND',
+          '未找到患者，或该患者不在当前医生的授权范围。',
+        );
+      if (result.kind === 'forbidden') {
+        audit(context, 'patient.transfer-responsibility', request.params.id, 'denied');
+        return fail(
+          request,
+          reply,
+          403,
+          'PATIENT_LIFECYCLE_DENIED',
+          '只有当前责任医生可以转交患者。',
+        );
+      }
+      if (result.kind === 'stale')
+        return fail(request, reply, 412, 'STALE_PATIENT_VERSION', '档案已更新，请刷新后重试。');
+      if (result.kind === 'invalid-target')
+        return fail(request, reply, 422, 'INVALID_TRANSFER_TARGET', '请选择另一位在职医生。');
+      if (result.kind === 'invalid')
+        return fail(request, reply, 422, 'CHANGE_REASON_REQUIRED', '必须填写操作原因。');
+      return envelope(request, { committed: true, version: result.version });
     },
   );
   app.post<{ Body: BatchPatientStatusRequest }>(

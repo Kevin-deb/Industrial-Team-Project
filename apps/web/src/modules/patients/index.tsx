@@ -67,7 +67,7 @@ export function PatientsPage() {
     setChecked([]);
   }, [data]);
   const groups = (meta as typeof meta & { groups?: PatientGroup[] })?.groups ?? [];
-  const editable = data?.filter((patient) => patient.canEdit) ?? [];
+  const editable = data?.filter((patient) => patient.canBatch) ?? [];
   const close = useCallback(() => setSelected(null), []);
   const updateParams = (fields: Record<string, string>, resetPage = true) =>
     setParams(
@@ -197,6 +197,9 @@ export function PatientsPage() {
             onBusy={setBatchBusy}
             onReload={afterSave}
           />
+          <p className="patients-access-note">
+            {t('批量选择仅适用于您负责且处于管理中的患者；协作授权只能查看。')}
+          </p>
           {loading || error ? (
             <LoadingState error={error} onRetry={reload} />
           ) : (
@@ -224,11 +227,17 @@ export function PatientsPage() {
                             }
                           />
                         </th>
-                        {['患者信息', '健康分类', '管理状态', '最近就诊', '下次随访', '档案'].map(
-                          (label) => (
-                            <th key={label}>{t(label)}</th>
-                          ),
-                        )}
+                        {[
+                          '患者信息',
+                          '健康分类',
+                          '管理状态',
+                          '责任与权限',
+                          '最近就诊',
+                          '下次随访',
+                          '档案',
+                        ].map((label) => (
+                          <th key={label}>{t(label)}</th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody>
@@ -237,7 +246,7 @@ export function PatientsPage() {
                           {groupBy !== 'none' &&
                             (index === 0 || patient.groupKey !== data[index - 1].groupKey) && (
                               <tr className="patients-group-heading">
-                                <th colSpan={7} scope="colgroup">
+                                <th colSpan={8} scope="colgroup">
                                   {groupBy === 'status'
                                     ? t(statusLabels[patient.status])
                                     : patient.diagnosis}
@@ -259,8 +268,12 @@ export function PatientsPage() {
                               <input
                                 type="checkbox"
                                 aria-label={t('选择患者 {id}', { id: patient.id })}
-                                disabled={!patient.canEdit}
-                                title={!patient.canEdit ? t('没有修改权限') : undefined}
+                                disabled={!patient.canBatch}
+                                title={
+                                  patient.batchDisabledReason
+                                    ? t(patient.batchDisabledReason)
+                                    : undefined
+                                }
                                 checked={checked.includes(patient.id)}
                                 onChange={(event) =>
                                   setChecked((previous) =>
@@ -288,6 +301,40 @@ export function PatientsPage() {
                               <Badge tone={statusTones[patient.status]}>
                                 {t(statusLabels[patient.status])}
                               </Badge>
+                            </td>
+                            <td className="patients-access-cell">
+                              <strong>{patient.responsibleDoctorName ?? t('暂未分配')}</strong>
+                              <Badge tone={patient.accessRole === 'responsible' ? 'teal' : 'slate'}>
+                                {t(patient.accessRole === 'responsible' ? '责任医生' : '协作只读')}
+                              </Badge>
+                              <small
+                                className="patients-access-detail"
+                                title={
+                                  patient.lifecycleStatus !== 'active'
+                                    ? t(
+                                        patient.lifecycleStatus === 'archived'
+                                          ? '已归档'
+                                          : '已解除管理',
+                                      )
+                                    : !patient.canBatch && patient.batchDisabledReason
+                                      ? t(patient.batchDisabledReason)
+                                      : undefined
+                                }
+                                aria-hidden={
+                                  patient.lifecycleStatus === 'active' &&
+                                  (patient.canBatch || !patient.batchDisabledReason)
+                                }
+                              >
+                                {patient.lifecycleStatus !== 'active'
+                                  ? t(
+                                      patient.lifecycleStatus === 'archived'
+                                        ? '已归档'
+                                        : '已解除管理',
+                                    )
+                                  : !patient.canBatch && patient.batchDisabledReason
+                                    ? t(patient.batchDisabledReason)
+                                    : '\u00a0'}
+                              </small>
                             </td>
                             <td>
                               {patient.lastVisit ? formatDate(patient.lastVisit) : t('未记录')}

@@ -11,6 +11,9 @@ import type {
   BatchPatientStatusResult,
   PatientGroup,
   CreatePatientRequest,
+  PatientLifecycleRequest,
+  TransferPatientRequest,
+  TransferDoctor,
 } from '@doctor/contracts';
 import { patientScopeSql, type RequestContext } from '../platform/index.js';
 
@@ -40,6 +43,20 @@ function map(row: Row): Patient {
     medicalHistory: JSON.parse(String(row.medical_history_json)) as string[],
     careSummary: String(row.care_summary),
   };
+}
+function snapshotOf(patient: PatientArchive): PatientSnapshot {
+  const {
+    canEdit: _edit,
+    responsibleDoctorName: _name,
+    accessRole: _role,
+    canBatch: _batch,
+    canArchive: _archive,
+    canRelease: _release,
+    canTransfer: _transfer,
+    batchDisabledReason: _reason,
+    ...snapshot
+  } = patient;
+  return snapshot;
 }
 export class SqlitePatientRepository implements PatientRepository {
   constructor(private readonly db: DatabaseSync) {}
@@ -111,6 +128,7 @@ export class SqlitePatientRepository implements PatientRepository {
         lastVisit: input.lastVisit ?? '',
         nextFollowUp: input.nextFollowUp ?? '',
         assignedDoctorId: context.actorId,
+        lifecycleStatus: 'active',
         version: 1,
       };
       this.db
@@ -152,7 +170,7 @@ export class SqlitePatientRepository implements PatientRepository {
         .run(context.actorId, requestKey, fingerprint, id, context.now);
       recordAudit(id);
       this.db.exec('COMMIT');
-      return { kind: 'created', patient: { ...snapshot, canEdit: true } };
+      return { kind: 'created', patient: this.archive(id, context)! };
     } catch (error) {
       this.db.exec('ROLLBACK');
       throw error;
@@ -192,7 +210,7 @@ export class SqlitePatientRepository implements PatientRepository {
     );
     const items = this.db
       .prepare(
-        'SELECT p.* FROM patients p WHERE ' +
+        `SELECT p.*,(SELECT display_name FROM identities WHERE id=p.assigned_doctor_id) responsible_name FROM patients p WHERE ` +
           where +
           ' ORDER BY ' +
           (query.groupBy ? groupColumn + ',' : '') +
@@ -202,9 +220,7 @@ export class SqlitePatientRepository implements PatientRepository {
       .map((row) => {
         const archive = this.archive(String(row.id), context)!;
         return {
-          ...map(row),
-          version: archive.version,
-          canEdit: archive.canEdit,
+          ...archive,
           ...(query.groupBy
             ? { groupKey: String(query.groupBy === 'disease' ? row.diagnosis : row.status) }
             : {}),
@@ -214,14 +230,18 @@ export class SqlitePatientRepository implements PatientRepository {
   }
   findById(id: string, context: RequestContext): Patient | undefined {
     const row = this.db
-      .prepare('SELECT p.* FROM patients p WHERE p.id=:id AND ' + patientScopeSql)
+      .prepare(
+        `SELECT p.*,(SELECT display_name FROM identities WHERE id=p.assigned_doctor_id) responsible_name FROM patients p WHERE p.id=:id AND ${patientScopeSql}`,
+      )
       .get({ ...context, id });
     return row ? map(row) : undefined;
   }
 
   archive(id: string, context: RequestContext): PatientArchive | undefined {
     const row = this.db
-      .prepare('SELECT p.* FROM patients p WHERE p.id=:id AND ' + patientScopeSql)
+      .prepare(
+        `SELECT p.*,(SELECT display_name FROM identities WHERE id=p.assigned_doctor_id) responsible_name FROM patients p WHERE p.id=:id AND ${patientScopeSql}`,
+      )
       .get({ ...context, id });
     if (!row) return undefined;
     const version = Number(
@@ -231,12 +251,36 @@ export class SqlitePatientRepository implements PatientRepository {
         )
         .get(id)!.version,
     );
+    const lifecycleStatus = String(
+      row.lifecycle_status ?? 'active',
+    ) as PatientArchive['lifecycleStatus'];
+    const responsible =
+      String(row.assigned_doctor_id) === context.actorId && lifecycleStatus !== 'released';
+    const canEdit = this.canEdit(id, context);
+    const reason =
+      lifecycleStatus === 'archived'
+        ? '患者已归档，不能批量修改状态。'
+        : lifecycleStatus === 'released'
+          ? '患者已解除管理，当前没有责任医生。'
+          : !responsible
+            ? '当前为协作只读权限，只有责任医生可以修改。'
+            : !canEdit
+              ? '当前账号缺少患者修改权限。'
+              : null;
     return {
       ...map(row),
       version,
       symptoms: JSON.parse(String(row.symptoms_json)),
       allergyStatus: row.allergy_status as PatientArchive['allergyStatus'],
-      canEdit: this.canEdit(id, context),
+      canEdit,
+      responsibleDoctorName: lifecycleStatus === 'released' ? null : String(row.responsible_name),
+      lifecycleStatus,
+      accessRole: responsible ? 'responsible' : 'collaborative-readonly',
+      canBatch: canEdit,
+      canArchive: canEdit,
+      canRelease: canEdit,
+      canTransfer: canEdit,
+      batchDisabledReason: reason,
     };
   }
 
@@ -244,13 +288,114 @@ export class SqlitePatientRepository implements PatientRepository {
     // Read-only temporary consultation access must never imply archive write access.
     return !!this.db
       .prepare(
-        `SELECT 1 FROM patients p WHERE p.id=:id AND p.assigned_doctor_id=:actorId
+        `SELECT 1 FROM patients p WHERE p.id=:id AND p.assigned_doctor_id=:actorId AND p.lifecycle_status='active'
       AND ${patientScopeSql} AND EXISTS (
         SELECT 1 FROM identity_roles ir JOIN role_permissions rp ON rp.role_id=ir.role_id
         WHERE ir.identity_id=:actorId AND rp.permission='patient:write'
       )`,
       )
       .get({ id, ...context });
+  }
+
+  transferTargets(context: RequestContext): TransferDoctor[] {
+    if (!this.canRegister(context)) return [];
+    return this.db
+      .prepare(
+        `SELECT i.id,i.display_name name,i.department FROM identities i JOIN doctors d ON d.identity_id=i.id
+      WHERE d.personnel_status='verified' AND i.id!=? ORDER BY i.display_name`,
+      )
+      .all(context.actorId)
+      .map((row) => ({
+        id: String(row.id),
+        name: String(row.name),
+        department: String(row.department),
+      }));
+  }
+
+  lifecycle(
+    id: string,
+    operation: 'archive' | 'release' | 'transfer',
+    input: PatientLifecycleRequest | TransferPatientRequest,
+    context: RequestContext,
+    recordAudit: () => void,
+  ) {
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      const current = this.archive(id, context);
+      if (!current) {
+        this.db.exec('ROLLBACK');
+        return { kind: 'not-found' as const };
+      }
+      if (!current.canEdit) {
+        this.db.exec('ROLLBACK');
+        return { kind: 'forbidden' as const };
+      }
+      if (current.version !== input.expectedVersion) {
+        this.db.exec('ROLLBACK');
+        return { kind: 'stale' as const, version: current.version };
+      }
+      const reason = input.changeReason.trim();
+      if (!reason) {
+        this.db.exec('ROLLBACK');
+        return { kind: 'invalid' as const };
+      }
+      let nextDoctor = current.assignedDoctorId;
+      let nextLifecycle: PatientArchive['lifecycleStatus'] =
+        operation === 'archive' ? 'archived' : operation === 'release' ? 'released' : 'active';
+      if (operation === 'transfer') {
+        const target = (input as TransferPatientRequest).newResponsibleDoctorId;
+        if (
+          target === context.actorId ||
+          !this.db
+            .prepare("SELECT 1 FROM doctors WHERE identity_id=? AND personnel_status='verified'")
+            .get(target)
+        ) {
+          this.db.exec('ROLLBACK');
+          return { kind: 'invalid-target' as const };
+        }
+        nextDoctor = target;
+      }
+      const nextVersion = current.version + 1;
+      this.db
+        .prepare('UPDATE patients SET assigned_doctor_id=?,lifecycle_status=? WHERE id=?')
+        .run(nextDoctor, nextLifecycle, id);
+      const nextSnapshot = {
+        ...snapshotOf(current),
+        assignedDoctorId: nextDoctor,
+        lifecycleStatus: nextLifecycle,
+        version: nextVersion,
+      };
+      this.db
+        .prepare('INSERT INTO patient_archive_versions VALUES(?,?,?,?,?,?,?)')
+        .run(
+          randomUUID(),
+          id,
+          nextVersion,
+          JSON.stringify(nextSnapshot),
+          context.actorId,
+          context.now,
+          reason,
+        );
+      this.db
+        .prepare('INSERT INTO patient_management_history VALUES(?,?,?,?,?,?,?,?,?)')
+        .run(
+          randomUUID(),
+          id,
+          operation,
+          current.assignedDoctorId,
+          operation === 'transfer' ? nextDoctor : null,
+          context.actorId,
+          reason,
+          context.now,
+          nextVersion,
+        );
+      recordAudit();
+      this.db.exec('COMMIT');
+      return { kind: 'saved' as const, version: nextVersion };
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
   }
 
   stats(context: RequestContext) {
@@ -346,12 +491,11 @@ export class SqlitePatientRepository implements PatientRepository {
         const {
           id,
           version,
-          canEdit: _canEdit,
           lastVisit: _lastVisit,
           nextFollowUp: _nextFollowUp,
           assignedDoctorId: _doctor,
           ...fields
-        } = originals[index]!;
+        } = snapshotOf(originals[index]!);
         const saved = this.updateInTransaction(
           id,
           version,
@@ -401,7 +545,7 @@ export class SqlitePatientRepository implements PatientRepository {
     ) {
       return { kind: 'unchanged' };
     }
-    const { canEdit: _canEdit, ...before } = current;
+    const before = snapshotOf(current);
     // Legacy seed versions were partial. Capture a labelled baseline without rewriting history.
     this.db
       .prepare('INSERT OR IGNORE INTO patient_archive_baselines VALUES(?,?,?,?)')
@@ -439,6 +583,6 @@ export class SqlitePatientRepository implements PatientRepository {
         changeReason,
       );
     recordAudit();
-    return { kind: 'saved', patient: { ...next, canEdit: true } };
+    return { kind: 'saved', patient: this.archive(id, context)! };
   }
 }

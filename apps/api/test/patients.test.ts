@@ -20,6 +20,14 @@ function input(
     lastVisit: _lastVisit,
     nextFollowUp: _nextFollowUp,
     assignedDoctorId: _doctor,
+    responsibleDoctorName: _responsibleName,
+    lifecycleStatus: _lifecycle,
+    accessRole: _accessRole,
+    canBatch: _canBatch,
+    canArchive: _canArchive,
+    canRelease: _canRelease,
+    canTransfer: _canTransfer,
+    batchDisabledReason: _batchReason,
     ...fields
   } = patient;
   return { ...fields, changeReason: 'Synthetic archive review', ...overrides };
@@ -181,6 +189,11 @@ test('batch stale, unavailable and temporary read-only patients block the entire
     assert.deepEqual((await app.inject('/api/v1/patients/PAT-001')).json().data, {
       ...before,
       canEdit: false,
+      canBatch: false,
+      canArchive: false,
+      canRelease: false,
+      canTransfer: false,
+      batchDisabledReason: '当前账号缺少患者修改权限。',
     });
     assert.equal(
       db

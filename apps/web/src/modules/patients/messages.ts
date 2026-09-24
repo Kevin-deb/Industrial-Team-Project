@@ -51,6 +51,38 @@ export const patientsMessages: Record<string, string> = {
   版本已更新: 'Version changed',
   患者不可访问: 'Patient unavailable',
   没有修改权限: 'No edit permission',
+  责任与权限: 'Responsibility & access',
+  责任医生: 'Responsible doctor',
+  协作只读: 'Collaborative read-only',
+  暂未分配: 'Unassigned',
+  管理中: 'Active management',
+  已归档: 'Archived',
+  已解除管理: 'Management released',
+  当前访问权限: 'Current access',
+  档案生命周期: 'Record lifecycle',
+  患者生命周期管理: 'Patient lifecycle management',
+  归档患者: 'Archive patient',
+  解除管理: 'Release management',
+  转交责任医生: 'Transfer responsibility',
+  新的责任医生: 'New responsible doctor',
+  请选择医生: 'Select a doctor',
+  操作原因: 'Reason for action',
+  确认操作: 'Confirm action',
+  '处理中…': 'Processing…',
+  '批量选择仅适用于您负责且处于管理中的患者；协作授权只能查看。':
+    'Batch selection is available only for actively managed patients you are responsible for. Collaborative access is read-only.',
+  '当前为协作只读权限，只有责任医生可以修改。':
+    'You have collaborative read-only access. Only the responsible doctor can make changes.',
+  '患者已归档，不能批量修改状态。': 'This patient is archived and cannot be batch updated.',
+  '患者已解除管理，当前没有责任医生。':
+    'Management has been released and no responsible doctor is assigned.',
+  '当前账号缺少患者修改权限。': 'Your account does not have patient write permission.',
+  '确认归档该患者？档案和历史记录仍会保留。':
+    'Archive this patient? The record and history will be retained.',
+  '确认解除管理？您可能无法继续查看该患者。':
+    'Release management? You may no longer be able to view this patient.',
+  '确认转交责任医生？转交后您可能无法继续查看该患者。':
+    'Transfer responsibility? You may no longer be able to view this patient.',
   未执行: 'Not applied',
   '修改原因不能为空，患者不能重复。':
     'A change reason is required and patients must not be repeated.',

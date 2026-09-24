@@ -27,6 +27,14 @@ const patient: PatientArchive = {
   symptoms: [],
   version: 1,
   canEdit: true,
+  responsibleDoctorName: '林知远',
+  lifecycleStatus: 'active',
+  accessRole: 'responsible',
+  canBatch: true,
+  canArchive: true,
+  canRelease: true,
+  canTransfer: true,
+  batchDisabledReason: null,
 };
 function response(data: unknown, extra = {}, etag = '"patient-v1"') {
   return new Response(
@@ -167,7 +175,16 @@ describe('Patients workflows', () => {
       return response(
         [
           { ...patient, groupKey: '高血压' },
-          { ...patient, id: 'PAT-002', canEdit: false, groupKey: '高血压' },
+          {
+            ...patient,
+            id: 'PAT-002',
+            canEdit: false,
+            canBatch: false,
+            accessRole: 'collaborative-readonly',
+            responsibleDoctorName: '周明',
+            batchDisabledReason: '当前为协作只读权限，只有责任医生可以修改。',
+            groupKey: '高血压',
+          },
         ],
         { total: 8, groups: [{ key: '高血压', count: 8 }] },
       );
@@ -183,6 +200,11 @@ describe('Patients workflows', () => {
     );
     await screen.findByText('匹配 8 位 · 本页 2 位');
     expect(screen.getByLabelText('选择患者 PAT-002')).toBeDisabled();
+    expect(screen.getByText('当前为协作只读权限，只有责任医生可以修改。')).toHaveAttribute(
+      'title',
+      '当前为协作只读权限，只有责任医生可以修改。',
+    );
+    expect(document.querySelectorAll('.patients-access-detail')).toHaveLength(2);
     fireEvent.click(screen.getByLabelText('全选当前页可编辑患者'));
     expect(screen.getByText('已选择 1 位患者')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '批量更新状态' }));

@@ -19,7 +19,7 @@ export const patientScopeSql = `
     SELECT 1 FROM identity_roles ir JOIN role_permissions rp ON rp.role_id=ir.role_id
     WHERE ir.identity_id=:actorId AND rp.permission='patient:read'
   ) AND (
-    p.assigned_doctor_id=:actorId OR EXISTS (
+    (p.assigned_doctor_id=:actorId AND COALESCE(p.lifecycle_status,'active')!='released') OR EXISTS (
       SELECT 1 FROM access_grants ag WHERE ag.identity_id=:actorId AND ag.patient_id=p.id
       AND ag.scope='patient:read' AND ag.revoked_at IS NULL
       AND (ag.expires_at IS NULL OR julianday(ag.expires_at)>julianday(:now))
