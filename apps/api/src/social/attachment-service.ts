@@ -26,9 +26,16 @@ export class AttachmentService {
     context: RequestContext,
   ): Promise<SocialAttachment> {
     this.assertEnabled(context);
+    let media: Awaited<ReturnType<typeof validateMedia>>;
+    try {
+      media = await validateMedia(content, claimedMediaType);
+    } catch (error) {
+      throw new SocialValidationFailure(
+        error instanceof Error && error.message ? error.message : '无法读取附件内容。',
+      );
+    }
     let storageKey: string | undefined;
     try {
-      const media = await validateMedia(content, claimedMediaType);
       storageKey = await this.storage.write(content, extensionForMedia(media.mediaType));
       const id = `ATTACHMENT-${randomUUID()}`;
       const item: SocialAttachmentRecord = {

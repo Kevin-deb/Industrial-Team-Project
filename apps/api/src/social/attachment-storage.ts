@@ -98,8 +98,15 @@ export async function validateMedia(
   }
   let duration: number | undefined;
   try {
-    const metadata = await parseBuffer(content, { mimeType: mediaType, size: content.byteLength });
-    duration = metadata.format.duration;
+    if (mediaType === 'audio/webm') {
+      duration = webmDurationMs(content) / 1000;
+    } else {
+      const metadata = await parseBuffer(content, {
+        mimeType: mediaType,
+        size: content.byteLength,
+      });
+      duration = metadata.format.duration;
+    }
   } catch {
     throw new Error('无法读取音频内容。');
   }
@@ -131,4 +138,90 @@ function matchesAudioSignature(content: Uint8Array, mediaType: string): boolean 
     );
   }
   return false;
+}
+
+function webmDurationMs(content: Uint8Array): number {
+  const bytes = Buffer.from(content.buffer, content.byteOffset, content.byteLength);
+  if (bytes.indexOf(Buffer.from('A_OPUS')) < 0) throw new Error('WebM does not contain Opus audio.');
+
+  const scaleElement = bytes.indexOf(Buffer.from([0x2a, 0xd7, 0xb1]));
+  let timecodeScale = 1_000_000;
+  if (scaleElement >= 0) {
+    const size = readEbmlVint(bytes, scaleElement + 3, true);
+    if (size && !size.unknown && size.value >= 1 && size.value <= 8) {
+      timecodeScale = readUnsigned(bytes, size.next, size.value);
+    }
+  }
+
+  const clusterId = Buffer.from([0x1f, 0x43, 0xb6, 0x75]);
+  let clusterAt = bytes.indexOf(clusterId);
+  let latestTicks = -1;
+  while (clusterAt >= 0) {
+    const size = readEbmlVint(bytes, clusterAt + clusterId.length, true);
+    if (!size) break;
+    const nextCluster = bytes.indexOf(clusterId, size.next);
+    const clusterEnd = size.unknown
+      ? nextCluster >= 0
+        ? nextCluster
+        : bytes.length
+      : Math.min(bytes.length, size.next + size.value);
+    let clusterTicks = 0;
+    let cursor = size.next;
+    while (cursor < clusterEnd) {
+      const id = readEbmlVint(bytes, cursor, false);
+      if (!id) break;
+      const elementSize = readEbmlVint(bytes, id.next, true);
+      if (!elementSize || elementSize.unknown) break;
+      const dataStart = elementSize.next;
+      const dataEnd = dataStart + elementSize.value;
+      if (dataEnd > clusterEnd) break;
+      if (id.value === 0xe7 && elementSize.value >= 1 && elementSize.value <= 8) {
+        clusterTicks = readUnsigned(bytes, dataStart, elementSize.value);
+        latestTicks = Math.max(latestTicks, clusterTicks);
+      } else if (id.value === 0xa3 && elementSize.value >= 4) {
+        const track = readEbmlVint(bytes, dataStart, true);
+        if (track && track.next + 2 <= dataEnd) {
+          const relativeTicks = bytes.readInt16BE(track.next);
+          latestTicks = Math.max(latestTicks, clusterTicks + relativeTicks);
+        }
+      }
+      cursor = dataEnd;
+    }
+    clusterAt = nextCluster;
+  }
+  if (latestTicks < 0 || !Number.isFinite(timecodeScale) || timecodeScale <= 0)
+    throw new Error('WebM duration is unavailable.');
+
+  // Chromium records Opus in 20 ms packets. The final block timestamp marks the
+  // packet start, so include one packet to report and enforce the full duration.
+  return (latestTicks * timecodeScale) / 1_000_000 + 20;
+}
+
+function readEbmlVint(
+  bytes: Buffer,
+  offset: number,
+  removeMarker: boolean,
+): { value: number; next: number; unknown: boolean } | undefined {
+  const first = bytes[offset];
+  if (first === undefined || first === 0) return undefined;
+  let length = 1;
+  let marker = 0x80;
+  while (length <= 8 && (first & marker) === 0) {
+    length += 1;
+    marker >>= 1;
+  }
+  if (length > 8 || offset + length > bytes.length) return undefined;
+  let value = BigInt(removeMarker ? first & (marker - 1) : first);
+  for (let index = 1; index < length; index += 1)
+    value = (value << 8n) | BigInt(bytes[offset + index]!);
+  const unknown = removeMarker && value === (1n << BigInt(7 * length)) - 1n;
+  if (unknown) return { value: 0, next: offset + length, unknown: true };
+  if (value > BigInt(Number.MAX_SAFE_INTEGER)) return undefined;
+  return { value: Number(value), next: offset + length, unknown };
+}
+
+function readUnsigned(bytes: Buffer, offset: number, length: number): number {
+  let value = 0;
+  for (let index = 0; index < length; index += 1) value = value * 256 + bytes[offset + index]!;
+  return value;
 }

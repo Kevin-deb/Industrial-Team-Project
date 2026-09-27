@@ -49,6 +49,19 @@ test('media validation measures WAV duration and enforces three minutes', async 
   await assert.rejects(validateMedia(createWav(181), 'audio/wav'), /音频不能超过 3 分钟/);
 });
 
+test('media validation accepts Chromium MediaRecorder WebM without duration metadata', async () => {
+  const short = createMediaRecorderWebM(1_180);
+  const audio = await validateMedia(short, 'audio/webm;codecs=opus');
+  assert.equal(audio.kind, 'audio');
+  assert.equal(audio.mediaType, 'audio/webm');
+  assert.ok(audio.durationMs && audio.durationMs >= 1_180 && audio.durationMs <= 1_220);
+
+  await assert.rejects(
+    validateMedia(createMediaRecorderWebM(181_000), 'audio/webm;codecs=opus'),
+    /音频不能超过 3 分钟/,
+  );
+});
+
 test('attachment HTTP API uploads, streams, ranges and deletes local media', async () => {
   const root = await mkdtemp(resolve(tmpdir(), 'carelink-attachment-api-'));
   const app = await createApp({ databasePath: resolve(root, 'carelink.db') });
@@ -102,6 +115,13 @@ test('attachment HTTP API uploads, streams, ranges and deletes local media', asy
     assert.equal(range.headers['content-length'], '16');
     assert.deepEqual(range.rawPayload, wav.subarray(0, 16));
 
+    const rejectedAudio = await upload(app, Buffer.from('not an audio recording'), 'audio/webm');
+    assert.equal(rejectedAudio.statusCode, 400);
+    assert.equal(
+      rejectedAudio.json().error.message,
+      '文件内容与声明格式不一致。',
+    );
+
     const removed = await app.inject({
       method: 'DELETE',
       url: `/api/v1/social/attachments/${image.id}`,
@@ -149,4 +169,33 @@ function createWav(durationSeconds: number) {
   buffer.write('data', 36);
   buffer.writeUInt32LE(dataLength, 40);
   return buffer;
+}
+
+function createMediaRecorderWebM(clusterTimeMs: number) {
+  const timecode = unsignedBytes(clusterTimeMs);
+  const clusterPayload = Buffer.concat([
+    Buffer.from([0xe7, 0x80 | timecode.length]),
+    timecode,
+    Buffer.from([0xa3, 0x86, 0x81, 0x00, 0x00, 0x80, 0x00, 0x00]),
+  ]);
+  return Buffer.concat([
+    Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 0x80]),
+    Buffer.from([0x86, 0x86]),
+    Buffer.from('A_OPUS'),
+    // Chromium MediaRecorder uses an unknown-sized cluster while recording.
+    Buffer.from([0x1f, 0x43, 0xb6, 0x75, 0x01, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]),
+    clusterPayload,
+  ]);
+}
+
+function unsignedBytes(value: number) {
+  if (value <= 0xff) return Buffer.from([value]);
+  if (value <= 0xffff) {
+    const bytes = Buffer.alloc(2);
+    bytes.writeUInt16BE(value);
+    return bytes;
+  }
+  const bytes = Buffer.alloc(3);
+  bytes.writeUIntBE(value, 0, 3);
+  return bytes;
 }
