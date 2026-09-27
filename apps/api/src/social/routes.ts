@@ -687,7 +687,7 @@ async function replySocial<T>(
         durationMs,
         400,
         'INVALID_SOCIAL_CONTENT',
-        '请检查内容、圈子成员身份或去标识化确认。',
+        error.message || '请检查内容、圈子成员身份或去标识化确认。',
       );
     throw error;
   }
