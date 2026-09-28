@@ -65,8 +65,12 @@ export const demoMessages: Record<string, string> = {
   慢病随访归档: 'Archived chronic care follow-up',
   老年心血管多学科会诊: 'Geriatric cardiovascular consultation',
   糖尿病综合健康评估: 'Comprehensive diabetes assessment',
+  糖尿病足风险联合会诊: 'Diabetic foot risk joint consultation',
+  术后康复联合评估: 'Postoperative rehabilitation joint evaluation',
   '心血管内科 · 全科医学': 'Cardiology · General medicine',
   '内分泌科 · 全科医学': 'Endocrinology · General medicine',
+  '康复医学科 · 骨科 · 全科医学': 'Rehabilitation · Orthopedics · General medicine',
+  '内分泌科 · 全科医学 · 护理管理': 'Endocrinology · General medicine · Nursing care',
   '展示会诊资料、专家协作与报告草稿的未来工作流程。':
     'Preview of case materials, expert collaboration and draft reports.',
   '申请、临时授权和专家确认将在后续迭代实现。':

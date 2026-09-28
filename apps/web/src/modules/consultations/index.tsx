@@ -627,14 +627,14 @@ function ConsultationRoom({
     if (!materials.length) return;
     const files = materials.map((material, index) => ({
       name: material.objectUrl
-        ? material.fileName || `${index + 1}-${material.title}`
+        ? material.fileName || `${index + 1}-${t(material.title)}`
         : `${String(index + 1).padStart(2, '0')}-${material.fileName.replace(/\.[^.]+$/, '')}.txt`,
       bytes: material.objectUrl
         ? dataUrlBytes(material.objectUrl)
         : textEncoder.encode(
             [
               `${t('会诊材料')}：${t(material.title)}`,
-              `${item.title} · ${item.patientName}`,
+              `${t(item.title)} · ${t(item.patientName)}`,
               '',
               t(material.description),
             ].join('\n'),
@@ -656,7 +656,7 @@ function ConsultationRoom({
       `${item.id}-${material.fileName.replace(/\.[^.]+$/, '')}.txt`,
       [
         `${t('会诊材料')}：${t(material.title)}`,
-        `${item.title} · ${item.patientName}`,
+        `${t(item.title)} · ${t(item.patientName)}`,
         '',
         t(material.description),
       ].join('\n'),
@@ -701,7 +701,7 @@ function ConsultationRoom({
         <div>
           <strong>{t(item.title)}</strong>
           <small>
-            {item.patientName} · {item.patientId} · {item.id}
+            {t(item.patientName)} · {item.patientId} · {item.id}
           </small>
         </div>
         <div className="encounter-room-header-meta">
@@ -760,7 +760,7 @@ function ConsultationRoom({
                   <button
                     type="button"
                     onClick={() => downloadMaterial(material)}
-                    aria-label={t('下载 {name}', { name: material.title })}
+                    aria-label={t('下载 {name}', { name: t(material.title) })}
                   >
                     <Download size={14} />
                   </button>
@@ -768,7 +768,7 @@ function ConsultationRoom({
                     type="button"
                     disabled={isFinished}
                     onClick={() => void deleteMaterial(material).catch(showRoomError)}
-                    aria-label={t('删除 {name}', { name: material.title })}
+                    aria-label={t('删除 {name}', { name: t(material.title) })}
                   >
                     <X size={14} />
                   </button>
@@ -1063,7 +1063,7 @@ export function ConsultationsPage() {
                   <span className="feature-eyebrow">{item.id}</span>
                   <h3>{t(item.title)}</h3>
                   <p>
-                    {item.patientName} · {item.patientId}
+                    {t(item.patientName)} · {item.patientId}
                     {item.direction && (
                       <Badge tone={item.direction === 'received' ? 'amber' : 'slate'}>
                         {t(item.direction === 'received' ? '收到的申请' : '我发起的')}
@@ -1071,7 +1071,7 @@ export function ConsultationsPage() {
                     )}
                   </p>
                   <div className="mdt-specialties">
-                    <span>{item.specialty}</span>
+                    <span>{t(item.specialty)}</span>
                     <span>{t('{count} 位参与医生', { count: item.participants.length })}</span>
                   </div>
                   <p className="feature-inline-icon">
@@ -1155,7 +1155,7 @@ export function ConsultationsPage() {
           </Badge>
           <DetailGrid
             items={[
-              { label: '患者', value: selected.patientName },
+              { label: '患者', value: t(selected.patientName) },
               { label: '会诊专科', value: selected.specialty },
               {
                 label: '计划时间',
@@ -1166,13 +1166,15 @@ export function ConsultationsPage() {
               },
               {
                 label: '参与医生',
-                value: selected.participants.join(language === 'en' ? ', ' : '、'),
+                value: selected.participants
+                  .map((participant) => t(participant))
+                  .join(language === 'en' ? ', ' : '、'),
               },
-              { label: '审核人', value: selected.reviewerName ?? '—' },
+              { label: '审核人', value: selected.reviewerName ? t(selected.reviewerName) : '—' },
             ]}
           />
           <h4 className="feature-small-heading">{t('会诊摘要')}</h4>
-          <p className="feature-prose">{selected.summary}</p>
+          <p className="feature-prose">{t(selected.summary)}</p>
           <div className="encounter-room-action consultation-detail-actions">
             {selected.canAccept && selected.status === 'requested' && (
               <Button

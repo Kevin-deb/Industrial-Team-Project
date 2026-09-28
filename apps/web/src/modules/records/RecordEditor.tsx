@@ -451,8 +451,8 @@ export function RecordEditor({ recordId, onClose, onSaved }: EditorProps) {
     orderTemplates?.find((item) => item.id === orderTemplateId) ?? orderTemplates?.[0];
   return (
     <FeatureDialog
-      title={record ? record.title : '新建电子病历'}
-      subtitle={record ? `${record.id} · v${record.version}.0` : '结构化病历草稿'}
+      title={record ? t(record.title) : t('新建电子病历')}
+      subtitle={record ? `${record.id} · v${record.version}.0` : t('结构化病历草稿')}
       onClose={closeSafely}
       wide
     >
@@ -480,7 +480,7 @@ export function RecordEditor({ recordId, onClose, onSaved }: EditorProps) {
                 <option value="">{t('请选择患者')}</option>
                 {(patients ?? []).map((patient) => (
                   <option key={patient.id} value={patient.id}>
-                    {patient.name} · {patient.id}
+                    {t(patient.name)} · {patient.id}
                   </option>
                 ))}
               </select>
@@ -498,7 +498,7 @@ export function RecordEditor({ recordId, onClose, onSaved }: EditorProps) {
                 <option value="">{t('不关联问诊')}</option>
                 {matchingEncounters.map((encounter) => (
                   <option key={encounter.id} value={encounter.id}>
-                    {encounter.id} · {encounter.reason}
+                    {encounter.id} · {t(encounter.reason)}
                   </option>
                 ))}
               </select>
@@ -516,7 +516,7 @@ export function RecordEditor({ recordId, onClose, onSaved }: EditorProps) {
                 <option value="">{t('请选择审核医师')}</option>
                 {(reviewers ?? []).map((reviewer) => (
                   <option key={reviewer.id} value={reviewer.id}>
-                    {reviewer.name} · {reviewer.department} · {reviewer.title}
+                    {t(reviewer.name)} · {t(reviewer.department)} · {t(reviewer.title)}
                   </option>
                 ))}
               </select>
@@ -550,7 +550,7 @@ export function RecordEditor({ recordId, onClose, onSaved }: EditorProps) {
               <input
                 aria-label={t('病历标题')}
                 maxLength={120}
-                value={form.title}
+                value={editable ? form.title : t(form.title)}
                 disabled={!editable}
                 onChange={(event) => setForm((value) => ({ ...value, title: event.target.value }))}
               />
@@ -560,7 +560,7 @@ export function RecordEditor({ recordId, onClose, onSaved }: EditorProps) {
               <input
                 aria-label={t('诊断')}
                 maxLength={200}
-                value={form.diagnosis}
+                value={editable ? form.diagnosis : t(form.diagnosis)}
                 disabled={!editable}
                 onChange={(event) =>
                   setForm((value) => ({ ...value, diagnosis: event.target.value }))
@@ -626,7 +626,7 @@ export function RecordEditor({ recordId, onClose, onSaved }: EditorProps) {
                   aria-label={t(field.labelKey)}
                   maxLength={field.maxLength}
                   rows={4}
-                  value={form.body[field.key] ?? ''}
+                  value={editable ? (form.body[field.key] ?? '') : t(form.body[field.key] ?? '')}
                   disabled={!editable}
                   onChange={(event) =>
                     setForm((value) => ({
@@ -644,7 +644,7 @@ export function RecordEditor({ recordId, onClose, onSaved }: EditorProps) {
               <p>
                 {t(record.latestReview.decision === 'approved' ? '已批准' : '已退回')}
                 {' · '}
-                {record.latestReview.reviewerName}
+                {t(record.latestReview.reviewerName)}
                 {' · v'}
                 {record.latestReview.recordVersion}
                 {' · '}
@@ -653,7 +653,7 @@ export function RecordEditor({ recordId, onClose, onSaved }: EditorProps) {
                   timeStyle: 'short',
                 })}
               </p>
-              {record.latestReview.comment && <p>{record.latestReview.comment}</p>}
+              {record.latestReview.comment && <p>{t(record.latestReview.comment)}</p>}
             </section>
           )}
           {versions.length > 0 && (
@@ -663,10 +663,10 @@ export function RecordEditor({ recordId, onClose, onSaved }: EditorProps) {
                 {versions.map((item) => (
                   <li key={item.version}>
                     <span>
-                      v{item.version}.0 · {item.authorName} ·{' '}
+                      v{item.version}.0 · {t(item.authorName)} ·{' '}
                       {formatDate(item.authoredAt, { dateStyle: 'medium', timeStyle: 'short' })}
                     </span>
-                    {item.amendmentReason ? <small>{item.amendmentReason}</small> : null}
+                    {item.amendmentReason ? <small>{t(item.amendmentReason)}</small> : null}
                   </li>
                 ))}
               </ol>
@@ -842,7 +842,7 @@ export function RecordEditor({ recordId, onClose, onSaved }: EditorProps) {
                   <option value="">{t('选择会诊')}</option>
                   {eligibleConsultations.map((item) => (
                     <option key={item.id} value={item.id}>
-                      {item.title} · {item.id}
+                      {t(item.title)} · {item.id}
                     </option>
                   ))}
                 </select>

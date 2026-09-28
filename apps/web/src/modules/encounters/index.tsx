@@ -265,7 +265,9 @@ function EncounterRecordDialog({
   } = useApi<MedicalRecordReviewerOption[]>('/record-reviewers');
   const [templateId, setTemplateId] = useState<MedicalRecordTemplateId>('outpatient');
   const [reviewerId, setReviewerId] = useState('');
-  const [title, setTitle] = useState(`${encounter.patientName}在线问诊病历`);
+  const [title, setTitle] = useState(() =>
+    t('{name}在线问诊病历', { name: t(encounter.patientName) }),
+  );
   const [diagnosis, setDiagnosis] = useState(encounter.reason);
   const [body, setBody] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -303,7 +305,7 @@ function EncounterRecordDialog({
         method: 'POST',
         body: JSON.stringify(payload),
       });
-      setNotice({ tone: 'success', text: `病历已保存：${saved.data.id}` });
+      setNotice({ tone: 'success', text: '病历已保存到电子病历。' });
       onSaved();
     } catch (reason) {
       setNotice({
@@ -318,13 +320,15 @@ function EncounterRecordDialog({
   return (
     <FeatureDialog
       title={t('开立电子病历')}
-      subtitle={`${encounter.patientName} · ${encounter.id}`}
+      subtitle={`${t(encounter.patientName)} · ${encounter.id}`}
       onClose={onClose}
       wide
     >
       {loading || reviewersLoading || error || reviewersError || !template ? (
         <LoadingState
-          error={error || reviewersError || (!loading && !reviewersLoading ? '无法加载病历模板' : null)}
+          error={
+            error || reviewersError || (!loading && !reviewersLoading ? '无法加载病历模板' : null)
+          }
         />
       ) : (
         <form
@@ -338,14 +342,14 @@ function EncounterRecordDialog({
             <label>
               <span>{t('患者')}</span>
               <input
-                value={`${encounter.patientName} · ${encounter.patientId}`}
+                value={`${t(encounter.patientName)} · ${encounter.patientId}`}
                 disabled
                 readOnly
               />
             </label>
             <label>
               <span>{t('关联问诊')}</span>
-              <input value={`${encounter.id} · ${encounter.reason}`} disabled readOnly />
+              <input value={`${encounter.id} · ${t(encounter.reason)}`} disabled readOnly />
             </label>
             <label>
               <span>{t('审核医师')}</span>
@@ -357,7 +361,7 @@ function EncounterRecordDialog({
                 <option value="">{t('请选择审核医师')}</option>
                 {(reviewers ?? []).map((reviewer) => (
                   <option key={reviewer.id} value={reviewer.id}>
-                    {reviewer.name} · {reviewer.department} · {reviewer.title}
+                    {t(reviewer.name)} · {t(reviewer.department)} · {t(reviewer.title)}
                   </option>
                 ))}
               </select>
@@ -645,8 +649,8 @@ function AppointmentManagementDialog({
   ).length;
   return (
     <FeatureDialog
-      title="预约管理"
-      subtitle="管理可接诊时段、排班容量、患者提醒与改期确认"
+      title={t('预约管理')}
+      subtitle={t('管理可接诊时段、排班容量、患者提醒与改期确认')}
       onClose={onClose}
       wide
     >
@@ -796,7 +800,7 @@ function AppointmentManagementDialog({
               return (
                 <article key={encounter.id}>
                   <div>
-                    <strong>{encounter.patientName}</strong>
+                    <strong>{t(encounter.patientName)}</strong>
                     <span>
                       {encounter.id} · {encounter.type === 'video' ? t('视频问诊') : t('图文问诊')}
                     </span>
@@ -827,7 +831,7 @@ function AppointmentManagementDialog({
                   .filter((item) => encounterDisplayStatus(item, nowMs) !== 'completed')
                   .map((encounter) => (
                     <option value={encounter.id} key={encounter.id}>
-                      {encounter.patientName} · {encounter.id}
+                      {t(encounter.patientName)} · {encounter.id}
                     </option>
                   ))}
               </select>
@@ -883,7 +887,7 @@ function AppointmentManagementDialog({
               <article key={notice.id}>
                 <div>
                   <strong>
-                    {notice.patientName} · {t(notice.kind)}
+                    {t(notice.patientName)} · {t(notice.kind)}
                   </strong>
                   <p>{t(notice.content)}</p>
                 </div>
@@ -1156,24 +1160,26 @@ function EncounterRoom({
         roomMessageFromApi(message, formatDate),
       );
       const content = [
-        `问诊编号：${encounter.id}`,
-        `患者：${encounter.patientName}（${encounter.patientId}）`,
-        `类型：${encounter.type === 'video' ? '视频接诊' : '图文接诊'}`,
-        `保存时间：${formatDate(record.savedAt, { dateStyle: 'medium', timeStyle: 'short' })}`,
-        `录音留存：${record.audioSaved ? '是' : '否'}`,
-        `录像留存：${record.videoSaved ? '是' : '否'}`,
-        '导出范围：患者摘要和已保存的文字消息；不包含图片、音频或视频文件。',
+        `${t('问诊编号')}：${encounter.id}`,
+        `${t('患者')}：${t(encounter.patientName)}（${encounter.patientId}）`,
+        `${t('类型')}：${t(encounter.type === 'video' ? '视频接诊' : '图文接诊')}`,
+        `${t('保存时间')}：${formatDate(record.savedAt, { dateStyle: 'medium', timeStyle: 'short' })}`,
+        `${t('录音留存')}：${t(record.audioSaved ? '是' : '否')}`,
+        `${t('录像留存')}：${t(record.videoSaved ? '是' : '否')}`,
+        t('导出范围：患者摘要和已保存的文字消息；不包含图片、音频或视频文件。'),
         '',
-        '患者信息',
-        `主诉：${savedBrief.chiefComplaint}`,
-        `现病史：${savedBrief.presentIllness}`,
-        `既往病史：${savedBrief.pastHistory}`,
-        `手术史：${savedBrief.surgicalHistory}`,
-        `用药史：${savedBrief.medicationHistory}`,
-        `过敏史：${savedBrief.allergyHistory}`,
+        t('患者信息'),
+        `${t('主诉')}：${t(savedBrief.chiefComplaint)}`,
+        `${t('现病史')}：${t(savedBrief.presentIllness)}`,
+        `${t('既往病史')}：${t(savedBrief.pastHistory)}`,
+        `${t('手术史')}：${t(savedBrief.surgicalHistory)}`,
+        `${t('用药史')}：${t(savedBrief.medicationHistory)}`,
+        `${t('过敏史')}：${t(savedBrief.allergyHistory)}`,
         '',
-        '沟通记录',
-        ...savedMessages.map((message) => `[${message.time}] ${message.sender}: ${message.body}`),
+        t('沟通记录'),
+        ...savedMessages.map(
+          (message) => `[${message.time}] ${t(message.sender)}: ${t(message.body)}`,
+        ),
       ].join('\n');
       const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
       const url = URL.createObjectURL(blob);
@@ -1197,9 +1203,9 @@ function EncounterRoom({
           <ArrowLeft size={19} />
         </button>
         <div className="feature-person">
-          <PersonAvatar name={encounter.patientName} />
+          <PersonAvatar name={t(encounter.patientName)} />
           <div>
-            <strong>{encounter.patientName}</strong>
+            <strong>{t(encounter.patientName)}</strong>
             <small>
               {encounter.patientId} · {encounter.id}
             </small>
@@ -1270,7 +1276,7 @@ function EncounterRoom({
             <section className="encounter-video-room">
               <div className="encounter-video-grid">
                 <div className="encounter-video-tile encounter-video-tile--patient">
-                  <PersonAvatar name={encounter.patientName} size="large" />
+                  <PersonAvatar name={t(encounter.patientName)} size="large" />
                   <span>
                     {t(isCompleted ? '问诊已结束，本机预览已关闭' : '远端患者连接尚未接入')}
                   </span>
@@ -1665,9 +1671,9 @@ export function EncountersPage() {
             {encounters.map((encounter, index) => (
               <article className="encounter-row" key={encounter.id}>
                 <div className="feature-person encounter-row-person">
-                  <PersonAvatar name={encounter.patientName} tone={index} />
+                  <PersonAvatar name={t(encounter.patientName)} tone={index} />
                   <div>
-                    <strong>{encounter.patientName}</strong>
+                    <strong>{t(encounter.patientName)}</strong>
                     <small>
                       {encounter.patientId} · {encounter.id}
                     </small>
@@ -1713,9 +1719,9 @@ export function EncountersPage() {
           onClose={close}
         >
           <div className="feature-person-header">
-            <PersonAvatar name={selected.patientName} size="large" />
+            <PersonAvatar name={t(selected.patientName)} size="large" />
             <div>
-              <h3>{selected.patientName}</h3>
+              <h3>{t(selected.patientName)}</h3>
               <p>{selected.patientId}</p>
             </div>
             {(() => {

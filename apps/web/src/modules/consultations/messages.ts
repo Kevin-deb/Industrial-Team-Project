@@ -10,7 +10,11 @@ export const consultationsMessages: Record<string, string> = {
   发起会诊: 'Request consultation',
   填写会诊申请: 'Fill consultation request',
   患者姓名: 'Patient name',
+  搜索患者姓名: 'Search patient name',
   患者编号: 'Patient ID',
+  搜索患者编号: 'Search patient ID',
+  正在加载患者: 'Loading patients',
+  没有匹配的患者: 'No matching patients',
   会诊标题: 'Consultation title',
   '上传患者病历、影像等资料': 'Upload records, images, and related materials',
   门诊病历摘要: 'Outpatient record summary',
@@ -48,10 +52,15 @@ export const consultationsMessages: Record<string, string> = {
   赵雅琴: 'Zhao Yaqin',
   术后康复联合评估: 'Postoperative rehabilitation joint evaluation',
   '康复医学科 · 骨科 · 全科医学': 'Rehabilitation · Orthopedics · General medicine',
+  '内分泌科 · 全科医学 · 护理管理': 'Endocrinology · General medicine · Nursing care',
+  全科医学: 'General medicine',
+  护理管理: 'Nursing care',
   康复医学科王医生: 'Dr. Wang, Rehabilitation',
   骨科周医生: 'Dr. Zhou, Orthopedics',
   '其他医生发来的会诊申请，需要确认是否参与并查看患者资料。':
     'A consultation request from another doctor. Confirm participation and review patient materials.',
+  '其他医生邀请当前医生参与糖尿病足风险评估，需要查看资料后确认是否参会。':
+    'Another doctor invited the current doctor to join a diabetic foot risk assessment. Review the materials before confirming participation.',
   此状态下暂无会诊: 'No consultations with this status',
   '查看其他分类，或浏览下方的会诊流程规划。':
     'Select another status or explore the planned workflow below.',
@@ -77,6 +86,16 @@ export const consultationsMessages: Record<string, string> = {
   病情摘要: 'Case summary',
   检查结果: 'Investigation results',
   用药记录: 'Medication records',
+  '术后康复会诊病情摘要。': 'Case summary for the postoperative rehabilitation consultation.',
+  '影像与实验室检查摘要。': 'Imaging and laboratory summary.',
+  '围术期及当前用药记录。': 'Perioperative and current medication record.',
+  足部照片摘要: 'Foot photo summary',
+  '患者足部皮肤状态与破溃风险摘要。': 'Summary of foot skin condition and ulceration risk.',
+  血糖波动记录: 'Glucose fluctuation record',
+  '近两周空腹及餐后血糖波动。':
+    'Fasting and postprandial glucose fluctuations over the past two weeks.',
+  护理评估表: 'Nursing assessment form',
+  '居家足部护理执行情况。': 'Home foot-care implementation.',
   '按会诊任务共享必要材料，附件访问单独授权。':
     'Share necessary materials for each consultation, with separate attachment authorization.',
   临时访问授权: 'Temporary access',
@@ -140,12 +159,18 @@ export const consultationsMessages: Record<string, string> = {
     'Review recent indicators and current medication before forming a joint opinion.',
   '已打开本次会诊材料，等待各专科补充意见。':
     'The consultation materials are open. Waiting for each specialty to add comments.',
+  '已提交术后康复资料，请全科协助评估随访计划。':
+    'Postoperative rehabilitation materials submitted. Please help assess the follow-up plan.',
+  '患者近期足部麻木加重，邀请全科一起评估综合干预方案。':
+    'The patient’s foot numbness has recently worsened. Inviting general medicine to assess a combined intervention plan.',
+  '报告已生成，可下载查看完整内容': 'Report generated. Download to view the full content.',
   进入视频会议: 'Join video meeting',
   发送讨论消息: 'Send discussion message',
   导出会诊材料: 'Export materials',
   下载材料: 'Download materials',
   下载全部材料: 'Download all materials',
   '下载 {name}': 'Download {name}',
+  '删除 {name}': 'Delete {name}',
   下载报告: 'Download report',
   上传资料: 'Upload materials',
   输入会诊讨论意见: 'Enter discussion comment',

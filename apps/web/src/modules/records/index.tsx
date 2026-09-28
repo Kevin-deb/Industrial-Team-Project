@@ -151,13 +151,13 @@ export function RecordsPage() {
                                   <FileText size={17} />
                                 </span>
                                 <div>
-                                  <strong>{record.title}</strong>
+                                  <strong>{t(record.title)}</strong>
                                   <small>{record.id}</small>
                                 </div>
                               </div>
                             </td>
-                            <td>{record.patientName}</td>
-                            <td>{record.reviewerName ?? t('未指定')}</td>
+                            <td>{t(record.patientName)}</td>
+                            <td>{record.reviewerName ? t(record.reviewerName) : t('未指定')}</td>
                             <td>
                               {formatDate(record.updatedAt, {
                                 dateStyle: 'medium',
