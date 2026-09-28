@@ -1,8 +1,8 @@
 # API Conventions and Module Contracts
 
-The desktop renderer and embedded API share the `@doctor/contracts` package. Each feature owner implements against this boundary rather than importing another module's internals. This guide distinguishes the implemented local E workflows and structured medical-record drafts from the other domains' read-only demonstrations and future writes.
+The desktop renderer and embedded API share the `@doctor/contracts` package. Each feature owner implements against this boundary rather than importing another module's internals. The current local demo includes real session authentication and persisted workflows across the owned domains.
 
-All application routes start with `/api/v1`. In the installed desktop application, renderer requests use `carelink://app/api/v1/...`; the private protocol dispatches to Fastify through `app.inject` without opening an HTTP listener. The optional `npm run dev:web` environment exposes the same routes on a loopback HTTP server. Requests and responses use JSON unless an upload/download contract explicitly states otherwise. The current application uses a fixed synthetic doctor, synthetic records and a fixed demonstration date. It does not implement a real login. Structured medical-record drafts and E health/community changes persist only in the local demo database; they are not production clinical operations or external deliveries.
+All application routes start with `/api/v1`. In the installed desktop application, renderer requests use `carelink://app/api/v1/...`; the private protocol dispatches to Fastify through `app.inject` without opening an HTTP listener. The optional `npm run dev:web` environment exposes the same routes on a loopback HTTP server. Requests and responses use JSON unless an upload/download contract explicitly states otherwise. Runtime requests use an authenticated synthetic clinician session; caller-supplied actor IDs do not establish identity. Password, test-email and demonstration-photo login are independent flows. Production clinical deployment and real external providers remain outside this local demonstration.
 
 The private protocol accepts only the application origin and validates asset paths, request size and supported operations. Application-level errors keep the JSON envelope below. A transport-level rejection, such as an invalid protocol origin or oversized request, may return a safe plain-text error before Fastify runs; the renderer must handle a non-JSON failure gracefully.
 
@@ -12,12 +12,12 @@ The current desktop header allowlist forwards `Accept`, `Content-Type`, `Accept-
 
 | Method and path                             | Owner                         | Response data                       | Current behavior                                                                                            |
 | ------------------------------------------- | ----------------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `POST /api/v1/auth/password-login`          | A                             | authenticated session               | Password is an independent login method with lockout and a revocable 12-hour session                         |
-| `POST /api/v1/auth/email-login/start`       | A                             | email challenge                     | Sends a single-use, expiring code to the verified account email                                              |
-| `POST /api/v1/auth/email-login/complete`    | A                             | authenticated session               | Email code is an independent login method and creates a revocable 12-hour session                            |
-| `/api/v1/auth/photo-login...`               | A                             | authenticated session               | Demo face/photo is an independent login method; no real matching or liveness detection is claimed            |
-| `POST /api/v1/auth/logout`                  | A                             | revocation result                   | Revokes the current Bearer session                                                                            |
-| `/api/v1/auth/password/...`                 | A                             | password challenge/result           | Change and recovery use email or demo-photo verification and revoke existing sessions                        |
+| `POST /api/v1/auth/password-login`          | A                             | authenticated session               | Password is an independent login method with lockout and a revocable 12-hour session                        |
+| `POST /api/v1/auth/email-login/start`       | A                             | email challenge                     | Sends a single-use, expiring code to the verified account email                                             |
+| `POST /api/v1/auth/email-login/complete`    | A                             | authenticated session               | Email code is an independent login method and creates a revocable 12-hour session                           |
+| `/api/v1/auth/photo-login...`               | A                             | authenticated session               | Demo face/photo is an independent login method; no real matching or liveness detection is claimed           |
+| `POST /api/v1/auth/logout`                  | A                             | revocation result                   | Revokes the current Bearer session                                                                          |
+| `/api/v1/auth/password/...`                 | A                             | password challenge/result           | Change and recovery use email or demo-photo verification and revoke existing sessions                       |
 | `GET /api/v1/session`                       | A                             | `Session`                           | Returns the authenticated clinician, verified profile fields, roles, mode, date and disclaimer              |
 | `GET /api/v1/dashboard`                     | A, composing domain summaries | `Dashboard`                         | Synthetic workload counts, schedule, patient previews, health alerts and activity                           |
 | `GET /api/v1/patients`                      | B                             | `Patient[]`                         | Scoped search/filter/pagination; page metadata is outside `data`                                            |
@@ -274,3 +274,23 @@ A contract change is ready when the producer and affected consumer owners agree 
 Run `npm run check` for boundary checks, type checking, API tests and builds. Run `npm run test:desktop` on Windows for native Electron integration changes; verify both languages and persisted preferences. `npm run test:e2e` remains supplemental browser-development validation. The initial tests should cover response envelopes, scoped reads, query validation, repeatable database initialization and all reserved write handlers. As features are enabled, add the iteration's real authorization, state transition, conflict, idempotency and provider-failure tests.
 
 See [Architecture](ARCHITECTURE.md) for workflow and data ownership, [Team workflow](TEAM_WORKFLOW.md) for review responsibilities, and [Requirements traceability](REQUIREMENTS_TRACEABILITY.md) for implementation status.
+
+## Member A additions (2026-09-28)
+
+The following current contracts supersede early framework-only examples in this guide. All use the validated session identity, never a caller-supplied doctor ID.
+
+| Endpoint                        | Contract                                                                                                                             |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| GET/PUT /settings/profile       | Current doctor's phone, specialty, outpatientLocation and bio; identity/email/credentials are read-only                              |
+| GET/PUT /settings/notifications | encounter, followUp, browser, quietHours, quietStart, quietEnd                                                                       |
+| GET /audit                      | Scoped server filtering (q, action, domain, outcome, from, to), page/pageSize; data remains an array, totals/summary/domains in meta |
+| GET /audit/export               | Same matching filters; authenticated CSV with BOM and formula escaping; 50,000-row cap, explicit 413 on overflow                     |
+| GET /notifications              | Current preferences, quietNow, eligible encounters, filtered doctor reminders and patient-scope local inbox                          |
+
+Photo routes share MAX_PHOTO_BYTES (2 MiB decoded) and PHOTO_REQUEST_BODY_BYTES from contracts. Only the three photo-bearing desktop POST endpoints get the expanded Base64 envelope allowance; ordinary desktop JSON keeps the 1 MiB limit.
+
+Consultation access requires both patient scope and current task membership; left_at members are excluded. Temporary access expires four hours after the planned start and is revoked on completion. Only the responsible doctor can create a consultation; only its requester or designated active reviewer can complete it. Completion/report/grant revocation are atomic.
+
+Local reminders use a durable inbox adapter injected at composition. No external patient delivery is claimed. Browser realtime uses the carelink and bearer.<token> WebSocket subprotocols at /social/events; tokens are not placed in URLs. Real sessions are revalidated and revoked connections closed.
+
+See [settings](handoffs/A-settings.md), [audit](handoffs/A-audit.md), [A/C](handoffs/A-C-consultation-access.md) and [A/E](handoffs/A-E-demo-notifications.md) for fields, failure paths, tests and ownership.

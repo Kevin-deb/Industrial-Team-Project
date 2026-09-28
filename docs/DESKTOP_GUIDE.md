@@ -1,6 +1,6 @@
 # CareLink Windows Desktop Guide
 
-CareLink 0.2.0 is the installable Windows desktop framework for the doctor service system. It displays fictional records and planned clinical features. This guide separates the installation steps for users from source-build steps for developers.
+The current source implements authenticated local doctor workflows with synthetic records. For the 2026-09-29 demonstration, build the current checkout and follow [the demonstration guide](DEMO_RUNBOOK_MEMBER_A.md). The v0.2.0 installer instructions below describe a historical artifact and do not include the 2026-09-28 changes.
 
 ## Install and open
 
@@ -23,7 +23,7 @@ Navigation, headings, actions, planned-function dialogs, settings, visible statu
 
 The installed demonstration keeps assets, fonts, synthetic data and its application runtime locally. Browsing its existing data does not require internet access. There is no external browser launch, localhost address or independently started server in the desktop workflow.
 
-Future email/SMS identity verification, hospital/device exchange, video, recording storage and notification delivery need approved network providers. Their ports are reserved, and the current framework does not contact them. A network-dependent feature must expose connection, retry and failure state when implemented.
+Password login, local test email codes and scheduled patient test-inbox delivery work locally. SMTP is used only when explicitly configured. SMS gateways, biometric matching, hospital/device exchange, two-party video and recording/playback remain external or unfinished work. Local test inbox delivery is not internet delivery.
 
 ## Local data and preferences
 
@@ -33,7 +33,7 @@ A source checkout's optional browser-development database is a different environ
 
 Application data is intended to survive an ordinary uninstall/reinstall. Do not assume uninstalling is a secure data-erasure procedure. If a complete reset is required, close the application first, identify its actual profile directory and retain any needed backup before removing that exact directory. Deleting a profile also removes saved preferences and the local database. The current release contains demonstration data only; live-data backup, retention and erasure procedures must be designed before clinical use.
 
-For a manual demonstration backup, fully close the application and copy its entire data directory, including any SQLite companion files. A verified operational backup/restore workflow remains a later iteration requirement. Do not modify database files while the application is running.
+For a verified backup, close CareLink and use `npm run profile:backup -- --profile PATH --output NEW_PATH`, then `profile:verify`. Restore with `profile:restore` into a separate empty directory. The tools use a consistent SQLite snapshot, include community media, and verify checksums, foreign keys and attachment references. See [the recovery handoff](handoffs/A-desktop-and-recovery.md). `CARELINK_PROFILE_PATH` selects an absolute independent profile path for normal desktop use.
 
 ## Build from source on Windows
 

@@ -1,5 +1,17 @@
 # CareLink Desktop Delivery Status
 
+## Current source: member A local demonstration delivery (28 September 2026)
+
+The source now provides independent password, test-email and demonstration-photo sign-in; scoped patient/business workflows; persistent per-doctor settings; server-side audit queries and CSV export; and scheduled delivery into a local patient test inbox. Consultation scope, completion and real-time session boundaries have been hardened.
+
+The authoritative current result is the [member A implementation record](MEMBER_A_IMPLEMENTATION_2026-09-28.md), with reproducible commands, exact tests, three-minute load measurements, migrations 33–37, and remaining work. Use the [demonstration runbook](DEMO_RUNBOOK_MEMBER_A.md) to prepare a separate profile and the [handoff documents](handoffs/A-desktop-and-recovery.md) for recovery.
+
+The existing GitHub v0.2.0 installer is historical and is not updated by pushing source. Build the current checkout. Local photo capture is not biometrics; patient SMS/email stays in the local test inbox; two-party video and recording/playback remain unfinished.
+
+## Historical baseline records
+
+The sections below describe earlier snapshots and their historical verification, not the current completion status. In particular, early statements about sequential login, fixed identity or read-only clinical workflows have been superseded above.
+
 ## Local authentication foundation (21 September 2026)
 
 The current branch adds five verified synthetic clinician accounts, ten synthetic patients and explicit clinician-patient grants. Login requires a password, an expiring single-use work-email code and a demonstration camera/upload photo step. Session tokens are opaque, stored only as hashes, expire after 12 hours and are revoked on logout. Runtime API calls, desktop protocol requests and realtime subscriptions all derive the actor from the validated session; caller-supplied actor headers are ignored.
@@ -10,18 +22,18 @@ CareLink 0.2.0 targets an installable Windows doctor application with an immedia
 
 ## Framework implementation
 
-| Area                      | Implemented design and current scope                                                                                                           |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| Windows application       | Electron main process, sandboxed renderer, bundled local assets and embedded Fastify services; NSIS and unpacked Windows x64 packaging         |
-| Internal transport        | `carelink://app/` serves local assets; `/api/v1` calls Fastify through `app.inject`; desktop mode opens no HTTP listener                       |
-| Languages                 | `zh-CN` default and `en` option; shared top-bar/Settings preference, domain message catalogs and locale-aware presentation                     |
-| Workspace                 | Dashboard and eight domain pages: patients, encounters, records, expert consultations, health, audit, community preview and settings           |
-| Patient/clinical previews | Search, filters, read-only details, schedules, records/review summaries, health trends and care-plan examples using fictional data             |
-| Audit                     | Seed events and local patient-list/detail access events filtered to the synthetic doctor                                                       |
+| Area                      | Implemented design and current scope                                                                                                                          |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Windows application       | Electron main process, sandboxed renderer, bundled local assets and embedded Fastify services; NSIS and unpacked Windows x64 packaging                        |
+| Internal transport        | `carelink://app/` serves local assets; `/api/v1` calls Fastify through `app.inject`; desktop mode opens no HTTP listener                                      |
+| Languages                 | `zh-CN` default and `en` option; shared top-bar/Settings preference, domain message catalogs and locale-aware presentation                                    |
+| Workspace                 | Dashboard and eight domain pages: patients, encounters, records, expert consultations, health, audit, community preview and settings                          |
+| Patient/clinical previews | Search, filters, read-only details, schedules, records/review summaries, health trends and care-plan examples using fictional data                            |
+| Audit                     | Seed events and local patient-list/detail access events filtered to the synthetic doctor                                                                      |
 | Preferences               | Language and community-entry visibility persist in the application profile; E community data and realtime notifications run locally without external delivery |
-| Service boundary          | Eleven read routes and 39 explicit reserved commands; reserved commands return `501 FEATURE_NOT_IMPLEMENTED`, unknown paths return `404`       |
-| Persistence               | Six domain migrations, relational constraints and synthetic seeding; installed data at `%APPDATA%\CareLink Doctor\data\doctor.sqlite`          |
-| Team separation           | Owned renderer pages/catalogs, backend commands/repositories/migrations, shared DTOs and external-provider ports                               |
+| Service boundary          | Eleven read routes and 39 explicit reserved commands; reserved commands return `501 FEATURE_NOT_IMPLEMENTED`, unknown paths return `404`                      |
+| Persistence               | Six domain migrations, relational constraints and synthetic seeding; installed data at `%APPDATA%\CareLink Doctor\data\doctor.sqlite`                         |
+| Team separation           | Owned renderer pages/catalogs, backend commands/repositories/migrations, shared DTOs and external-provider ports                                              |
 
 The fixed demonstration date is 10 September 2026. Displayed clinicians, patients, identity fields, clinical values and workload examples are fictional. Local audit timestamps reflect demo requests. Local authentication and scope enforcement are implemented, but they are not a production hospital identity proofing service. A desktop package does not connect external providers.
 
@@ -45,13 +57,13 @@ The English and Chinese architecture presentations have been revised to v3 under
 
 ## Future clinical delivery
 
-| Iteration   | Reserved functionality                                                                                                   |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------ |
-| 1           | Production identity-provider/email integration, persistent patient edits, text encounters and record drafts              |
-| 2           | Senior review/archive, independent orders, export jobs, care plans/assessments and reminders through a test provider     |
-| 3           | Images/media, policy-controlled recording, expert consultation, temporary access and confirmed reports                   |
-| 4           | Live data/notification providers, operational monitoring, backup/restore, performance and release hardening              |
-| 5, optional | Isolated professional groups, manually de-identified posts, interaction, reporting and server-side social opt-out        |
+| Iteration   | Reserved functionality                                                                                               |
+| ----------- | -------------------------------------------------------------------------------------------------------------------- |
+| 1           | Production identity-provider/email integration, persistent patient edits, text encounters and record drafts          |
+| 2           | Senior review/archive, independent orders, export jobs, care plans/assessments and reminders through a test provider |
+| 3           | Images/media, policy-controlled recording, expert consultation, temporary access and confirmed reports               |
+| 4           | Live data/notification providers, operational monitoring, backup/restore, performance and release hardening          |
+| 5, optional | Isolated professional groups, manually de-identified posts, interaction, reporting and server-side social opt-out    |
 
 Every new feature must preserve both interface languages. Tables and provider interfaces reserve future behavior without implementing it. No external hospital identity, email, biometric, device, RTC, recording, storage or messaging provider is configured.
 

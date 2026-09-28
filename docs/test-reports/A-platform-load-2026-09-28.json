@@ -1,0 +1,180 @@
+{
+  "createdAt": "2026-09-28T08:15:11.082Z",
+  "commit": "ec128bb7509a33b1e7905d61593664d581b1e8a2",
+  "dirtyWorkspace": true,
+  "methodology": {
+    "transport": "Fastify app.inject in one Node.js process; no HTTP listener",
+    "storage": "isolated in-memory SQLite; no daily profile",
+    "authentication": "one real password-login session",
+    "workload": "80% patient pagination, 15% scoped audit pagination, 5% profile writes",
+    "pacingMillisecondsPerWorker": 20,
+    "concurrencyStages": [1, 5, 10],
+    "secondsPerStage": 60,
+    "limitations": "Paced local service verification. Not maximum throughput, desktop UI timing, durable-disk throughput, or hospital multi-user capacity. Clinical concurrent-version behavior is covered by separate functional tests.",
+    "proposedDemoReadP95LimitMs": 500
+  },
+  "machine": {
+    "os": "win32",
+    "osRelease": "10.0.26200",
+    "architecture": "x64",
+    "cpu": "13th Gen Intel(R) Core(TM) i7-13620H",
+    "logicalCpus": 16,
+    "totalMemoryBytes": 16858472448,
+    "node": "v24.14.0"
+  },
+  "initialData": {
+    "patients": 1000,
+    "auditEvents": 10000
+  },
+  "stages": [
+    {
+      "concurrency": 1,
+      "requestedSeconds": 60,
+      "elapsedSeconds": 60,
+      "requests": 1255,
+      "reads": 1192,
+      "writes": 63,
+      "successfulWrites": 63,
+      "unexpectedErrors": 0,
+      "errors": [],
+      "statuses": {
+        "200": 1255
+      },
+      "completedRequestsPerSecond": 20.92,
+      "latencyMs": {
+        "p50": 19.59,
+        "p95": 30.99,
+        "max": 64.28
+      },
+      "readLatencyMs": {
+        "p50": 19.89,
+        "p95": 31.13
+      },
+      "writeLatencyMs": {
+        "p50": 2.54,
+        "p95": 5.81
+      },
+      "memoryBytes": {
+        "rssStart": 144076800,
+        "rssPeakSampled": 349630464,
+        "rssEnd": 303337472,
+        "heapUsedEnd": 66093728
+      },
+      "cpuMilliseconds": {
+        "user": 19453,
+        "system": 1391
+      },
+      "persistence": {
+        "persistedProfileMatchesSuccessfulWrite": true,
+        "persistedWriteAuditCount": 63,
+        "expectedWriteAuditCount": 63,
+        "allWritesAudited": true
+      },
+      "dataAfterStage": {
+        "patients": 1000,
+        "auditEvents": 11067
+      },
+      "proposedDemoGatePassed": true
+    },
+    {
+      "concurrency": 5,
+      "requestedSeconds": 60,
+      "elapsedSeconds": 60.04,
+      "requests": 3029,
+      "reads": 2877,
+      "writes": 152,
+      "successfulWrites": 152,
+      "unexpectedErrors": 0,
+      "errors": [],
+      "statuses": {
+        "200": 3029
+      },
+      "completedRequestsPerSecond": 50.45,
+      "latencyMs": {
+        "p50": 19.01,
+        "p95": 31.2,
+        "max": 140.29
+      },
+      "readLatencyMs": {
+        "p50": 19.04,
+        "p95": 29.94
+      },
+      "writeLatencyMs": {
+        "p50": 17.59,
+        "p95": 50.19
+      },
+      "memoryBytes": {
+        "rssStart": 303341568,
+        "rssPeakSampled": 424681472,
+        "rssEnd": 424706048,
+        "heapUsedEnd": 98880912
+      },
+      "cpuMilliseconds": {
+        "user": 43859,
+        "system": 2375
+      },
+      "persistence": {
+        "persistedProfileMatchesSuccessfulWrite": true,
+        "persistedWriteAuditCount": 215,
+        "expectedWriteAuditCount": 215,
+        "allWritesAudited": true
+      },
+      "dataAfterStage": {
+        "patients": 1000,
+        "auditEvents": 13640
+      },
+      "proposedDemoGatePassed": true
+    },
+    {
+      "concurrency": 10,
+      "requestedSeconds": 60,
+      "elapsedSeconds": 60.04,
+      "requests": 2950,
+      "reads": 2803,
+      "writes": 147,
+      "successfulWrites": 147,
+      "unexpectedErrors": 0,
+      "errors": [],
+      "statuses": {
+        "200": 2950
+      },
+      "completedRequestsPerSecond": 49.13,
+      "latencyMs": {
+        "p50": 19.55,
+        "p95": 38.47,
+        "max": 229.6
+      },
+      "readLatencyMs": {
+        "p50": 19.38,
+        "p95": 30.1
+      },
+      "writeLatencyMs": {
+        "p50": 70.38,
+        "p95": 159.26
+      },
+      "memoryBytes": {
+        "rssStart": 424812544,
+        "rssPeakSampled": 452190208,
+        "rssEnd": 394248192,
+        "heapUsedEnd": 54753280
+      },
+      "cpuMilliseconds": {
+        "user": 43719,
+        "system": 1625
+      },
+      "persistence": {
+        "persistedProfileMatchesSuccessfulWrite": true,
+        "persistedWriteAuditCount": 362,
+        "expectedWriteAuditCount": 362,
+        "allWritesAudited": true
+      },
+      "dataAfterStage": {
+        "patients": 1000,
+        "auditEvents": 16149
+      },
+      "proposedDemoGatePassed": true
+    }
+  ],
+  "foreignKeyViolations": 0,
+  "allStagesPassed": true
+}
