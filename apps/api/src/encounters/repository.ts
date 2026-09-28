@@ -29,14 +29,12 @@ const consultationDirectAccessSql = () =>
   `${consultationMemberSql} AND (
     c.status='requested' OR (
       julianday(c.scheduled_at)<=julianday(:now)
-      AND julianday(c.scheduled_at,'+4 hours')>julianday(:now)
     )
   )`;
 const consultationRoomAccessSql = () =>
   `${consultationMemberSql}
    AND c.status='scheduled'
    AND julianday(c.scheduled_at)<=julianday(:now)
-   AND julianday(c.scheduled_at,'+4 hours')>julianday(:now)
    AND (
      c.requested_by=:actorId OR EXISTS (
        SELECT 1 FROM consultation_participants room_participant

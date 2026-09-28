@@ -61,12 +61,7 @@ function canEnterConsultation(item: Consultation) {
   const start = Date.parse(item.scheduledAt);
   if (!Number.isFinite(start)) return false;
   const now = Date.now();
-  return (
-    item.status === 'scheduled' &&
-    !item.canConfirm &&
-    start <= now &&
-    now < start + 4 * 60 * 60 * 1000
-  );
+  return item.status === 'scheduled' && !item.canConfirm && start <= now;
 }
 
 type DraftMaterial = {
@@ -111,6 +106,23 @@ function arrayBufferFromBytes(bytes: Uint8Array) {
   const buffer = new ArrayBuffer(bytes.byteLength);
   new Uint8Array(buffer).set(bytes);
   return buffer;
+}
+
+function splitFileName(filename: string) {
+  const match = /^(.*?)(\.[^.]*)?$/.exec(filename);
+  return { base: match?.[1] || filename, extension: match?.[2] || '' };
+}
+
+function hasChinese(value: string) {
+  return /[\u3400-\u9fff]/.test(value);
+}
+
+function asciiSlug(value: string) {
+  return value
+    .normalize('NFKD')
+    .replace(/[^\w.-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase();
 }
 
 function readFileAsDataUrl(file: File) {
@@ -494,7 +506,7 @@ function ConsultationRoom({
   onBack: () => void;
   onChanged: () => void;
 }) {
-  const { t, formatDate } = useI18n();
+  const { t, formatDate, language } = useI18n();
   const contextData = useApi<ConsultationContext>(
     `/consultations/${encodeURIComponent(id)}/context`,
   );
@@ -561,6 +573,25 @@ function ConsultationRoom({
   const downloadText = (filename: string, content: string) => {
     downloadBlob(filename, new Blob([content], { type: 'text/plain;charset=utf-8' }));
   };
+  const materialDownloadName = (
+    material: ConsultationMaterial,
+    index: number,
+    options: { prefix?: string; forceText?: boolean } = {},
+  ) => {
+    const original = material.fileName || material.title;
+    const { base, extension } = splitFileName(original);
+    if (language !== 'en') {
+      const name = options.forceText ? `${base}.txt` : original;
+      return options.prefix ? `${options.prefix}-${name}` : name;
+    }
+    const translatedBase = t(base);
+    const candidate =
+      translatedBase !== base || !hasChinese(translatedBase) ? translatedBase : t(material.title);
+    const safeBase = asciiSlug(candidate) || `consultation-material-${index + 1}`;
+    const safeExtension = options.forceText ? '.txt' : extension || '.txt';
+    const name = `${safeBase}${safeExtension}`;
+    return options.prefix ? `${options.prefix}-${name}` : name;
+  };
   const addFiles = async (files: FileList | null) => {
     if (isFinished) return;
     if (!files?.length) return;
@@ -626,9 +657,10 @@ function ConsultationRoom({
     if (!item) return;
     if (!materials.length) return;
     const files = materials.map((material, index) => ({
-      name: material.objectUrl
-        ? material.fileName || `${index + 1}-${t(material.title)}`
-        : `${String(index + 1).padStart(2, '0')}-${material.fileName.replace(/\.[^.]+$/, '')}.txt`,
+      name: materialDownloadName(material, index, {
+        prefix: String(index + 1).padStart(2, '0'),
+        forceText: !material.objectUrl,
+      }),
       bytes: material.objectUrl
         ? dataUrlBytes(material.objectUrl)
         : textEncoder.encode(
@@ -647,13 +679,16 @@ function ConsultationRoom({
     if (material.objectUrl) {
       const bytes = dataUrlBytes(material.objectUrl);
       downloadBlob(
-        material.fileName || material.title,
+        materialDownloadName(material, materials.indexOf(material)),
         new Blob([arrayBufferFromBytes(bytes)], { type: dataUrlMime(material.objectUrl) }),
       );
       return;
     }
     downloadText(
-      `${item.id}-${material.fileName.replace(/\.[^.]+$/, '')}.txt`,
+      materialDownloadName(material, materials.indexOf(material), {
+        prefix: item.id,
+        forceText: true,
+      }),
       [
         `${t('会诊材料')}：${t(material.title)}`,
         `${t(item.title)} · ${t(item.patientName)}`,
@@ -966,24 +1001,55 @@ export function ConsultationsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [roomId, setRoomId] = useState<string | null>(null);
   const [requestOpen, setRequestOpen] = useState(false);
+  const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [actionMessage, setActionMessage] = useState<{
+    tone: 'success' | 'error';
+    text: string;
+  } | null>(null);
   const allCases = useMemo<Consultation[]>(() => data ?? [], [data]);
   const selected = allCases.find((item) => item.id === selectedId) ?? null;
   const close = useCallback(() => setSelectedId(null), []);
   const acceptConsultation = useCallback(
     async (id: string) => {
-      await requestApi<Consultation>(`/consultations/${encodeURIComponent(id)}/accept`, {
-        method: 'POST',
-      });
-      reload();
+      setBusyAction(id);
+      setActionMessage(null);
+      try {
+        await requestApi<Consultation>(`/consultations/${encodeURIComponent(id)}/accept`, {
+          method: 'POST',
+        });
+        setActionMessage({ tone: 'success', text: '已接受会诊申请。' });
+        setSelectedId(null);
+        reload();
+      } catch (error) {
+        setActionMessage({
+          tone: 'error',
+          text: error instanceof Error ? error.message : '操作未完成，请重试。',
+        });
+      } finally {
+        setBusyAction(null);
+      }
     },
     [reload],
   );
   const confirmConsultation = useCallback(
     async (id: string) => {
-      await requestApi<Consultation>(`/consultations/${encodeURIComponent(id)}/confirm`, {
-        method: 'POST',
-      });
-      reload();
+      setBusyAction(id);
+      setActionMessage(null);
+      try {
+        await requestApi<Consultation>(`/consultations/${encodeURIComponent(id)}/confirm`, {
+          method: 'POST',
+        });
+        setActionMessage({ tone: 'success', text: '已确认参会。' });
+        setSelectedId(null);
+        reload();
+      } catch (error) {
+        setActionMessage({
+          tone: 'error',
+          text: error instanceof Error ? error.message : '操作未完成，请重试。',
+        });
+      } finally {
+        setBusyAction(null);
+      }
     },
     [reload],
   );
@@ -1048,6 +1114,11 @@ export function ConsultationsPage() {
             />
             <span className="feature-mini-label">{t('当前医生相关的会诊安排')}</span>
           </div>
+          {actionMessage && (
+            <p className={`feature-prose consultation-action-message ${actionMessage.tone}`}>
+              {t(actionMessage.text)}
+            </p>
+          )}
           <div className="feature-card-grid">
             {cases.map((item) => {
               return (
@@ -1085,7 +1156,8 @@ export function ConsultationsPage() {
                         <Button
                           className="consultation-accept-button"
                           variant="secondary"
-                          onClick={() => acceptConsultation(item.id)}
+                          disabled={busyAction === item.id}
+                          onClick={() => void acceptConsultation(item.id)}
                         >
                           {t('同意申请')}
                         </Button>
@@ -1094,7 +1166,8 @@ export function ConsultationsPage() {
                         <Button
                           className="consultation-accept-button"
                           variant="secondary"
-                          onClick={() => confirmConsultation(item.id)}
+                          disabled={busyAction === item.id}
+                          onClick={() => void confirmConsultation(item.id)}
                         >
                           {t('确认参会')}
                         </Button>
@@ -1180,7 +1253,8 @@ export function ConsultationsPage() {
               <Button
                 className="consultation-accept-button consultation-accept-button--detail"
                 variant="secondary"
-                onClick={() => acceptConsultation(selected.id)}
+                disabled={busyAction === selected.id}
+                onClick={() => void acceptConsultation(selected.id)}
               >
                 {t('同意申请')}
               </Button>
@@ -1189,7 +1263,8 @@ export function ConsultationsPage() {
               <Button
                 className="consultation-accept-button consultation-accept-button--detail"
                 variant="secondary"
-                onClick={() => confirmConsultation(selected.id)}
+                disabled={busyAction === selected.id}
+                onClick={() => void confirmConsultation(selected.id)}
               >
                 {t('确认参会')}
               </Button>

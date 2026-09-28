@@ -97,6 +97,7 @@ type SavedEncounterRecord = {
 };
 type AvailabilityWindow = EncounterAvailabilityWindow;
 type NoticeLog = EncounterNotice;
+const defaultNoticeContent = '请患者在问诊前补充近期检查结果和当前用药。';
 
 function emptyClinicalBrief(encounter: Encounter): ClinicalBrief {
   return {
@@ -515,7 +516,7 @@ function SavedRecordsPanel({
   onToggle: () => void;
   onExport: () => void;
 }) {
-  const { t, formatDate } = useI18n();
+  const { t, language, formatDate } = useI18n();
   return (
     <section className="encounter-room-panel encounter-folder">
       <button className="encounter-panel-toggle" onClick={onToggle} aria-expanded={open}>
@@ -568,7 +569,7 @@ function AppointmentManagementDialog({
   onClose: () => void;
   onRescheduleAccepted: (id: string) => void;
 }) {
-  const { t, formatDate } = useI18n();
+  const { t, language, formatDate } = useI18n();
   const availability = useApi<AvailabilityWindow[]>('/encounter-availability');
   const noticeData = useApi<NoticeLog[]>('/encounter-notices');
   const firstWaiting = encounters.find(
@@ -585,15 +586,20 @@ function AppointmentManagementDialog({
   const [selectedEncounterId, setSelectedEncounterId] = useState(firstWaiting?.id ?? '');
   const [nextDate, setNextDate] = useState(() => localDate(1, nowMs));
   const [nextTime, setNextTime] = useState('10:00');
-  const [noticeText, setNoticeText] = useState('请患者在问诊前补充近期检查结果和当前用药。');
+  const [noticeText, setNoticeText] = useState(() => t(defaultNoticeContent));
+  const [noticeEdited, setNoticeEdited] = useState(false);
   const [noticeFeedback, setNoticeFeedback] = useState('');
   const [notices, setNotices] = useState<NoticeLog[]>([]);
+  const defaultNoticeText = t(defaultNoticeContent);
   useEffect(() => {
     setWindows(availability.data ?? []);
   }, [availability.data]);
   useEffect(() => {
     setNotices(noticeData.data ?? []);
   }, [noticeData.data]);
+  useEffect(() => {
+    if (!noticeEdited) setNoticeText(defaultNoticeText);
+  }, [defaultNoticeText, noticeEdited]);
   const selectedEncounter = encounters.find((item) => item.id === selectedEncounterId);
   const addWindow = useCallback(() => {
     void requestApi<AvailabilityWindow>('/encounter-availability', {
@@ -615,7 +621,12 @@ function AppointmentManagementDialog({
           encounterId: selectedEncounter.id,
           kind,
           content:
-            kind === '改期通知' ? `建议改至 ${nextDate} ${nextTime}，等待患者确认。` : noticeText,
+            kind === '改期通知'
+              ? t('建议改至 {date} {time}，等待患者确认。', {
+                  date: nextDate,
+                  time: nextTime,
+                })
+              : noticeText,
           proposedScheduledAt,
         }),
       }).then((response) => {
@@ -624,7 +635,7 @@ function AppointmentManagementDialog({
         if (kind !== '改期通知') setNoticeFeedback('已通知患者');
       });
     },
-    [nextDate, nextTime, noticeData, noticeText, selectedEncounter],
+    [nextDate, nextTime, noticeData, noticeText, selectedEncounter, t],
   );
   useEffect(() => {
     if (!noticeFeedback) return undefined;
@@ -844,7 +855,10 @@ function AppointmentManagementDialog({
               <span>{t('提醒内容')}</span>
               <textarea
                 value={noticeText}
-                onChange={(event) => setNoticeText(event.target.value)}
+                onChange={(event) => {
+                  setNoticeEdited(true);
+                  setNoticeText(event.target.value);
+                }}
               />
             </label>
             <div className="appointment-notice-actions">

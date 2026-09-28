@@ -302,6 +302,7 @@ export const encountersMessages: Record<string, string> = {
     'Generally stable recently, average sleep, occasional dizziness, no clear chest pain or shortness of breath reported.',
   高脂血症病史: 'History of hyperlipidemia.',
   胆囊切除术后: 'History of cholecystectomy.',
+  '胆囊切除术后。': 'History of cholecystectomy.',
   '高脂血症病史。': 'History of hyperlipidemia.',
   '糖尿病前期管理中。': 'Prediabetes management in progress.',
   '暂未使用降糖药。': 'No glucose-lowering medication currently.',
