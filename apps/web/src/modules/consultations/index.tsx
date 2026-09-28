@@ -46,8 +46,29 @@ function isPendingReview(item: Consultation) {
 }
 
 function consultationStatusLabel(item: Consultation) {
-  return isPendingReview(item) ? '待审核' : statuses[item.status];
+  if (isPendingReview(item)) return '待审核';
+  if (item.status === 'scheduled' && item.canConfirm) return '待确认参会';
+  return statuses[item.status];
 }
+
+function consultationStatusTone(item: Consultation) {
+  if (isPendingReview(item)) return 'rose';
+  if (item.status === 'scheduled' && item.canConfirm) return 'amber';
+  return tones[item.status];
+}
+
+function canEnterConsultation(item: Consultation) {
+  const start = Date.parse(item.scheduledAt);
+  if (!Number.isFinite(start)) return false;
+  const now = Date.now();
+  return (
+    item.status === 'scheduled' &&
+    !item.canConfirm &&
+    start <= now &&
+    now < start + 4 * 60 * 60 * 1000
+  );
+}
+
 type DraftMaterial = {
   title: string;
   fileName: string;
@@ -455,10 +476,7 @@ function RequestDialog({ onClose, onCreated }: { onClose: () => void; onCreated:
             {t(notice)}
           </p>
         )}
-        <Button
-          onClick={create}
-          disabled={submitting}
-        >
+        <Button onClick={create} disabled={submitting}>
           <FilePlus2 size={16} />
           {t(submitting ? '提交中' : '提交会诊申请')}
         </Button>
@@ -687,7 +705,7 @@ function ConsultationRoom({
           </small>
         </div>
         <div className="encounter-room-header-meta">
-          <Badge tone={tones[item.status]}>{t(statuses[item.status])}</Badge>
+          <Badge tone={consultationStatusTone(item)}>{t(consultationStatusLabel(item))}</Badge>
           <span>{formatDate(item.scheduledAt, { dateStyle: 'medium', timeStyle: 'short' })}</span>
         </div>
       </header>
@@ -1038,7 +1056,7 @@ export function ConsultationsPage() {
                     <span className="feature-symbol blue">
                       <UsersRound size={20} />
                     </span>
-                    <Badge tone={isPendingReview(item) ? 'rose' : tones[item.status]}>
+                    <Badge tone={consultationStatusTone(item)}>
                       {t(consultationStatusLabel(item))}
                     </Badge>
                   </div>
@@ -1081,9 +1099,9 @@ export function ConsultationsPage() {
                           {t('确认参会')}
                         </Button>
                       )}
-                      {item.direction === 'received' && item.status !== 'requested' && (
-                        <Badge tone="teal">{t('已接受')}</Badge>
-                      )}
+                      {item.direction === 'received' &&
+                        item.status !== 'requested' &&
+                        !item.canConfirm && <Badge tone="teal">{t('已接受')}</Badge>}
                       <LinkAction onClick={() => setSelectedId(item.id)}>
                         {t('查看详情')}
                       </LinkAction>
@@ -1132,7 +1150,7 @@ export function ConsultationsPage() {
           subtitle={t('{value0} · 会诊详情预览', { value0: selected.id })}
           onClose={close}
         >
-          <Badge tone={isPendingReview(selected) ? 'rose' : tones[selected.status]}>
+          <Badge tone={consultationStatusTone(selected)}>
             {t(consultationStatusLabel(selected))}
           </Badge>
           <DetailGrid
@@ -1177,7 +1195,7 @@ export function ConsultationsPage() {
             <Button
               className="consultation-enter-room-button"
               variant="secondary"
-              disabled={selected.status === 'requested' || Boolean(selected.canConfirm)}
+              disabled={!canEnterConsultation(selected)}
               onClick={() => {
                 setRoomId(selected.id);
                 close();
@@ -1197,6 +1215,13 @@ export function ConsultationsPage() {
               {t('请先确认参会，再进入诊室。')}
             </p>
           )}
+          {selected.status === 'scheduled' &&
+            !selected.canConfirm &&
+            !canEnterConsultation(selected) && (
+              <p className="feature-prose consultation-room-locked-note">
+                {t('会诊未到计划时间，不能进入诊室。')}
+              </p>
+            )}
           <div className="feature-document">
             <div className="feature-document-head">
               <h3>{t('联合会诊报告')}</h3>

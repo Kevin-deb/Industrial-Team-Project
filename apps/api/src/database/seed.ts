@@ -689,7 +689,7 @@ export function seedDemo(db: DatabaseSync): void {
       '老年心血管多学科会诊',
       '心血管内科 · 全科医学',
       'scheduled',
-      '2026-09-29T15:00:00+08:00',
+      '2026-09-27T15:00:00+08:00',
       '展示会诊资料、专家协作与报告草稿的未来工作流程。',
     );
     consultation.run(
@@ -699,7 +699,7 @@ export function seedDemo(db: DatabaseSync): void {
       '糖尿病综合健康评估',
       '内分泌科 · 全科医学',
       'requested',
-      '2026-09-30T10:00:00+08:00',
+      '2026-09-29T08:00:00+08:00',
       '申请、临时授权和专家确认将在后续迭代实现。',
     );
     for (const pair of [
@@ -1144,12 +1144,12 @@ export function seedAuthFoundation(db: DatabaseSync): void {
       'doctor-demo-002',
       '术后康复联合评估',
       '康复医学科 · 骨科 · 全科医学',
-      'requested',
+      'scheduled',
       '2026-10-01T15:30:00+08:00',
       '其他医生发来的会诊申请，需要确认是否参与并查看患者资料。',
     );
     db.prepare(
-      "UPDATE consultations SET status='requested',completed_at=NULL WHERE id='CON-IN-001'",
+      "UPDATE consultations SET status='scheduled',completed_at=NULL WHERE id='CON-IN-001'",
     ).run();
     db.prepare(
       'INSERT OR IGNORE INTO consultations(id,patient_id,requested_by,title,specialty,status,scheduled_at,summary) VALUES(?,?,?,?,?,?,?,?)',
@@ -1160,14 +1160,14 @@ export function seedAuthFoundation(db: DatabaseSync): void {
       '糖尿病足风险联合会诊',
       '内分泌科 · 全科医学 · 护理管理',
       'requested',
-      '2026-10-02T09:30:00+08:00',
+      '2026-09-29T08:00:00+08:00',
       '其他医生邀请当前医生参与糖尿病足风险评估，需要查看资料后确认是否参会。',
     );
     for (const [id, scheduledAt] of [
-      ['CON-001', '2026-09-29T15:00:00+08:00'],
-      ['CON-002', '2026-09-30T10:00:00+08:00'],
+      ['CON-001', '2026-09-27T15:00:00+08:00'],
+      ['CON-002', '2026-09-29T08:00:00+08:00'],
       ['CON-IN-001', '2026-10-01T15:30:00+08:00'],
-      ['CON-IN-002', '2026-10-02T09:30:00+08:00'],
+      ['CON-IN-002', '2026-09-29T08:00:00+08:00'],
     ] as const)
       db.prepare('UPDATE consultations SET scheduled_at=? WHERE id=?').run(scheduledAt, id);
     for (const pair of [
@@ -1185,7 +1185,7 @@ export function seedAuthFoundation(db: DatabaseSync): void {
       "UPDATE consultation_participants SET participant_role='invited',joined_at=NULL,left_at=NULL WHERE consultation_id='CON-IN-001' AND identity_id='doctor-demo-001'",
     ).run();
     db.prepare(
-      "UPDATE consultation_participants SET participant_role='reviewer',joined_at=NULL,left_at=NULL WHERE consultation_id='CON-IN-001' AND identity_id='doctor-demo-003'",
+      "UPDATE consultation_participants SET participant_role='reviewer',joined_at='2026-09-11T15:25:00+08:00',left_at=NULL WHERE consultation_id='CON-IN-001' AND identity_id='doctor-demo-003'",
     ).run();
     for (const pair of [
       [DEMO_DOCTOR_ID, 'invited'],

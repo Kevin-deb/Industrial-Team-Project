@@ -27,8 +27,25 @@ import {
 
 const consultationDirectAccessSql = () =>
   `${consultationMemberSql} AND (
-    c.status='requested' OR julianday(c.scheduled_at,'+4 hours')>julianday(:now)
+    c.status='requested' OR (
+      julianday(c.scheduled_at)<=julianday(:now)
+      AND julianday(c.scheduled_at,'+4 hours')>julianday(:now)
+    )
   )`;
+const consultationRoomAccessSql = () =>
+  `${consultationMemberSql}
+   AND c.status='scheduled'
+   AND julianday(c.scheduled_at)<=julianday(:now)
+   AND julianday(c.scheduled_at,'+4 hours')>julianday(:now)
+   AND (
+     c.requested_by=:actorId OR EXISTS (
+       SELECT 1 FROM consultation_participants room_participant
+       WHERE room_participant.consultation_id=c.id
+         AND room_participant.identity_id=:actorId
+         AND room_participant.joined_at IS NOT NULL
+         AND room_participant.left_at IS NULL
+     )
+   )`;
 const consultationHistoryAccessSql = () =>
   `c.requested_by=:actorId OR EXISTS (
     SELECT 1 FROM consultation_participants reviewer
@@ -377,7 +394,7 @@ export class SqliteEncounterRepository implements EncounterRepository {
   }
 
   consultationContext(id: string, context: RequestContext): ConsultationContext | undefined {
-    const row = this.findConsultationRow(id, context);
+    const row = this.findConsultationRoomRow(id, context);
     if (!row) return undefined;
     const consultation = this.mapConsultation(row, context);
     return {
@@ -534,10 +551,7 @@ export class SqliteEncounterRepository implements EncounterRepository {
     return this.mapConsultation({ ...row, status: 'scheduled' }, context);
   }
 
-  confirmConsultationParticipation(
-    id: string,
-    context: RequestContext,
-  ): Consultation | undefined {
+  confirmConsultationParticipation(id: string, context: RequestContext): Consultation | undefined {
     const row = this.findConsultationRow(id, context);
     if (!row || String(row.status) !== 'scheduled') return undefined;
     if (!this.canConfirmConsultation(id, context.actorId)) return undefined;
@@ -554,7 +568,7 @@ export class SqliteEncounterRepository implements EncounterRepository {
     input: { body: string; imageUrl?: string; imageName?: string },
     context: RequestContext,
   ): ConsultationMessage | undefined {
-    const row = this.findConsultationRow(id, context);
+    const row = this.findConsultationRoomRow(id, context);
     if (!row || String(row.status) === 'requested' || String(row.status) === 'completed')
       return undefined;
     const message = {
@@ -587,7 +601,7 @@ export class SqliteEncounterRepository implements EncounterRepository {
     input: { title: string; description?: string; fileName?: string; objectUrl?: string },
     context: RequestContext,
   ): ConsultationMaterial | undefined {
-    const row = this.findConsultationRow(id, context);
+    const row = this.findConsultationRoomRow(id, context);
     if (!row || String(row.status) === 'requested' || String(row.status) === 'completed')
       return undefined;
     const material = {
@@ -617,7 +631,7 @@ export class SqliteEncounterRepository implements EncounterRepository {
   }
 
   deleteConsultationMaterial(id: string, materialId: string, context: RequestContext): boolean {
-    const row = this.findConsultationRow(id, context);
+    const row = this.findConsultationRoomRow(id, context);
     if (!row || String(row.status) === 'requested' || String(row.status) === 'completed')
       return false;
     const upload = this.db
@@ -642,7 +656,7 @@ export class SqliteEncounterRepository implements EncounterRepository {
   completeConsultation(id: string, context: RequestContext): ConsultationReport | undefined {
     this.db.exec('BEGIN IMMEDIATE');
     try {
-      const row = this.findConsultationRow(id, context);
+      const row = this.findConsultationRoomRow(id, context);
       if (
         !row ||
         String(row.status) === 'requested' ||
@@ -765,6 +779,15 @@ export class SqliteEncounterRepository implements EncounterRepository {
       .prepare(
         `SELECT c.*,p.name patient_name FROM consultations c JOIN patients p ON p.id=c.patient_id
          WHERE c.id=:id AND ${consultationScopeSql()}`,
+      )
+      .get({ id, ...context });
+  }
+
+  private findConsultationRoomRow(id: string, context: RequestContext) {
+    return this.db
+      .prepare(
+        `SELECT c.*,p.name patient_name FROM consultations c JOIN patients p ON p.id=c.patient_id
+         WHERE c.id=:id AND ${consultationRoomAccessSql()}`,
       )
       .get({ id, ...context });
   }

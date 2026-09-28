@@ -2,6 +2,7 @@
 export const consultationsMessages: Record<string, string> = {
   申请中: 'Requested',
   待审核: 'Pending review',
+  待确认参会: 'Pending participation confirmation',
   已安排: 'Scheduled',
   '汇聚不同专科的经验，为复杂的照护需求找到更完整的解答。':
     'Bring specialties together for a fuller view of complex care needs.',
@@ -35,6 +36,8 @@ export const consultationsMessages: Record<string, string> = {
   '申请尚未接受，不能进入诊室。':
     'The request has not been accepted, so the room cannot be entered.',
   '请先确认参会，再进入诊室。': 'Confirm participation before entering the room.',
+  '会诊未到计划时间，不能进入诊室。':
+    'The consultation has not reached its scheduled time, so the room cannot be entered.',
   返回会诊列表: 'Back to consultations',
   收到的申请: 'Received request',
   我发起的: 'Sent by me',

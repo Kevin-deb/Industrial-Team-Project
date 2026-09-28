@@ -48,12 +48,25 @@ test('consultation access is valid at the scheduled start and expires exactly fo
   const { db, repository, access, task } = fixture();
   try {
     assert.equal(access.canReadPatient(input.patientId, reviewer), true);
-    assert.ok(repository.consultationContext(task.id, reviewer));
+    assert.equal(repository.consultationContext(task.id, reviewer), undefined);
+    assert.equal(
+      repository.findConsultationTask(task.id, reviewer)!.status,
+      'requested',
+      'the reviewer can review the request before the room opens',
+    );
+    assert.equal(repository.acceptConsultation(task.id, reviewer)!.status, 'scheduled');
+    assert.equal(
+      repository.consultationContext(task.id, {
+        ...reviewer,
+        now: '2026-09-28T08:59:59.999Z',
+      }),
+      undefined,
+      'the room opens only at the scheduled start',
+    );
     assert.equal(
       repository.consultationContext(task.id, reviewer)!.accessUntil,
       '2026-09-28T13:00:00.000Z',
     );
-    assert.equal(repository.acceptConsultation(task.id, reviewer)!.status, 'scheduled');
     assert.equal(
       access.canReadPatient(input.patientId, { ...reviewer, now: '2026-09-28T12:59:59.999Z' }),
       true,
@@ -82,10 +95,12 @@ test('an invited expert confirms participation only after reviewer approval', ()
     assert.equal(approved.canAccept, false);
     assert.equal(approved.canReview, false);
     assert.equal(approved.canConfirm, true);
+    assert.equal(repository.consultationContext(task.id, expert), undefined);
 
     const confirmed = repository.confirmConsultationParticipation(task.id, expert)!;
     assert.equal(confirmed.status, 'scheduled');
     assert.equal(confirmed.canConfirm, false);
+    assert.ok(repository.consultationContext(task.id, expert));
     assert.ok(
       db
         .prepare(
@@ -112,12 +127,12 @@ test('the requester sees their consultation without broad patient access', () =>
     const item = repository.listConsultations(zhou).find((entry) => entry.id === 'CON-IN-001');
     assert.ok(item);
     assert.equal(item.direction, 'sent');
-    assert.ok(repository.consultationContext('CON-IN-001', zhou));
+    assert.equal(repository.consultationContext('CON-IN-001', zhou), undefined);
     db.prepare("UPDATE consultations SET status='scheduled' WHERE id='CON-IN-001'").run();
     assert.ok(
-      repository.listConsultations({ ...zhou, now: '2026-10-10T12:00:00+08:00' }).some(
-        (entry) => entry.id === 'CON-IN-001',
-      ),
+      repository
+        .listConsultations({ ...zhou, now: '2026-10-10T12:00:00+08:00' })
+        .some((entry) => entry.id === 'CON-IN-001'),
       'the requester keeps consultation history without broad patient access',
     );
   } finally {
@@ -138,9 +153,9 @@ test('the reviewer keeps an approved consultation in history without broad patie
     assert.ok(repository.listConsultations(zhou).some((entry) => entry.id === 'CON-002'));
     assert.equal(repository.acceptConsultation('CON-002', zhou)!.status, 'scheduled');
     assert.ok(
-      repository.listConsultations({ ...zhou, now: '2026-10-10T12:00:00+08:00' }).some(
-        (entry) => entry.id === 'CON-002',
-      ),
+      repository
+        .listConsultations({ ...zhou, now: '2026-10-10T12:00:00+08:00' })
+        .some((entry) => entry.id === 'CON-002'),
       'the reviewer keeps approved consultation history without broad patient access',
     );
   } finally {
@@ -208,7 +223,7 @@ test('completion is owner/reviewer-only and report failure rolls back closure an
   const { db, repository, access, task, permanentGrant } = fixture();
   try {
     repository.acceptConsultation(task.id, reviewer);
-    assert.ok(repository.addConsultationMessage(task.id, { body: 'Test discussion' }, expert));
+    assert.ok(repository.addConsultationMessage(task.id, { body: 'Test discussion' }, reviewer));
     assert.equal(repository.completeConsultation(task.id, expert), undefined);
     db.exec(`CREATE TRIGGER reject_report BEFORE INSERT ON consultation_reports
       BEGIN SELECT RAISE(ABORT, 'test report persistence failure'); END;`);
@@ -238,7 +253,7 @@ test('completion is owner/reviewer-only and report failure rolls back closure an
     assert.ok(completed.body.includes('Test discussion'));
     assert.equal(access.canReadPatient(input.patientId, reviewer), false);
     assert.equal(repository.consultationContext(task.id, reviewer), undefined);
-    assert.ok(repository.consultationContext(task.id, owner));
+    assert.equal(repository.consultationContext(task.id, owner), undefined);
     permanentGrant('reviewer-permanent', reviewer.actorId);
     assert.equal(access.canReadPatient(input.patientId, reviewer), true);
     assert.equal(
@@ -251,8 +266,8 @@ test('completion is owner/reviewer-only and report failure rolls back closure an
       .prepare('SELECT completed_at FROM consultations WHERE id=?')
       .get(task.id)!.completed_at;
     assert.equal(
-      repository.completeConsultation(task.id, { ...owner, now: '2026-09-28T12:00:00Z' })!.id,
-      completed.id,
+      repository.completeConsultation(task.id, { ...owner, now: '2026-09-28T12:00:00Z' }),
+      undefined,
     );
     assert.equal(
       db.prepare('SELECT completed_at FROM consultations WHERE id=?').get(task.id)!.completed_at,
@@ -291,7 +306,10 @@ test('a participant who left loses task and reviewer access even while its grant
     assert.equal(repository.consultationContext(task.id, reviewer), undefined);
     assert.equal(repository.acceptConsultation(task.id, reviewer), undefined);
     assert.equal(repository.completeConsultation(task.id, reviewer), undefined);
-    const ownerView = repository.consultationContext(task.id, owner)!;
+    const ownerView = repository.consultationContext(task.id, {
+      ...owner,
+      now: '2026-09-28T09:00:00.000Z',
+    })!;
     assert.ok(!ownerView.participants.some((person) => person.id === reviewer.actorId));
     assert.equal(ownerView.consultation.reviewerId, undefined);
     db.prepare(
@@ -299,10 +317,12 @@ test('a participant who left loses task and reviewer access even while its grant
     ).run(owner.now, task.id, owner.actorId);
     assert.equal(access.canReadPatient(input.patientId, owner), true);
     assert.ok(
-      repository.consultationContext(task.id, owner),
+      repository.consultationContext(task.id, { ...owner, now: '2026-09-28T09:00:00.000Z' }),
       'the requester keeps its own authorized task access',
     );
-    assert.ok(repository.completeConsultation(task.id, owner));
+    assert.ok(
+      repository.completeConsultation(task.id, { ...owner, now: '2026-09-28T09:00:00.000Z' }),
+    );
   } finally {
     db.close();
   }
