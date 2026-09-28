@@ -89,6 +89,8 @@ export interface Consultation {
   reviewerId?: string;
   reviewerName?: string;
   canReview?: boolean;
+  canAccept?: boolean;
+  canConfirm?: boolean;
 }
 
 export interface ConsultationParticipant {

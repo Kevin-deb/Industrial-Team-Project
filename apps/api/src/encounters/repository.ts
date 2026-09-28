@@ -25,6 +25,21 @@ import {
   type RequestContext,
 } from '../platform/index.js';
 
+const consultationDirectAccessSql = () =>
+  `${consultationMemberSql} AND (
+    c.status='requested' OR julianday(c.scheduled_at,'+4 hours')>julianday(:now)
+  )`;
+const consultationHistoryAccessSql = () =>
+  `c.requested_by=:actorId OR EXISTS (
+    SELECT 1 FROM consultation_participants reviewer
+    WHERE reviewer.consultation_id=c.id AND reviewer.identity_id=:actorId
+      AND reviewer.participant_role='reviewer' AND reviewer.left_at IS NULL
+  ) OR (${consultationDirectAccessSql()})`;
+const consultationScopeSql = () =>
+  `(${patientScopeSql} OR (${consultationDirectAccessSql()})) AND ${consultationMemberSql}`;
+const consultationListScopeSql = () =>
+  `(${patientScopeSql} OR (${consultationHistoryAccessSql()})) AND ${consultationMemberSql}`;
+
 export interface ConsultationTask {
   id: string;
   patientId: string;
@@ -90,6 +105,7 @@ export interface EncounterRepository {
     context: RequestContext,
   ): Consultation | undefined;
   acceptConsultation(id: string, context: RequestContext): Consultation | undefined;
+  confirmConsultationParticipation(id: string, context: RequestContext): Consultation | undefined;
   addConsultationMessage(
     id: string,
     input: { body: string; imageUrl?: string; imageName?: string },
@@ -353,7 +369,7 @@ export class SqliteEncounterRepository implements EncounterRepository {
     return this.db
       .prepare(
         `SELECT c.*,p.name patient_name FROM consultations c JOIN patients p ON p.id=c.patient_id
-         WHERE ${patientScopeSql} AND ${consultationMemberSql}
+         WHERE ${consultationListScopeSql()}
          ORDER BY c.scheduled_at`,
       )
       .all({ ...context })
@@ -508,7 +524,7 @@ export class SqliteEncounterRepository implements EncounterRepository {
   acceptConsultation(id: string, context: RequestContext): Consultation | undefined {
     const row = this.findConsultationRow(id, context);
     if (!row || String(row.status) === 'completed') return undefined;
-    if (!this.canReviewConsultation(id, context.actorId)) return undefined;
+    if (!this.canAcceptConsultation(id, context.actorId)) return undefined;
     this.db.prepare("UPDATE consultations SET status='scheduled' WHERE id=?").run(id);
     this.db
       .prepare(
@@ -516,6 +532,21 @@ export class SqliteEncounterRepository implements EncounterRepository {
       )
       .run(context.now, id, context.actorId);
     return this.mapConsultation({ ...row, status: 'scheduled' }, context);
+  }
+
+  confirmConsultationParticipation(
+    id: string,
+    context: RequestContext,
+  ): Consultation | undefined {
+    const row = this.findConsultationRow(id, context);
+    if (!row || String(row.status) !== 'scheduled') return undefined;
+    if (!this.canConfirmConsultation(id, context.actorId)) return undefined;
+    this.db
+      .prepare(
+        'UPDATE consultation_participants SET joined_at=? WHERE consultation_id=? AND identity_id=?',
+      )
+      .run(context.now, id, context.actorId);
+    return this.mapConsultation(row, context);
   }
 
   addConsultationMessage(
@@ -689,7 +720,7 @@ export class SqliteEncounterRepository implements EncounterRepository {
             WHERE cp.consultation_id=c.id AND cp.identity_id=:actorId AND cp.left_at IS NULL
           ) OR c.requested_by=:actorId) is_participant
          FROM consultations c JOIN patients p ON p.id=c.patient_id
-         WHERE c.id=:id AND ${patientScopeSql} AND ${consultationMemberSql}`,
+         WHERE c.id=:id AND ${consultationScopeSql()}`,
       )
       .get({ id, ...context });
     if (!row) return undefined;
@@ -714,7 +745,7 @@ export class SqliteEncounterRepository implements EncounterRepository {
          JOIN consultations c ON c.id=r.consultation_id
          JOIN patients p ON p.id=c.patient_id
          WHERE r.consultation_id=:consultationId AND r.id=:reportId AND r.status='confirmed'
-           AND ${patientScopeSql} AND ${consultationMemberSql}`,
+           AND ${consultationScopeSql()}`,
       )
       .get({ consultationId, reportId, ...context });
     return row ? { id: String(row.id) } : undefined;
@@ -733,7 +764,7 @@ export class SqliteEncounterRepository implements EncounterRepository {
     return this.db
       .prepare(
         `SELECT c.*,p.name patient_name FROM consultations c JOIN patients p ON p.id=c.patient_id
-         WHERE c.id=:id AND ${patientScopeSql} AND ${consultationMemberSql}`,
+         WHERE c.id=:id AND ${consultationScopeSql()}`,
       )
       .get({ id, ...context });
   }
@@ -755,6 +786,8 @@ export class SqliteEncounterRepository implements EncounterRepository {
       reviewerId: reviewer?.id,
       reviewerName: reviewer?.name,
       canReview: reviewer?.id === context.actorId,
+      canAccept: this.canAcceptConsultation(id, context.actorId),
+      canConfirm: this.canConfirmConsultation(id, context.actorId),
     };
   }
 
@@ -794,6 +827,31 @@ export class SqliteEncounterRepository implements EncounterRepository {
          WHERE consultation_id=? AND identity_id=? AND participant_role='reviewer' AND left_at IS NULL`,
       )
       .get(id, actorId);
+    return Boolean(row);
+  }
+
+  private canAcceptConsultation(id: string, actorId: string): boolean {
+    const row = this.db
+      .prepare(
+        `SELECT 1 FROM consultations c
+         JOIN consultation_participants cp ON cp.consultation_id=c.id
+         WHERE c.id=? AND c.status='requested' AND c.completed_at IS NULL
+           AND cp.identity_id=? AND cp.participant_role='reviewer' AND cp.left_at IS NULL`,
+      )
+      .get(id, actorId);
+    return Boolean(row);
+  }
+
+  private canConfirmConsultation(id: string, actorId: string): boolean {
+    const row = this.db
+      .prepare(
+        `SELECT 1 FROM consultations c
+         JOIN consultation_participants cp ON cp.consultation_id=c.id
+         WHERE c.id=? AND c.status='scheduled' AND c.completed_at IS NULL
+           AND c.requested_by<>?
+           AND cp.identity_id=? AND cp.left_at IS NULL AND cp.joined_at IS NULL`,
+      )
+      .get(id, actorId, actorId);
     return Boolean(row);
   }
 

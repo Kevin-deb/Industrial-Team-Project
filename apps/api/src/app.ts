@@ -612,6 +612,15 @@ export async function createApp(options: AppOptions = {}) {
       return envelope(request, item);
     },
   );
+  app.post<{ Params: { id: string } }>(
+    '/api/v1/consultations/:id/confirm',
+    async (request, reply) => {
+      const item = encounters.confirmConsultationParticipation(request.params.id, context());
+      if (!item)
+        return fail(request, reply, 409, 'CONSULTATION_LOCKED', '会诊未通过或不能确认参会。');
+      return envelope(request, item);
+    },
+  );
   app.post<{
     Params: { id: string };
     Body: { body?: string; imageUrl?: string; imageName?: string };

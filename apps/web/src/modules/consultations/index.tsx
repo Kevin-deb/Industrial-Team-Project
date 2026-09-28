@@ -960,6 +960,15 @@ export function ConsultationsPage() {
     },
     [reload],
   );
+  const confirmConsultation = useCallback(
+    async (id: string) => {
+      await requestApi<Consultation>(`/consultations/${encodeURIComponent(id)}/confirm`, {
+        method: 'POST',
+      });
+      reload();
+    },
+    [reload],
+  );
   const cases = useMemo(
     () =>
       allCases.filter((item) => {
@@ -1054,13 +1063,22 @@ export function ConsultationsPage() {
                   <div className="mdt-footer" style={{ marginTop: 18 }}>
                     <span>{t('演示会诊')}</span>
                     <div className="consultation-card-actions">
-                      {item.canReview && item.status === 'requested' && (
+                      {item.canAccept && item.status === 'requested' && (
                         <Button
                           className="consultation-accept-button"
                           variant="secondary"
                           onClick={() => acceptConsultation(item.id)}
                         >
                           {t('同意申请')}
+                        </Button>
+                      )}
+                      {item.canConfirm && item.status === 'scheduled' && (
+                        <Button
+                          className="consultation-accept-button"
+                          variant="secondary"
+                          onClick={() => confirmConsultation(item.id)}
+                        >
+                          {t('确认参会')}
                         </Button>
                       )}
                       {item.direction === 'received' && item.status !== 'requested' && (
@@ -1138,7 +1156,7 @@ export function ConsultationsPage() {
           <h4 className="feature-small-heading">{t('会诊摘要')}</h4>
           <p className="feature-prose">{selected.summary}</p>
           <div className="encounter-room-action consultation-detail-actions">
-            {selected.canReview && selected.status === 'requested' && (
+            {selected.canAccept && selected.status === 'requested' && (
               <Button
                 className="consultation-accept-button consultation-accept-button--detail"
                 variant="secondary"
@@ -1147,10 +1165,19 @@ export function ConsultationsPage() {
                 {t('同意申请')}
               </Button>
             )}
+            {selected.canConfirm && selected.status === 'scheduled' && (
+              <Button
+                className="consultation-accept-button consultation-accept-button--detail"
+                variant="secondary"
+                onClick={() => confirmConsultation(selected.id)}
+              >
+                {t('确认参会')}
+              </Button>
+            )}
             <Button
               className="consultation-enter-room-button"
               variant="secondary"
-              disabled={selected.status === 'requested'}
+              disabled={selected.status === 'requested' || Boolean(selected.canConfirm)}
               onClick={() => {
                 setRoomId(selected.id);
                 close();
@@ -1163,6 +1190,11 @@ export function ConsultationsPage() {
           {selected.status === 'requested' && (
             <p className="feature-prose consultation-room-locked-note">
               {t('申请尚未接受，不能进入诊室。')}
+            </p>
+          )}
+          {selected.canConfirm && selected.status === 'scheduled' && (
+            <p className="feature-prose consultation-room-locked-note">
+              {t('请先确认参会，再进入诊室。')}
             </p>
           )}
           <div className="feature-document">

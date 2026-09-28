@@ -66,6 +66,88 @@ test('consultation access is valid at the scheduled start and expires exactly fo
   }
 });
 
+test('an invited expert confirms participation only after reviewer approval', () => {
+  const { db, repository, task } = fixture();
+  try {
+    const listed = repository.listConsultations(expert).find((item) => item.id === task.id)!;
+    assert.equal(listed.status, 'requested');
+    assert.equal(listed.canAccept, false);
+    assert.equal(listed.canReview, false);
+    assert.equal(listed.canConfirm, false);
+    assert.equal(repository.acceptConsultation(task.id, expert), undefined);
+
+    assert.equal(repository.acceptConsultation(task.id, reviewer)!.status, 'scheduled');
+    const approved = repository.listConsultations(expert).find((item) => item.id === task.id)!;
+    assert.equal(approved.status, 'scheduled');
+    assert.equal(approved.canAccept, false);
+    assert.equal(approved.canReview, false);
+    assert.equal(approved.canConfirm, true);
+
+    const confirmed = repository.confirmConsultationParticipation(task.id, expert)!;
+    assert.equal(confirmed.status, 'scheduled');
+    assert.equal(confirmed.canConfirm, false);
+    assert.ok(
+      db
+        .prepare(
+          'SELECT joined_at FROM consultation_participants WHERE consultation_id=? AND identity_id=?',
+        )
+        .get(task.id, expert.actorId)!.joined_at,
+    );
+    assert.equal(repository.completeConsultation(task.id, expert), undefined);
+  } finally {
+    db.close();
+  }
+});
+
+test('the requester sees their consultation without broad patient access', () => {
+  const db = openDatabase(':memory:');
+  try {
+    const repository = new SqliteEncounterRepository(db);
+    const access = new SqlitePatientAccess(db);
+    const zhou: RequestContext = {
+      actorId: 'doctor-demo-002',
+      now: '2026-09-12T15:00:00.000Z',
+    };
+    assert.equal(access.canReadPatient('PAT-004', zhou), false);
+    const item = repository.listConsultations(zhou).find((entry) => entry.id === 'CON-IN-001');
+    assert.ok(item);
+    assert.equal(item.direction, 'sent');
+    assert.ok(repository.consultationContext('CON-IN-001', zhou));
+    db.prepare("UPDATE consultations SET status='scheduled' WHERE id='CON-IN-001'").run();
+    assert.ok(
+      repository.listConsultations({ ...zhou, now: '2026-10-10T12:00:00+08:00' }).some(
+        (entry) => entry.id === 'CON-IN-001',
+      ),
+      'the requester keeps consultation history without broad patient access',
+    );
+  } finally {
+    db.close();
+  }
+});
+
+test('the reviewer keeps an approved consultation in history without broad patient access', () => {
+  const db = openDatabase(':memory:');
+  try {
+    const repository = new SqliteEncounterRepository(db);
+    const access = new SqlitePatientAccess(db);
+    const zhou: RequestContext = {
+      actorId: 'doctor-demo-002',
+      now: '2026-09-11T09:00:00.000Z',
+    };
+    assert.equal(access.canReadPatient('PAT-002', zhou), false);
+    assert.ok(repository.listConsultations(zhou).some((entry) => entry.id === 'CON-002'));
+    assert.equal(repository.acceptConsultation('CON-002', zhou)!.status, 'scheduled');
+    assert.ok(
+      repository.listConsultations({ ...zhou, now: '2026-10-10T12:00:00+08:00' }).some(
+        (entry) => entry.id === 'CON-002',
+      ),
+      'the reviewer keeps approved consultation history without broad patient access',
+    );
+  } finally {
+    db.close();
+  }
+});
+
 test('a patient reader outside the consultation cannot access content or change the task', () => {
   const { db, repository, access, task, permanentGrant } = fixture();
   try {

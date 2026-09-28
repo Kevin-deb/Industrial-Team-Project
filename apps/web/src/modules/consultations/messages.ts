@@ -34,11 +34,13 @@ export const consultationsMessages: Record<string, string> = {
   进入诊室: 'Enter room',
   '申请尚未接受，不能进入诊室。':
     'The request has not been accepted, so the room cannot be entered.',
+  '请先确认参会，再进入诊室。': 'Confirm participation before entering the room.',
   返回会诊列表: 'Back to consultations',
   收到的申请: 'Received request',
   我发起的: 'Sent by me',
   接受申请: 'Accept request',
   同意申请: 'Approve request',
+  确认参会: 'Confirm participation',
   已接受: 'Accepted',
   赵雅琴: 'Zhao Yaqin',
   术后康复联合评估: 'Postoperative rehabilitation joint evaluation',
