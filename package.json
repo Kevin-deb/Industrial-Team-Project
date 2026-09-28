@@ -21,7 +21,7 @@
     "database:export": "tsx scripts/export-database-sql.ts",
     "database:verify": "npm run test -w @doctor/api -- --test-name-pattern='standalone SQL'",
     "check:boundaries": "node scripts/check-boundaries.mjs",
-    "check": "npm run check:boundaries && npm run typecheck && npm test && npm run build",
+    "check": "npm run check:boundaries && npm run typecheck && npm test && npm run test:integration && npm run build",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "postinstall": "node node_modules/electron/install.js",
@@ -29,7 +29,14 @@
     "start:api": "npm run start -w @doctor/api",
     "test:desktop": "playwright test --config playwright.desktop.config.ts",
     "package:win": "npm run build && node scripts/package-desktop.mjs nsis",
-    "package:dir": "npm run build && node scripts/package-desktop.mjs dir"
+    "package:dir": "npm run build && node scripts/package-desktop.mjs dir",
+    "test:integration": "tsx --test tests/integration/auth-scope-flow.test.ts tests/integration/backup-profile.test.ts",
+    "test:realtime": "tsx --test tests/integration/reply-notifications.test.ts",
+    "test:load": "tsx scripts/platform-load-test.ts",
+    "profile:backup": "tsx scripts/backup-profile.ts backup",
+    "profile:verify": "tsx scripts/backup-profile.ts verify",
+    "profile:restore": "tsx scripts/backup-profile.ts restore",
+    "demo:prepare": "tsx scripts/prepare-demo.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.55.0",

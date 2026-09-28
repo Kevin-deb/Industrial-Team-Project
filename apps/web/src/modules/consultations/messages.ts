@@ -141,8 +141,7 @@ export const consultationsMessages: Record<string, string> = {
   上传资料: 'Upload materials',
   输入会诊讨论意见: 'Enter discussion comment',
   '会诊已结束，不能继续发送消息': 'Consultation ended. Messages cannot be sent',
-  '会诊已结束，讨论和上传已锁定。':
-    'Consultation ended. Discussion and uploads are locked.',
+  '会诊已结束，讨论和上传已锁定。': 'Consultation ended. Discussion and uploads are locked.',
   图片: 'Image',
   图片消息: 'Image message',
   结束并生成报告: 'End and generate report',
@@ -164,4 +163,7 @@ export const consultationsMessages: Record<string, string> = {
     'Specialist consultations will support requests, invitations, patient authorization, multidisciplinary discussions, and report review and archiving.',
   '共享权限按会诊任务设置范围和有效期。专家邀请、实时讨论及报告提交尚未接入，此预览不会发送邀请或共享患者档案。':
     'Sharing scope and expiry will be set per consultation. Invitations, live discussion, and report submission are not connected. This preview does not invite anyone or share patient records.',
+  '会诊已结束或访问权限已变更，请返回列表。':
+    'This consultation has ended or your access has changed. Return to the list.',
+  '操作未完成，请重试。': 'The action could not be completed. Please try again.',
 };

@@ -1,4 +1,11 @@
+import {
+  settingsMigration,
+  auditEvolutionMigration,
+  platformNotificationsMigration,
+} from '../platform/index.js';
+import { healthReminderSchedulingMigration } from '../health/index.js';
 import { DatabaseSync } from 'node:sqlite';
+import { consultationGrantExpiryMigration } from '../encounters/index.js';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { platformMigration } from '../platform/index.js';
@@ -94,6 +101,11 @@ export const migrations = [
   remoteConsultationPersistenceMigration,
   remoteConsultationInvitedCaseMigration,
   patientsLifecycleMigration,
+  settingsMigration,
+  auditEvolutionMigration,
+  platformNotificationsMigration,
+  healthReminderSchedulingMigration,
+  consultationGrantExpiryMigration,
 ];
 
 const legacyAuthOrder = [

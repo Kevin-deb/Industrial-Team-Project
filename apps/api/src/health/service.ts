@@ -369,7 +369,7 @@ export class HealthService {
           status: 'planned',
           attempts: 0,
         };
-        this.repository.createReminder(reminder, input.consentReference);
+        this.repository.createReminder(reminder, input.consentReference, context.actorId);
         return reminder;
       },
       'reminder',
@@ -426,6 +426,7 @@ export class HealthService {
       );
       if (!created) return 'busy' as const;
       this.repository.updateReminder(pending);
+      this.repository.noteReminderAttempt?.(reminder.id, context.now);
       return 'claimed' as const;
     });
     if (claimed === 'replay') {

@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures.js';
 
 test('dashboard and all doctor modules load with local API data', async ({ page, request }) => {
   const errors: string[] = [];
@@ -79,7 +79,7 @@ test('community is a forum workspace with persistent opt-in', async ({ page }) =
   await page.reload();
   await expect(page.locator('nav').getByRole('link', { name: /同行协作/ })).toHaveCount(0);
   await page.goto('/settings');
-  await page.getByRole('switch').click();
+  await page.getByRole('switch', { name: '显示医生社区入口' }).click();
   await expect(page.locator('nav').getByRole('link', { name: /同行协作/ })).toBeVisible();
 });
 
@@ -175,7 +175,9 @@ test('E community separates feed, forum, personal activity and scrollable direct
   await expect(page.locator('.community-message-scroll article')).toHaveCount(36);
   await page.getByRole('textbox', { name: '私信内容' }).fill(messageBody);
   await page.getByRole('button', { name: '发送' }).click();
-  await expect(page.getByText(messageBody, { exact: true })).toBeVisible();
+  await expect(
+    page.locator('.community-message-scroll').getByText(messageBody, { exact: true }),
+  ).toBeVisible();
 });
 
 test('E tab navigation and panel origins remain stable across short and long views', async ({
@@ -194,7 +196,10 @@ test('E tab navigation and panel origins remain stable across short and long vie
     .locator('.community-view-heading')
     .evaluate((el) => ({ y: el.getBoundingClientRect().y }));
   for (const name of ['专科圈子', '同行私信', '社区设置', '社区首页', '同行私信', '社区首页']) {
-    await page.getByRole('link', { name, exact: true }).click();
+    await page
+      .locator('.community-tabs')
+      .getByRole('link', { name: new RegExp('^' + name) })
+      .click();
     await expect(page.locator('.community-view-heading h2')).toHaveText(name);
     await expect(page.locator('.community-view')).toBeVisible();
     const next = await page.locator('.community-tabs').boundingBox();
@@ -290,16 +295,18 @@ test('medical record drafts create, version and remain bilingual', async ({ page
   await dialog.getByLabel('选择病历模板').selectOption('followup');
   await dialog.getByLabel('病历标题').fill('端到端演示草稿');
   await dialog.getByLabel('诊断').fill('合成测试诊断');
-  await dialog.getByLabel('本次随访目的').fill('验证本地持久化');
+  await dialog.getByRole('textbox', { name: '本次随访目的', exact: true }).fill('验证本地持久化');
   await dialog.getByRole('button', { name: '保存草稿' }).click();
   await expect(dialog).toContainText('草稿已保存到本地数据库');
   await expect(dialog).toContainText('v1.0');
 
-  await dialog.getByLabel('本次随访目的').fill('验证第二个版本');
+  await dialog.getByRole('textbox', { name: '本次随访目的', exact: true }).fill('验证第二个版本');
   await dialog.getByRole('button', { name: '保存草稿' }).click();
   await expect(dialog).toContainText('v2.0');
   await page.getByTestId('language-select').selectOption('en', { force: true });
-  await expect(dialog.getByLabel('Follow-up purpose')).toHaveValue('验证第二个版本');
+  await expect(dialog.getByRole('textbox', { name: 'Follow-up purpose', exact: true })).toHaveValue(
+    '验证第二个版本',
+  );
   await expect(dialog.getByRole('button', { name: 'Save draft' })).toBeDisabled();
   await dialog.getByRole('button', { name: 'Close', exact: true }).click();
   await expect(page.getByText('端到端演示草稿')).toBeVisible();

@@ -109,4 +109,40 @@ describe('verified clinician login', () => {
     expect(screen.getByRole('heading', { name: 'Sign in to CareLink' })).toBeInTheDocument();
     expect(screen.getByLabelText('Account or email')).toBeInTheDocument();
   });
+
+  it('rejects oversize photos before reading them in both login and recovery', async () => {
+    const user = userEvent.setup();
+    const beginPhotoLogin = vi
+      .fn()
+      .mockResolvedValue({ photoTicket: 'photo-ticket', demoOnly: true });
+    const beginRecovery = vi
+      .fn()
+      .mockResolvedValue({ challengeId: 'recovery-ticket', method: 'photo' });
+    const reader = vi.spyOn(FileReader.prototype, 'readAsDataURL');
+    render(
+      <I18nProvider>
+        <LoginPage {...props} beginPhotoLogin={beginPhotoLogin} beginRecovery={beginRecovery} />
+      </I18nProvider>,
+    );
+    try {
+      const oversized = new File([new Uint8Array(2 * 1024 * 1024 + 1)], 'too-large.png', {
+        type: 'image/png',
+      });
+      await user.click(screen.getByRole('tab', { name: '人脸验证' }));
+      await user.click(screen.getByRole('button', { name: '开始人脸验证' }));
+      await user.upload(await screen.findByLabelText('上传照片'), oversized);
+      expect(screen.getByRole('alert')).toHaveTextContent('照片不能超过 2 MiB');
+      expect(reader).not.toHaveBeenCalled();
+      await user.click(screen.getByRole('button', { name: '返回登录方式' }));
+      await user.click(screen.getByRole('tab', { name: '账号密码' }));
+      await user.click(screen.getByRole('button', { name: '忘记密码？' }));
+      await user.selectOptions(screen.getByLabelText('验证方式'), 'photo');
+      await user.click(screen.getByRole('button', { name: '继续' }));
+      await user.upload(await screen.findByLabelText('拍照或上传照片'), oversized);
+      expect(screen.getByRole('alert')).toHaveTextContent('照片不能超过 2 MiB');
+      expect(reader).not.toHaveBeenCalled();
+    } finally {
+      reader.mockRestore();
+    }
+  });
 });

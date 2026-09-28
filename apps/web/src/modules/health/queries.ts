@@ -226,6 +226,7 @@ export function useReminders(patientId: string) {
   return useLocalizedEQuery(
     useQuery({
       queryKey: healthKeys.reminders(patientId),
+      refetchInterval: 5000,
       queryFn: () =>
         requestEApi<ReminderTask[]>(`/health/reminders?patientId=${encodeURIComponent(patientId)}`),
       enabled: Boolean(patientId),

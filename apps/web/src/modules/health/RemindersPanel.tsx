@@ -9,7 +9,7 @@ import { useCancelReminder, useCreateReminder, useReminders, useRetryReminder } 
 const statusLabels: Record<ReminderTask['status'], string> = {
   planned: '已保存，尚未发送',
   pending: '发送处理中',
-  sent: '已发送',
+  sent: '本地测试收件箱已收到',
   failed: '发送失败',
   cancelled: '已取消',
 };
@@ -26,7 +26,7 @@ export function RemindersPanel({ patientId }: { patientId: string }) {
       <header className="health-panel-header">
         <div>
           <h2>{t('随访提醒')}</h2>
-          <p>{t('通知接口未接入时，只保存任务，不显示发送成功')}</p>
+          <p>{t('本机测试通道会在到期后投递，可在通知中心查看患者测试收件箱。')}</p>
         </div>
         <Button onClick={() => setAdding(true)}>
           <BellPlus size={15} />
@@ -110,7 +110,10 @@ function ReminderForm({
   const { t } = useI18n();
   const [channel, setChannel] = useState<ReminderTask['channel']>('in-app');
   const [templateId, setTemplateId] = useState('followup-demo');
-  const [scheduledAt, setScheduledAt] = useState('2026-09-16T09:00');
+  const [scheduledAt, setScheduledAt] = useState(() => {
+    const next = new Date(Date.now() + 60000);
+    return new Date(next.getTime() - next.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  });
   async function submit(event: FormEvent) {
     event.preventDefault();
     await onSubmit({
@@ -118,7 +121,7 @@ function ReminderForm({
       patientId,
       channel,
       templateId,
-      scheduledAt: `${scheduledAt}:00+08:00`,
+      scheduledAt: new Date(scheduledAt).toISOString(),
     }).catch(() => undefined);
   }
   return (
@@ -152,7 +155,7 @@ function ReminderForm({
           />
         </label>
         <p className="health-form-note">
-          {t('当前没有真实通知服务，保存后状态为“已保存，尚未发送”。')}
+          {t('保存后到期自动投递到本机测试收件箱，不发送真实短信或邮件。')}
         </p>
         {error && <div className="health-inline-error">{error.message}</div>}
         <footer>

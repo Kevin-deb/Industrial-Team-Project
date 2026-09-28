@@ -14,7 +14,10 @@ import { plannedCommands } from '../src/platform/planned-commands.js';
 test('migrations create every domain and coherent synthetic clinical relationships', () => {
   const db = openDatabase(':memory:');
   try {
-    assert.equal(db.prepare('SELECT COUNT(*) count FROM schema_migrations').get()!.count, migrations.length);
+    assert.equal(
+      db.prepare('SELECT COUNT(*) count FROM schema_migrations').get()!.count,
+      migrations.length,
+    );
     assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), []);
     assert.equal(db.prepare('SELECT COUNT(*) count FROM patients').get()!.count, 10);
     const archive = db
@@ -77,7 +80,7 @@ test('read APIs use consistent envelopes and dashboard counts are derived from s
       ),
     );
     const flags = (await app.inject('/api/v1/features')).json().data;
-    assert.equal(flags.find((f: { id: string }) => f.id === 'community').status, 'disabled');
+    assert.equal(flags.find((f: { id: string }) => f.id === 'community').status, 'demo');
   } finally {
     await app.close();
   }
@@ -171,6 +174,9 @@ test('temporary patient access requires role, patient match, active task and une
       '2026-09-10T10:00:00.000Z',
       '2026-09-10T08:00:00.000Z',
     );
+    db.prepare(
+      "INSERT INTO consultation_participants(consultation_id,identity_id,participant_role) VALUES(?,?,'expert')",
+    ).run('CON-SCOPE', context.actorId);
     assert.equal(access.canReadPatient('PAT-RESTRICTED', context), true);
     assert.equal(
       access.canReadPatient('PAT-RESTRICTED', { ...context, now: '2026-09-10T10:00:00.000Z' }),
@@ -217,7 +223,9 @@ test('every reserved command returns 501 without mutating clinical data or conta
   const db = openDatabase(':memory:');
   const app = await createApp({ database: db });
   try {
-    const before = db.prepare('SELECT total_changes() changes').get()!.changes;
+    const before =
+      Number(db.prepare('SELECT total_changes() changes').get()!.changes) -
+      Number(db.prepare('SELECT COUNT(*) n FROM audit_events').get()!.n);
     for (const command of plannedCommands) {
       const response = await app.inject({
         method: command.method,
@@ -227,7 +235,12 @@ test('every reserved command returns 501 without mutating clinical data or conta
       assert.equal(response.statusCode, 501, command.method + ' ' + command.path);
       assert.equal(response.json().error.code, 'FEATURE_NOT_IMPLEMENTED');
     }
-    assert.equal(db.prepare('SELECT total_changes() changes').get()!.changes, before);
+    assert.equal(
+      Number(db.prepare('SELECT total_changes() changes').get()!.changes) -
+        Number(db.prepare('SELECT COUNT(*) n FROM audit_events').get()!.n),
+      before,
+      'Only audit inserts are allowed for unavailable commands',
+    );
     const unknown = await app.inject({
       method: 'POST',
       url: '/api/v1/not-a-real-command',
@@ -257,7 +270,10 @@ test('reopening the file database preserves data and does not reseed or rerun mi
     }
     const db = openDatabase(path);
     try {
-      assert.equal(db.prepare('SELECT COUNT(*) count FROM schema_migrations').get()!.count, migrations.length);
+      assert.equal(
+        db.prepare('SELECT COUNT(*) count FROM schema_migrations').get()!.count,
+        migrations.length,
+      );
     } finally {
       db.close();
     }
@@ -349,7 +365,10 @@ test('startup upgrades the legacy auth migration ordering without losing the dat
     legacy.exec(
       'PRAGMA foreign_keys=ON; CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL)',
     );
-    const apply = (migration: { version: number; name: string; sql: string }, version = migration.version) => {
+    const apply = (
+      migration: { version: number; name: string; sql: string },
+      version = migration.version,
+    ) => {
       legacy.exec(migration.sql);
       legacy
         .prepare('INSERT INTO schema_migrations(version,name,applied_at) VALUES(?,?,?)')

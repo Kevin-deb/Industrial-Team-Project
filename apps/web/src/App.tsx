@@ -1,3 +1,7 @@
+import {
+  useWorkspaceNotifications,
+  WorkspaceNotificationPanel,
+} from './shared/workspace-notifications';
 import { useI18n } from './shared/i18n';
 import { useEffect, useState, type ReactNode } from 'react';
 import { NavLink, Route, Routes, useLocation, useNavigate, Link } from 'react-router-dom';
@@ -37,11 +41,7 @@ import {
   RecordsPage,
   SettingsPage,
 } from './modules';
-import {
-  GlobalSocialLiveUpdates,
-  UnreadBadge,
-  useSocialUnread,
-} from './modules/community/unread';
+import { GlobalSocialLiveUpdates, UnreadBadge, useSocialUnread } from './modules/community/unread';
 import { useReadAllNotifications } from './modules/community/queries';
 import { noticeText } from './modules/community/CommunityNotifications';
 
@@ -79,6 +79,7 @@ export function App() {
   const location = useLocation();
   const navigate = useNavigate();
   const { session, logout } = useAuth();
+  const workNotifications = useWorkspaceNotifications(session.doctor.id);
   const [query, setQuery] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [dialog, setDialog] = useState<'notifications' | 'help' | null>(null);
@@ -264,7 +265,12 @@ export function App() {
               </div>
               <ChevronDown size={14} />
             </button>
-            <button className="icon-button" aria-label={t('退出登录')} title={t('退出登录')} onClick={() => void logout()}>
+            <button
+              className="icon-button"
+              aria-label={t('退出登录')}
+              title={t('退出登录')}
+              onClick={() => void logout()}
+            >
               <LogOut size={18} />
             </button>
           </div>
@@ -296,11 +302,11 @@ export function App() {
           <footer className="page-footer">
             <span>
               {t('CareLink 医生服务系统')}
-              <span className="footer-dot">·</span> Iteration 0
+              <span className="footer-dot">·</span> {t('本地业务演示')}
             </span>
             <span>
               <span className="status-dot" />
-              {t('框架演示 · 仅使用虚构数据')}
+              {t('本地业务演示 · 合成数据')}
             </span>
           </footer>
         </main>
@@ -312,6 +318,13 @@ export function App() {
         >
           {dialog === 'notifications' ? (
             <div className="notification-center-list">
+              <WorkspaceNotificationPanel
+                {...workNotifications}
+                navigate={(path) => {
+                  setDialog(null);
+                  navigate(path);
+                }}
+              />
               {unread.interactionTotal + unread.conversationTotal === 0 && (
                 <p className="notification-empty">{t('目前没有社区消息')}</p>
               )}
@@ -319,7 +332,9 @@ export function App() {
                 <section className="notification-center-section">
                   <header>
                     <strong>{t('社区互动')}</strong>
-                    <span>{unread.interactionTotal} {t('条消息')}</span>
+                    <span>
+                      {unread.interactionTotal} {t('条消息')}
+                    </span>
                     <UnreadBadge count={unread.interactionUnread} />
                   </header>
                   {unread.notificationItems.map((item) => (
@@ -331,14 +346,18 @@ export function App() {
                         navigate(item.postId ? `/community/posts/${item.postId}` : '/community');
                       }}
                     >
-                      <span className="notice-symbol"><Bell size={17} /></span>
+                      <span className="notice-symbol">
+                        <Bell size={17} />
+                      </span>
                       <span>
                         <strong>
                           {item.kind.startsWith('report-') || item.kind === 'content-moderated'
                             ? t(noticeText(item.kind))
                             : `${item.actorDisplayName} ${t(noticeText(item.kind))}`}
                         </strong>
-                        <small>{formatDate(item.createdAt, { dateStyle: 'medium', timeStyle: 'short' })}</small>
+                        <small>
+                          {formatDate(item.createdAt, { dateStyle: 'medium', timeStyle: 'short' })}
+                        </small>
                       </span>
                     </button>
                   ))}
@@ -348,7 +367,9 @@ export function App() {
                 <section className="notification-center-section">
                   <header>
                     <strong>{t('同行私信')}</strong>
-                    <span>{unread.conversationTotal} {t('条会话')}</span>
+                    <span>
+                      {unread.conversationTotal} {t('条会话')}
+                    </span>
                     <UnreadBadge count={unread.directUnread} />
                   </header>
                   {unread.conversationItems.map((item) => (
@@ -360,7 +381,9 @@ export function App() {
                         navigate('/community/messages');
                       }}
                     >
-                      <span className="notice-symbol"><MessageSquareText size={17} /></span>
+                      <span className="notice-symbol">
+                        <MessageSquareText size={17} />
+                      </span>
                       <span>
                         <strong>{item.peer.displayName}</strong>
                         <small>{item.lastMessage || t('查看同行私信')}</small>
@@ -378,17 +401,17 @@ export function App() {
               </p>
               <div className="help-grid">
                 <Info
-                  title={t('浏览演示')}
-                  text={t('查看左侧业务模块，通过搜索、筛选和详情面板了解计划中的工作流程。')}
+                  title={t('浏览工作流程')}
+                  text={t('通过患者、问诊、病历和健康页面完成本地业务操作。')}
                 />
                 <Info
                   title={t('功能状态')}
                   text={t('标记「待上线」的操作尚未接入真实业务，所有演示人物和数据均为虚构。')}
                 />
                 <Info
-                  title={t('开发边界')}
+                  title={t('本地服务状态')}
                   text={t(
-                    '当前提供前后端框架与本地数据库。真实认证、业务写入、视频与消息将在后续迭代开发。',
+                    '登录、业务保存和审计在本机运行；照片为演示核验，患者提醒进入测试收件箱。视频通话与真实人脸识别仍未接入。',
                   )}
                 />
               </div>

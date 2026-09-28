@@ -108,6 +108,12 @@ function emptyClinicalBrief(encounter: Encounter): ClinicalBrief {
   };
 }
 
+function localDate(offsetDays = 0, nowMs = Date.now()) {
+  const date = new Date(nowMs);
+  date.setDate(date.getDate() + offsetDays);
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
+
 function addMinutes(value: string, minutes: number) {
   const date = new Date(value);
   date.setMinutes(date.getMinutes() + minutes);
@@ -194,10 +200,17 @@ function ClinicalSummary({ brief }: { brief: ClinicalBrief }) {
 }
 
 function emptyRecordBody(template: MedicalRecordTemplateDefinition) {
-  return Object.fromEntries(template.fields.map((field) => [field.key, ''])) as Record<string, string>;
+  return Object.fromEntries(template.fields.map((field) => [field.key, ''])) as Record<
+    string,
+    string
+  >;
 }
 
-function bodyFromBrief(template: MedicalRecordTemplateDefinition, brief: ClinicalBrief, encounter: Encounter) {
+function bodyFromBrief(
+  template: MedicalRecordTemplateDefinition,
+  brief: ClinicalBrief,
+  encounter: Encounter,
+) {
   const body = emptyRecordBody(template);
   if (template.id === 'outpatient') {
     body.chiefComplaint = brief.chiefComplaint;
@@ -208,7 +221,8 @@ function bodyFromBrief(template: MedicalRecordTemplateDefinition, brief: Clinica
       `用药史：${brief.medicationHistory}`,
       `过敏史：${brief.allergyHistory}`,
     ].join('\n');
-    body.examinationAndInvestigations = '在线问诊资料待医生补充，必要时建议线下查体或完善辅助检查。';
+    body.examinationAndInvestigations =
+      '在线问诊资料待医生补充，必要时建议线下查体或完善辅助检查。';
     body.assessmentAndPlan = `围绕“${encounter.reason}”继续评估，结合沟通记录完善诊疗计划。`;
   } else if (template.id === 'followup') {
     body.followUpPurpose = encounter.reason;
@@ -238,7 +252,11 @@ function EncounterRecordDialog({
   onSaved: () => void;
 }) {
   const { t } = useI18n();
-  const { data: templates, loading, error } = useApi<MedicalRecordTemplateDefinition[]>('/record-templates');
+  const {
+    data: templates,
+    loading,
+    error,
+  } = useApi<MedicalRecordTemplateDefinition[]>('/record-templates');
   const [templateId, setTemplateId] = useState<MedicalRecordTemplateId>('outpatient');
   const [title, setTitle] = useState(`${encounter.patientName}在线问诊病历`);
   const [diagnosis, setDiagnosis] = useState(encounter.reason);
@@ -309,7 +327,11 @@ function EncounterRecordDialog({
           <div className="record-editor-grid">
             <label>
               <span>{t('患者')}</span>
-              <input value={`${encounter.patientName} · ${encounter.patientId}`} disabled readOnly />
+              <input
+                value={`${encounter.patientName} · ${encounter.patientId}`}
+                disabled
+                readOnly
+              />
             </label>
             <label>
               <span>{t('关联问诊')}</span>
@@ -395,7 +417,9 @@ function EncounterRecordDialog({
 }
 
 function EncounterDetailClinical({ encounter }: { encounter: Encounter }) {
-  const { data } = useApi<EncounterContext>(`/encounters/${encodeURIComponent(encounter.id)}/context`);
+  const { data } = useApi<EncounterContext>(
+    `/encounters/${encodeURIComponent(encounter.id)}/context`,
+  );
   return <ClinicalSummary brief={data?.brief ?? emptyClinicalBrief(encounter)} />;
 }
 
@@ -511,17 +535,19 @@ function AppointmentManagementDialog({
   const { t, formatDate } = useI18n();
   const availability = useApi<AvailabilityWindow[]>('/encounter-availability');
   const noticeData = useApi<NoticeLog[]>('/encounter-notices');
-  const firstWaiting = encounters.find((item) => encounterDisplayStatus(item, nowMs) !== 'completed');
+  const firstWaiting = encounters.find(
+    (item) => encounterDisplayStatus(item, nowMs) !== 'completed',
+  );
   const [windows, setWindows] = useState<AvailabilityWindow[]>([]);
   const [newWindow, setNewWindow] = useState({
-    date: '2026-09-22',
+    date: localDate(1, nowMs),
     type: 'video' as Encounter['type'],
     start: '09:00',
     end: '09:20',
     capacity: 4,
   });
   const [selectedEncounterId, setSelectedEncounterId] = useState(firstWaiting?.id ?? '');
-  const [nextDate, setNextDate] = useState('2026-09-22');
+  const [nextDate, setNextDate] = useState(() => localDate(1, nowMs));
   const [nextTime, setNextTime] = useState('10:00');
   const [noticeText, setNoticeText] = useState('请患者在问诊前补充近期检查结果和当前用药。');
   const [noticeFeedback, setNoticeFeedback] = useState('');
@@ -545,16 +571,15 @@ function AppointmentManagementDialog({
   const sendNotice = useCallback(
     (kind: NoticeLog['kind']) => {
       if (!selectedEncounter) return;
-      const proposedScheduledAt = kind === '改期通知' ? `${nextDate}T${nextTime}:00+08:00` : undefined;
+      const proposedScheduledAt =
+        kind === '改期通知' ? new Date(`${nextDate}T${nextTime}:00`).toISOString() : undefined;
       void requestApi<NoticeLog>('/encounter-notices', {
         method: 'POST',
         body: JSON.stringify({
           encounterId: selectedEncounter.id,
           kind,
           content:
-            kind === '改期通知'
-              ? `建议改至 ${nextDate} ${nextTime}，等待患者确认。`
-              : noticeText,
+            kind === '改期通知' ? `建议改至 ${nextDate} ${nextTime}，等待患者确认。` : noticeText,
           proposedScheduledAt,
         }),
       }).then((response) => {
@@ -611,7 +636,7 @@ function AppointmentManagementDialog({
             <span>{t('今日可接诊容量')}</span>
             <strong>
               {windows
-                .filter((item) => item.date === '2026-09-21')
+                .filter((item) => item.date === localDate(0, nowMs))
                 .reduce((total, item) => total + item.capacity, 0)}
             </strong>
           </div>
@@ -628,7 +653,9 @@ function AppointmentManagementDialog({
               <input
                 type="date"
                 value={newWindow.date}
-                onChange={(event) => setNewWindow((current) => ({ ...current, date: event.target.value }))}
+                onChange={(event) =>
+                  setNewWindow((current) => ({ ...current, date: event.target.value }))
+                }
               />
             </label>
             <label>
@@ -651,7 +678,9 @@ function AppointmentManagementDialog({
               <input
                 type="time"
                 value={newWindow.start}
-                onChange={(event) => setNewWindow((current) => ({ ...current, start: event.target.value }))}
+                onChange={(event) =>
+                  setNewWindow((current) => ({ ...current, start: event.target.value }))
+                }
               />
             </label>
             <label>
@@ -659,7 +688,9 @@ function AppointmentManagementDialog({
               <input
                 type="time"
                 value={newWindow.end}
-                onChange={(event) => setNewWindow((current) => ({ ...current, end: event.target.value }))}
+                onChange={(event) =>
+                  setNewWindow((current) => ({ ...current, end: event.target.value }))
+                }
               />
             </label>
             <label>
@@ -702,9 +733,7 @@ function AppointmentManagementDialog({
                       const capacity = Math.max(window.booked, Number(event.target.value) || 1);
                       setWindows((current) =>
                         current.map((item) =>
-                          item.id === window.id
-                            ? { ...item, capacity }
-                            : item,
+                          item.id === window.id ? { ...item, capacity } : item,
                         ),
                       );
                       void requestApi<AvailabilityWindow>(
@@ -741,8 +770,7 @@ function AppointmentManagementDialog({
                   <div>
                     <strong>{encounter.patientName}</strong>
                     <span>
-                      {encounter.id} ·{' '}
-                      {encounter.type === 'video' ? t('视频问诊') : t('图文问诊')}
+                      {encounter.id} · {encounter.type === 'video' ? t('视频问诊') : t('图文问诊')}
                     </span>
                   </div>
                   <span>
@@ -862,7 +890,9 @@ function EncounterRoom({
   onComplete: (id: string, record: SavedEncounterRecord) => void;
 }) {
   const { t, formatDate } = useI18n();
-  const roomContext = useApi<EncounterContext>(`/encounters/${encodeURIComponent(encounter.id)}/context`);
+  const roomContext = useApi<EncounterContext>(
+    `/encounters/${encodeURIComponent(encounter.id)}/context`,
+  );
   const brief = roomContext.data?.brief ?? emptyClinicalBrief(encounter);
   const [draft, setDraft] = useState('');
   const [messages, setMessages] = useState<RoomMessage[]>([]);
@@ -873,6 +903,12 @@ function EncounterRoom({
   const [previewImage, setPreviewImage] = useState<{ url: string; name?: string } | null>(null);
   const [doctorStream, setDoctorStream] = useState<MediaStream | null>(null);
   const [cameraError, setCameraError] = useState('');
+  const [operationError, setOperationError] = useState('');
+  const [busyAction, setBusyAction] = useState(false);
+  const actionPending = useRef(false);
+  const [cameraStarting, setCameraStarting] = useState(false);
+  const cameraPending = useRef(false);
+  const roomMounted = useRef(true);
   const doctorVideoRef = useRef<HTMLVideoElement | null>(null);
   const doctorStreamRef = useRef<MediaStream | null>(null);
   const isVideo = encounter.type === 'video';
@@ -882,7 +918,9 @@ function EncounterRoom({
   const roomSavedRecords = roomContext.data?.savedRecords ?? savedRecords;
   useEffect(() => {
     if (!roomContext.data) return;
-    setMessages(roomContext.data.messages.map((message) => roomMessageFromApi(message, formatDate)));
+    setMessages(
+      roomContext.data.messages.map((message) => roomMessageFromApi(message, formatDate)),
+    );
   }, [formatDate, roomContext.data]);
   const playDoctorVideo = useCallback(
     (node: HTMLVideoElement | null = doctorVideoRef.current) => {
@@ -907,7 +945,9 @@ function EncounterRoom({
     playDoctorVideo();
   }, [playDoctorVideo]);
   useEffect(() => {
+    roomMounted.current = true;
     return () => {
+      roomMounted.current = false;
       doctorStreamRef.current?.getTracks().forEach((track) => track.stop());
       doctorStreamRef.current = null;
     };
@@ -920,133 +960,208 @@ function EncounterRoom({
     setDoctorStream(stream);
   }, []);
   const startCamera = useCallback(async () => {
-    if (isCompleted) return false;
+    if (isCompleted || cameraPending.current) return false;
     if (!navigator.mediaDevices?.getUserMedia) {
       setCameraError('当前浏览器不支持摄像头预览');
       return false;
     }
+    cameraPending.current = true;
+    setCameraStarting(true);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      if (!roomMounted.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return false;
+      }
       replaceDoctorStream(stream);
+      setCallStarted(true);
       setCameraError('');
       return true;
     } catch {
+      setCallStarted(false);
       setCameraError('摄像头未开启，请允许浏览器访问摄像头');
       return false;
+    } finally {
+      cameraPending.current = false;
+      setCameraStarting(false);
     }
   }, [isCompleted, replaceDoctorStream]);
   const stopCamera = useCallback(() => {
     replaceDoctorStream(null);
+    setCallStarted(false);
     setCameraError('');
   }, [replaceDoctorStream]);
   const toggleCall = useCallback(async () => {
     if (callStarted) {
-      setCallStarted(false);
       stopCamera();
       return;
     }
-    if (isCompleted) return;
-    await startCamera();
-    setCallStarted(true);
+    if (!isCompleted) await startCamera();
   }, [callStarted, isCompleted, startCamera, stopCamera]);
-  const sendMessage = useCallback(() => {
+  const beginAction = useCallback(() => {
+    if (actionPending.current) return false;
+    actionPending.current = true;
+    setBusyAction(true);
+    setOperationError('');
+    return true;
+  }, []);
+  const finishAction = useCallback(() => {
+    actionPending.current = false;
+    setBusyAction(false);
+  }, []);
+  const showOperationError = useCallback((reason: unknown) => {
+    setOperationError(
+      reason instanceof TypeError
+        ? '无法连接本地服务'
+        : reason instanceof Error
+          ? reason.message
+          : '操作未完成，请重试。',
+    );
+  }, []);
+  const sendMessage = useCallback(async () => {
     if (isCompleted) return;
     const body = draft.trim();
-    if (!body) return;
-    void requestApi<ApiEncounterMessage>(`/encounters/${encodeURIComponent(encounter.id)}/messages`, {
-      method: 'POST',
-      body: JSON.stringify({ body }),
-    }).then((response) => {
+    if (!body || !beginAction()) return;
+    try {
+      const response = await requestApi<ApiEncounterMessage>(
+        `/encounters/${encodeURIComponent(encounter.id)}/messages`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ body }),
+        },
+      );
       setMessages((current) => [...current, roomMessageFromApi(response.data, formatDate)]);
       setDraft('');
       roomContext.reload();
-    });
-  }, [draft, encounter.id, formatDate, isCompleted, roomContext]);
+    } catch (reason) {
+      showOperationError(reason);
+    } finally {
+      finishAction();
+    }
+  }, [
+    draft,
+    encounter.id,
+    formatDate,
+    isCompleted,
+    roomContext,
+    beginAction,
+    finishAction,
+    showOperationError,
+  ]);
   const sendImage = useCallback(
-    (files: FileList | null) => {
+    async (files: FileList | null) => {
       if (isCompleted) return;
       const file = files?.[0];
-      if (!file) return;
-      void readImageAsDataUrl(file)
-        .then((imageUrl) =>
-          requestApi<ApiEncounterMessage>(
-            `/encounters/${encodeURIComponent(encounter.id)}/messages`,
-            {
-              method: 'POST',
-              body: JSON.stringify({ body: file.name, imageUrl, imageName: file.name }),
-            },
-          ),
-        )
-        .then((response) => {
-          setMessages((current) => [...current, roomMessageFromApi(response.data, formatDate)]);
-          roomContext.reload();
-        });
+      if (!file || !beginAction()) return;
+      try {
+        const imageUrl = await readImageAsDataUrl(file);
+        const response = await requestApi<ApiEncounterMessage>(
+          `/encounters/${encodeURIComponent(encounter.id)}/messages`,
+          {
+            method: 'POST',
+            body: JSON.stringify({ body: file.name, imageUrl, imageName: file.name }),
+          },
+        );
+        setMessages((current) => [...current, roomMessageFromApi(response.data, formatDate)]);
+        roomContext.reload();
+      } catch (reason) {
+        showOperationError(reason);
+      } finally {
+        finishAction();
+      }
     },
-    [encounter.id, formatDate, isCompleted, roomContext],
+    [
+      encounter.id,
+      formatDate,
+      isCompleted,
+      roomContext,
+      beginAction,
+      finishAction,
+      showOperationError,
+    ],
   );
-  const endEncounter = useCallback(() => {
-    if (isCompleted) return;
-    setCallStarted(false);
-    stopCamera();
-    void requestApi<SavedEncounterRecord>(
-      `/encounters/${encodeURIComponent(encounter.id)}/complete`,
-      {
-        method: 'POST',
-        body: JSON.stringify({
-          mode: encounter.type,
-          messageCount: messages.filter((message) => message.sender !== 'system').length,
-          audioSaved: encounter.type === 'video',
-          videoSaved: encounter.type === 'video',
-        }),
-      },
-    ).then((response) => {
+  const endEncounter = useCallback(async () => {
+    if (isCompleted || !beginAction()) return;
+    try {
+      const response = await requestApi<SavedEncounterRecord>(
+        `/encounters/${encodeURIComponent(encounter.id)}/complete`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            mode: encounter.type,
+            messageCount: messages.filter((message) => message.sender !== 'system').length,
+          }),
+        },
+      );
+      stopCamera();
       onComplete(encounter.id, response.data);
       roomContext.reload();
       setRecordsOpen(true);
-    });
-  }, [encounter.id, encounter.type, isCompleted, messages, onComplete, roomContext, stopCamera]);
-  const exportRecord = useCallback(() => {
-    const record =
-      roomSavedRecords[0] ??
-      (isCompleted
-        ? {
-            id: `${encounter.id}-completed-export`,
-            title: '本次问诊记录',
-            savedAt: new Date().toISOString(),
-            mode: encounter.type,
-            messageCount: messages.filter((message) => message.sender !== 'system').length,
-            audioSaved: encounter.type === 'video',
-            videoSaved: encounter.type === 'video',
-          }
-        : null);
-    if (!record) return;
-    const content = [
-      `问诊编号：${encounter.id}`,
-      `患者：${encounter.patientName}（${encounter.patientId}）`,
-      `类型：${encounter.type === 'video' ? '视频接诊' : '图文接诊'}`,
-      `保存时间：${formatDate(record.savedAt, { dateStyle: 'medium', timeStyle: 'short' })}`,
-      `录音留存：${record.audioSaved ? '是' : '否'}`,
-      `录像留存：${record.videoSaved ? '是' : '否'}`,
-      '',
-      '患者信息',
-      `主诉：${brief.chiefComplaint}`,
-      `现病史：${brief.presentIllness}`,
-      `既往病史：${brief.pastHistory}`,
-      `手术史：${brief.surgicalHistory}`,
-      `用药史：${brief.medicationHistory}`,
-      `过敏史：${brief.allergyHistory}`,
-      '',
-      '沟通记录',
-      ...messages.map((message) => `[${message.time}] ${message.sender}: ${message.body}`),
-    ].join('\n');
-    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${encounter.id}-consultation-record.txt`;
-    link.click();
-    URL.revokeObjectURL(url);
-  }, [brief, encounter, formatDate, isCompleted, messages, roomSavedRecords]);
+    } catch (reason) {
+      showOperationError(reason);
+    } finally {
+      finishAction();
+    }
+  }, [
+    encounter.id,
+    encounter.type,
+    isCompleted,
+    messages,
+    onComplete,
+    roomContext,
+    stopCamera,
+    beginAction,
+    finishAction,
+    showOperationError,
+  ]);
+  const exportRecord = useCallback(async () => {
+    if (!beginAction()) return;
+    try {
+      // Re-authorize immediately before export and use the fresh persisted snapshot only.
+      const response = await requestApi<EncounterContext>(
+        `/encounters/${encodeURIComponent(encounter.id)}/context`,
+      );
+      const record = response.data.savedRecords[0];
+      if (!record) throw new Error('没有已保存的问诊记录，无法导出。');
+      const savedBrief = response.data.brief;
+      const savedMessages = response.data.messages.map((message) =>
+        roomMessageFromApi(message, formatDate),
+      );
+      const content = [
+        `问诊编号：${encounter.id}`,
+        `患者：${encounter.patientName}（${encounter.patientId}）`,
+        `类型：${encounter.type === 'video' ? '视频接诊' : '图文接诊'}`,
+        `保存时间：${formatDate(record.savedAt, { dateStyle: 'medium', timeStyle: 'short' })}`,
+        `录音留存：${record.audioSaved ? '是' : '否'}`,
+        `录像留存：${record.videoSaved ? '是' : '否'}`,
+        '导出范围：患者摘要和已保存的文字消息；不包含图片、音频或视频文件。',
+        '',
+        '患者信息',
+        `主诉：${savedBrief.chiefComplaint}`,
+        `现病史：${savedBrief.presentIllness}`,
+        `既往病史：${savedBrief.pastHistory}`,
+        `手术史：${savedBrief.surgicalHistory}`,
+        `用药史：${savedBrief.medicationHistory}`,
+        `过敏史：${savedBrief.allergyHistory}`,
+        '',
+        '沟通记录',
+        ...savedMessages.map((message) => `[${message.time}] ${message.sender}: ${message.body}`),
+      ].join('\n');
+      const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${encounter.id}-consultation-record.txt`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (reason) {
+      showOperationError(reason);
+    } finally {
+      finishAction();
+    }
+  }, [encounter, formatDate, beginAction, finishAction, showOperationError]);
   return (
     <div className="encounter-room-page">
       <header className="encounter-room-header">
@@ -1067,6 +1182,7 @@ function EncounterRoom({
           <span>{isVideo ? t('视频接诊') : t('图文接诊')}</span>
         </div>
       </header>
+      {operationError && <p role="alert">{t(operationError)}</p>}
       <div className="encounter-room-layout">
         <aside className="encounter-room-sidebar">
           <div className="encounter-room-actions">
@@ -1078,7 +1194,7 @@ function EncounterRoom({
               className="encounter-end-button"
               variant="secondary"
               onClick={endEncounter}
-              disabled={isCompleted}
+              disabled={isCompleted || busyAction || cameraStarting}
             >
               <Square size={14} />
               {t(isCompleted ? '问诊已结束' : '结束问诊')}
@@ -1086,7 +1202,7 @@ function EncounterRoom({
             <Button
               variant="secondary"
               onClick={exportRecord}
-              disabled={!roomSavedRecords.length && !isCompleted}
+              disabled={!roomSavedRecords.length || busyAction}
             >
               <Download size={14} />
               {t('导出记录')}
@@ -1128,13 +1244,7 @@ function EncounterRoom({
                 <div className="encounter-video-tile encounter-video-tile--patient">
                   <PersonAvatar name={encounter.patientName} size="large" />
                   <span>
-                    {t(
-                      isCompleted
-                        ? '问诊已结束，视频通话不可继续'
-                        : callStarted
-                          ? '患者已接入视频'
-                          : '等待系统呼叫患者',
-                    )}
+                    {t(isCompleted ? '问诊已结束，本机预览已关闭' : '远端患者连接尚未接入')}
                   </span>
                 </div>
                 <div className="encounter-video-tile encounter-video-tile--doctor">
@@ -1146,10 +1256,10 @@ function EncounterRoom({
                       muted
                       playsInline
                       onLoadedMetadata={(event) => {
-                        void event.currentTarget.play();
+                        playDoctorVideo(event.currentTarget);
                       }}
                       onClick={(event) => {
-                        void event.currentTarget.play();
+                        playDoctorVideo(event.currentTarget);
                       }}
                     />
                   ) : (
@@ -1164,27 +1274,33 @@ function EncounterRoom({
               </div>
               <div className="encounter-call-status">
                 <strong>
-                  {t(isCompleted ? '问诊已完成' : callStarted ? '视频接诊中' : '等待呼叫')}
+                  {t(
+                    isCompleted
+                      ? '问诊已完成'
+                      : callStarted
+                        ? '本机摄像头预览中'
+                        : '本机摄像头预览',
+                  )}
                 </strong>
                 <span>
                   {t(
                     isCompleted
-                      ? '本次问诊记录已保存，诊间已锁定'
-                      : callStarted
-                        ? '双方已进入视频诊间'
-                        : '点击开始呼叫后进入视频接诊流程',
+                      ? roomSavedRecords.length
+                        ? '问诊文本记录已保存；未录音录像。'
+                        : '问诊已结束，未找到已保存的问诊记录。'
+                      : '仅预览本机画面；尚未连接患者，未录音录像。',
                   )}
                 </span>
               </div>
               <div className="encounter-call-controls">
-                <button aria-label={t('麦克风')} disabled={isCompleted}>
+                <button aria-label={t('麦克风未接入')} title={t('麦克风未接入')} disabled>
                   <Mic size={18} />
                 </button>
                 <button
                   type="button"
                   className={doctorStream ? 'is-active' : ''}
                   aria-label={t('摄像头')}
-                  disabled={isCompleted}
+                  disabled={isCompleted || busyAction || cameraStarting}
                   onClick={() => {
                     if (doctorStream) {
                       stopCamera();
@@ -1198,13 +1314,13 @@ function EncounterRoom({
                 <Button
                   className={callStarted ? 'encounter-danger-button' : ''}
                   variant={callStarted ? 'secondary' : 'primary'}
-                  disabled={isCompleted}
+                  disabled={isCompleted || busyAction || cameraStarting}
                   onClick={() => {
                     void toggleCall();
                   }}
                 >
                   {callStarted ? <PhoneOff size={17} /> : <PhoneCall size={17} />}
-                  {t(callStarted ? '结束通话' : '开始视频接诊')}
+                  {t(callStarted ? '停止本机预览' : '开启本机预览')}
                 </Button>
               </div>
             </section>
@@ -1255,28 +1371,28 @@ function EncounterRoom({
               <div className="encounter-compose">
                 <label
                   className={`message-image-button ${isCompleted ? 'is-disabled' : ''}`}
-                  aria-disabled={isCompleted}
+                  aria-disabled={isCompleted || busyAction}
                 >
                   <ImagePlus size={17} />
                   {t('图片')}
                   <input
                     type="file"
                     accept="image/*"
-                    disabled={isCompleted}
+                    disabled={isCompleted || busyAction}
                     onChange={(event) => {
-                      sendImage(event.target.files);
+                      void sendImage(event.target.files);
                       event.currentTarget.value = '';
                     }}
                   />
                 </label>
                 <textarea
                   value={draft}
-                  disabled={isCompleted}
+                  disabled={isCompleted || busyAction}
                   onChange={(event) => setDraft(event.target.value)}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter' && !event.shiftKey) {
                       event.preventDefault();
-                      sendMessage();
+                      void sendMessage();
                     }
                   }}
                   placeholder={t(
@@ -1284,7 +1400,7 @@ function EncounterRoom({
                   )}
                   aria-label={t('输入回复患者的内容')}
                 />
-                <Button onClick={sendMessage} disabled={isCompleted}>
+                <Button onClick={sendMessage} disabled={isCompleted || busyAction}>
                   <Send size={16} />
                   {t('发送')}
                 </Button>
@@ -1361,19 +1477,25 @@ export function EncountersPage() {
   const activeRoom = encounterRows.find((item) => item.id === roomId) ?? null;
   const [appointmentOpen, setAppointmentOpen] = useState(false);
   const close = useCallback(() => setSelectedId(null), []);
-  const completeEncounter = useCallback((id: string, record: SavedEncounterRecord) => {
-    setStatusOverrides((current) => ({ ...current, [id]: 'completed' }));
-    setSavedRecordsByEncounter((current) => {
-      const records = current[id] ?? [];
-      if (records.some((item) => item.id === record.id)) return current;
-      return { ...current, [id]: [record, ...records] };
-    });
-    reload();
-  }, [reload]);
-  const applyReschedule = useCallback((id: string) => {
-    setStatusOverrides((current) => ({ ...current, [id]: 'waiting' }));
-    reload();
-  }, [reload]);
+  const completeEncounter = useCallback(
+    (id: string, record: SavedEncounterRecord) => {
+      setStatusOverrides((current) => ({ ...current, [id]: 'completed' }));
+      setSavedRecordsByEncounter((current) => {
+        const records = current[id] ?? [];
+        if (records.some((item) => item.id === record.id)) return current;
+        return { ...current, [id]: [record, ...records] };
+      });
+      reload();
+    },
+    [reload],
+  );
+  const applyReschedule = useCallback(
+    (id: string) => {
+      setStatusOverrides((current) => ({ ...current, [id]: 'waiting' }));
+      reload();
+    },
+    [reload],
+  );
   const encounters = useMemo(
     () =>
       encounterRows.filter((item) => {

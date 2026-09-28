@@ -1,3 +1,10 @@
+import {
+  LocalDemoNotifications,
+  isQuietTime,
+  SqliteSettingsRepository,
+  registerSettingsRoutes,
+  registerAuditRoutes,
+} from './platform/index.js';
 import Fastify, { LogController, type FastifyReply, type FastifyRequest } from 'fastify';
 import fastifyStatic from '@fastify/static';
 import fastifyMultipart from '@fastify/multipart';
@@ -50,6 +57,8 @@ export interface AppOptions {
   webRoot?: string;
   logger?: boolean;
   now?: () => string;
+  /** Zero disables automatic delivery; tests use an isolated deterministic clock. */
+  reminderPollingMs?: number;
   mediaRoot?: string;
   socialRealtime?: SocialRealtimePort & {
     subscribe(
@@ -72,6 +81,19 @@ const fail = (
   reply
     .code(status)
     .send({ error: { code, message }, meta: { requestId: request.id, mode: 'demo' } });
+
+function requestSessionToken(request: FastifyRequest): string | undefined {
+  const token = bearerToken(request.headers.authorization);
+  if (token) return token;
+  if (request.url.split('?')[0] !== '/api/v1/social/events') return undefined;
+  const protocols = request.headers['sec-websocket-protocol'];
+  if (typeof protocols !== 'string') return undefined;
+  const credential = protocols
+    .split(',')
+    .map((value) => value.trim())
+    .find((value) => value.startsWith('bearer.'));
+  return credential ? bearerToken('Bearer ' + credential.slice(7)) : undefined;
+}
 
 function isLocalUrl(value: string): boolean {
   try {
@@ -109,6 +131,11 @@ export async function createApp(options: AppOptions = {}) {
   const clinical = new SqliteClinicalRepository(db, new SqlitePermissionAccess(db), encounters);
   const healthRepository = new SqliteHealthRepository(db);
   const platform = new SqlitePlatformRepository(db);
+  const settings = new SqliteSettingsRepository(db);
+  const localNotifications = new LocalDemoNotifications(
+    db,
+    () => options.now?.() ?? new Date().toISOString(),
+  );
   const ephemeralMediaRoot =
     !options.mediaRoot && (!options.databasePath || options.databasePath === ':memory:')
       ? mkdtempSync(resolve(tmpdir(), 'carelink-social-media-'))
@@ -119,7 +146,8 @@ export async function createApp(options: AppOptions = {}) {
     resolve(dirname(options.databasePath!), 'social-media');
   const socialRepository = new SqliteSocialRepository(db);
   const socialRealtime = options.socialRealtime ?? new SocialRealtimeHub();
-  const trustedTestActor = options.identity?.actorId ?? (!options.runtime ? DEMO_DOCTOR_ID : undefined);
+  const trustedTestActor =
+    options.identity?.actorId ?? (!options.runtime ? DEMO_DOCTOR_ID : undefined);
   const requestContext = new AsyncLocalStorage<{ actorId: string; now: string }>();
   const context = () => {
     const current = requestContext.getStore();
@@ -129,7 +157,9 @@ export async function createApp(options: AppOptions = {}) {
     throw new Error('Authenticated request context is unavailable.');
   };
   const demoEmail = new DemoEmailOutbox();
-  const emailDelivery = smtpConfigured(process.env) ? new SmtpEmailDelivery(process.env) : demoEmail;
+  const emailDelivery = smtpConfigured(process.env)
+    ? new SmtpEmailDelivery(process.env)
+    : demoEmail;
   const auth = new AuthService(new SqliteAuthRepository(db), emailDelivery, {
     now: options.now,
     audit(event) {
@@ -174,19 +204,56 @@ export async function createApp(options: AppOptions = {}) {
     },
     {
       record(event) {
-        if (event.outcome === 'failed') return;
         platform.recordAccess({
           actorId: event.actorId,
           action: event.action,
           targetType: event.resourceType,
           targetId: event.resourceId,
-          outcome: event.outcome === 'denied' ? 'denied' : 'success',
+          outcome: event.outcome,
+          occurredAt: event.occurredAt,
           description: `E health ${event.outcome} metadata event`,
         });
       },
     },
+    localNotifications,
   );
+  let reminderRun: Promise<void> | undefined;
+  const dispatchReminders = () => {
+    if (reminderRun) return reminderRun;
+    reminderRun = (async () => {
+      const now = options.now?.() ?? new Date().toISOString();
+      healthRepository.recoverInterruptedDeliveries(now);
+      for (const { task, actorId } of healthRepository.dueReminders(now)) {
+        const taskContext = { actorId, now };
+        if (!new SqlitePatientAccess(db).canReadPatient(task.patientId, taskContext)) continue;
+        try {
+          await health.retryReminder(task.id, `auto-${task.id}-${task.attempts + 1}`, taskContext);
+        } catch {
+          // The domain records failures; the scheduler must continue processing unrelated patients.
+        }
+      }
+    })().finally(() => {
+      reminderRun = undefined;
+    });
+    return reminderRun;
+  };
+  let reminderTimer: ReturnType<typeof setInterval> | undefined;
+  app.addHook('onReady', async () => {
+    if (!options.runtime || options.reminderPollingMs === 0) return;
+    await dispatchReminders();
+    reminderTimer = setInterval(
+      () => {
+        void dispatchReminders().catch((error) =>
+          app.log.error({ err: error }, 'Reminder scheduler failed'),
+        );
+      },
+      Math.max(25, options.reminderPollingMs ?? 5000),
+    );
+    reminderTimer.unref();
+  });
   app.addHook('onClose', async () => {
+    if (reminderTimer) clearInterval(reminderTimer);
+    await reminderRun;
     if (!options.database) db.close();
     if (ephemeralMediaRoot) rmSync(ephemeralMediaRoot, { recursive: true, force: true });
   });
@@ -218,7 +285,7 @@ export async function createApp(options: AppOptions = {}) {
       );
     }
     if (isPublic) return done();
-    const token = bearerToken(request.headers.authorization);
+    const token = requestSessionToken(request);
     const session = token ? auth.authenticate(token) : undefined;
     if (!session)
       return void fail(request, reply, 401, 'AUTHENTICATION_REQUIRED', '请登录后继续。');
@@ -229,6 +296,31 @@ export async function createApp(options: AppOptions = {}) {
       },
       done,
     );
+  });
+  app.addHook('onResponse', async (request, reply) => {
+    const actor = requestContext.getStore() ?? (trustedTestActor ? context() : undefined);
+    if (!actor) return;
+    const route = request.routeOptions.url ?? '';
+    const domain =
+      /^\/api\/v1\/(encounters|encounter-availability|encounter-notices|consultations|consultation-doctors)/.test(
+        route,
+      );
+    if (!domain && reply.statusCode < 500) return;
+    const id = (request.params as { id?: string } | undefined)?.id;
+    platform.recordAccess({
+      actorId: actor.actorId,
+      action: `${request.method} ${route}`,
+      targetType: route.includes('consultation') ? 'consultation' : domain ? 'encounter' : 'system',
+      targetId: String(id ?? 'collection').slice(0, 120),
+      outcome:
+        reply.statusCode < 400
+          ? 'success'
+          : [401, 403, 404, 409].includes(reply.statusCode)
+            ? 'denied'
+            : 'failed',
+      occurredAt: actor.now,
+      description: `request=${request.id}; status=${reply.statusCode}`,
+    });
   });
   app.setErrorHandler((error, request, reply) => {
     if (error && typeof error === 'object' && 'validation' in error)
@@ -266,7 +358,8 @@ export async function createApp(options: AppOptions = {}) {
       doctor: platform.doctor(context().actorId),
       mode: 'demo',
       demoDate: DEMO_DATE,
-      disclaimer: '仅供项目演示：全部患者及临床资料均为合成数据，当前无真实登录与诊疗功能。',
+      disclaimer:
+        '仅供项目演示：全部患者及临床资料均为合成数据，本地登录、业务保存和审计已启用；照片为演示核验，提醒发送到本机测试收件箱。',
     }),
   );
   registerPatientRoutes(app, { patients, platform, context });
@@ -283,7 +376,8 @@ export async function createApp(options: AppOptions = {}) {
     const body = String(request.body.body ?? '').trim();
     const imageUrl = request.body.imageUrl;
     const imageName = request.body.imageName;
-    if (!body && !imageUrl) return fail(request, reply, 400, 'INVALID_REQUEST', '消息内容不能为空。');
+    if (!body && !imageUrl)
+      return fail(request, reply, 400, 'INVALID_REQUEST', '消息内容不能为空。');
     if (imageUrl && !isLocalUrl(imageUrl) && !String(imageUrl).startsWith('data:image/'))
       return fail(request, reply, 400, 'INVALID_REQUEST', '图片地址无效。');
     const message = encounters.addMessage(
@@ -296,7 +390,12 @@ export async function createApp(options: AppOptions = {}) {
   });
   app.post<{
     Params: { id: string };
-    Body: { mode?: 'text' | 'video'; messageCount?: number; audioSaved?: boolean; videoSaved?: boolean };
+    Body: {
+      mode?: 'text' | 'video';
+      messageCount?: number;
+      audioSaved?: boolean;
+      videoSaved?: boolean;
+    };
   }>('/api/v1/encounters/:id/complete', async (request, reply) => {
     const mode = request.body.mode === 'video' ? 'video' : 'text';
     const record = encounters.complete(
@@ -304,8 +403,8 @@ export async function createApp(options: AppOptions = {}) {
       {
         mode,
         messageCount: Math.max(0, Number(request.body.messageCount ?? 0)),
-        audioSaved: Boolean(request.body.audioSaved),
-        videoSaved: Boolean(request.body.videoSaved),
+        audioSaved: false, // No recording storage provider is connected.
+        videoSaved: false,
       },
       context(),
     );
@@ -316,13 +415,22 @@ export async function createApp(options: AppOptions = {}) {
     envelope(request, encounters.listAvailability(context())),
   );
   app.post<{
-    Body: { date?: string; type?: 'text' | 'video'; start?: string; end?: string; capacity?: number };
+    Body: {
+      date?: string;
+      type?: 'text' | 'video';
+      start?: string;
+      end?: string;
+      capacity?: number;
+    };
   }>('/api/v1/encounter-availability', async (request, reply) => {
     const { date, type, start, end } = request.body;
     const capacity = Number(request.body.capacity ?? 0);
     if (!date || !type || !start || !end || !Number.isInteger(capacity) || capacity < 1)
       return fail(request, reply, 400, 'INVALID_REQUEST', '可接诊时段信息不完整。');
-    return envelope(request, encounters.createAvailability({ date, type, start, end, capacity }, context()));
+    return envelope(
+      request,
+      encounters.createAvailability({ date, type, start, end, capacity }, context()),
+    );
   });
   app.patch<{ Params: { id: string }; Body: { capacity?: number } }>(
     '/api/v1/encounter-availability/:id',
@@ -331,7 +439,8 @@ export async function createApp(options: AppOptions = {}) {
       if (!Number.isInteger(capacity) || capacity < 1)
         return fail(request, reply, 400, 'INVALID_REQUEST', '容量无效。');
       const window = encounters.updateAvailabilityCapacity(request.params.id, capacity, context());
-      if (!window) return fail(request, reply, 404, 'NOT_FOUND', '未找到该时段或容量小于已预约数。');
+      if (!window)
+        return fail(request, reply, 404, 'NOT_FOUND', '未找到该时段或容量小于已预约数。');
       return envelope(request, window);
     },
   );
@@ -350,15 +459,21 @@ export async function createApp(options: AppOptions = {}) {
     const content = String(request.body.content ?? '').trim();
     if (!encounterId || !kind || !content)
       return fail(request, reply, 400, 'INVALID_REQUEST', '通知内容不完整。');
-    const notice = encounters.createNotice({ encounterId, kind, content, proposedScheduledAt }, context());
+    const notice = encounters.createNotice(
+      { encounterId, kind, content, proposedScheduledAt },
+      context(),
+    );
     if (!notice) return fail(request, reply, 404, 'NOT_FOUND', '未找到该接诊或问诊已结束。');
     return envelope(request, notice);
   });
-  app.post<{ Params: { id: string } }>('/api/v1/encounter-notices/:id/accept', async (request, reply) => {
-    const notice = encounters.acceptNotice(request.params.id, context());
-    if (!notice) return fail(request, reply, 404, 'NOT_FOUND', '未找到待确认的改期通知。');
-    return envelope(request, notice);
-  });
+  app.post<{ Params: { id: string } }>(
+    '/api/v1/encounter-notices/:id/accept',
+    async (request, reply) => {
+      const notice = encounters.acceptNotice(request.params.id, context());
+      if (!notice) return fail(request, reply, 404, 'NOT_FOUND', '未找到待确认的改期通知。');
+      return envelope(request, notice);
+    },
+  );
   registerClinicalRoutes(app, { clinical, encounters, platform, context });
   app.get('/api/v1/consultations', async (request) =>
     envelope(request, encounters.listConsultations(context())),
@@ -366,11 +481,14 @@ export async function createApp(options: AppOptions = {}) {
   app.get<{ Querystring: { q?: string } }>('/api/v1/consultation-doctors', async (request) =>
     envelope(request, encounters.listConsultationDoctors(String(request.query.q ?? ''), context())),
   );
-  app.get<{ Params: { id: string } }>('/api/v1/consultations/:id/context', async (request, reply) => {
-    const data = encounters.consultationContext(request.params.id, context());
-    if (!data) return fail(request, reply, 404, 'NOT_FOUND', '未找到该会诊。');
-    return envelope(request, data);
-  });
+  app.get<{ Params: { id: string } }>(
+    '/api/v1/consultations/:id/context',
+    async (request, reply) => {
+      const data = encounters.consultationContext(request.params.id, context());
+      if (!data) return fail(request, reply, 404, 'NOT_FOUND', '未找到该会诊。');
+      return envelope(request, data);
+    },
+  );
   app.post<{
     Body: {
       patientId?: string;
@@ -380,10 +498,16 @@ export async function createApp(options: AppOptions = {}) {
       summary?: string;
       reviewerId?: string;
       participantIds?: string[];
-      materials?: Array<string | { title?: string; fileName?: string; description?: string; objectUrl?: string }>;
+      materials?: Array<
+        string | { title?: string; fileName?: string; description?: string; objectUrl?: string }
+      >;
     };
   }>('/api/v1/consultations', async (request, reply) => {
-    if (!Object.values(request.body ?? {}).some((value) => value !== undefined && value !== null && value !== ''))
+    if (
+      !Object.values(request.body ?? {}).some(
+        (value) => value !== undefined && value !== null && value !== '',
+      )
+    )
       return reply.code(501).send({
         error: {
           code: 'FEATURE_NOT_IMPLEMENTED',
@@ -396,14 +520,20 @@ export async function createApp(options: AppOptions = {}) {
     const specialty = String(request.body.specialty ?? '').trim();
     const scheduledAt = String(request.body.scheduledAt ?? '').trim();
     const reviewerId = String(request.body.reviewerId ?? '').trim();
-    const participantIds = Array.isArray(request.body.participantIds) ? request.body.participantIds : [];
+    const participantIds = Array.isArray(request.body.participantIds)
+      ? request.body.participantIds
+      : [];
     const rawMaterials = Array.isArray(request.body.materials) ? request.body.materials : [];
     const materials = rawMaterials
       .map((material) => {
         if (typeof material === 'string') {
           const title = material.trim();
           return title
-            ? { title, fileName: title.endsWith('.txt') ? title : `${title}.txt`, description: '发起会诊时上传的患者资料。' }
+            ? {
+                title,
+                fileName: title.endsWith('.txt') ? title : `${title}.txt`,
+                description: '发起会诊时上传的患者资料。',
+              }
             : null;
         }
         const title = String(material.title ?? material.fileName ?? '').trim();
@@ -418,7 +548,16 @@ export async function createApp(options: AppOptions = {}) {
             }
           : null;
       })
-      .filter((material): material is { title: string; fileName: string; description: string; objectUrl?: string } => Boolean(material));
+      .filter(
+        (
+          material,
+        ): material is {
+          title: string;
+          fileName: string;
+          description: string;
+          objectUrl?: string;
+        } => Boolean(material),
+      );
     if (
       materials.some(
         (material) =>
@@ -430,6 +569,24 @@ export async function createApp(options: AppOptions = {}) {
       return fail(request, reply, 400, 'INVALID_REQUEST', '材料地址无效。');
     if (!patientId || !title || !specialty || !scheduledAt || !reviewerId || !participantIds.length)
       return fail(request, reply, 400, 'INVALID_REQUEST', '会诊申请信息不完整。');
+    if (
+      !Number.isFinite(Date.parse(scheduledAt)) ||
+      Date.parse(scheduledAt) < Date.parse(context().now)
+    )
+      return fail(request, reply, 400, 'INVALID_SCHEDULE', '请选择当前时间之后的有效会诊时间。');
+    const clinicianIds = [...new Set([reviewerId, ...participantIds.map(String)])];
+    if (
+      clinicianIds.length > 20 ||
+      clinicianIds.some(
+        (id) =>
+          !db
+            .prepare(
+              "SELECT 1 FROM doctors d JOIN users u ON u.identity_id=d.identity_id WHERE d.identity_id=? AND d.enabled=1 AND u.status='active'",
+            )
+            .get(id),
+      )
+    )
+      return fail(request, reply, 400, 'INVALID_PARTICIPANT', '请选择有效的医生参与会诊。');
     const item = encounters.createConsultation(
       {
         patientId,
@@ -446,11 +603,15 @@ export async function createApp(options: AppOptions = {}) {
     if (!item) return fail(request, reply, 404, 'NOT_FOUND', '未找到患者或没有访问权限。');
     return envelope(request, item);
   });
-  app.post<{ Params: { id: string } }>('/api/v1/consultations/:id/accept', async (request, reply) => {
-    const item = encounters.acceptConsultation(request.params.id, context());
-    if (!item) return fail(request, reply, 409, 'CONSULTATION_LOCKED', '会诊不存在或当前状态不能接受。');
-    return envelope(request, item);
-  });
+  app.post<{ Params: { id: string } }>(
+    '/api/v1/consultations/:id/accept',
+    async (request, reply) => {
+      const item = encounters.acceptConsultation(request.params.id, context());
+      if (!item)
+        return fail(request, reply, 409, 'CONSULTATION_LOCKED', '会诊不存在或当前状态不能接受。');
+      return envelope(request, item);
+    },
+  );
   app.post<{
     Params: { id: string };
     Body: { body?: string; imageUrl?: string; imageName?: string };
@@ -458,7 +619,8 @@ export async function createApp(options: AppOptions = {}) {
     const body = String(request.body.body ?? '').trim();
     const imageUrl = request.body.imageUrl;
     const imageName = request.body.imageName;
-    if (!body && !imageUrl) return fail(request, reply, 400, 'INVALID_REQUEST', '消息内容不能为空。');
+    if (!body && !imageUrl)
+      return fail(request, reply, 400, 'INVALID_REQUEST', '消息内容不能为空。');
     if (imageUrl && !isLocalUrl(imageUrl) && !String(imageUrl).startsWith('data:image/'))
       return fail(request, reply, 400, 'INVALID_REQUEST', '图片地址无效。');
     const message = encounters.addConsultationMessage(
@@ -505,15 +667,25 @@ export async function createApp(options: AppOptions = {}) {
         context(),
       );
       if (!deleted)
-        return fail(request, reply, 409, 'CONSULTATION_LOCKED', '材料不存在，或会诊未接受/已结束。');
+        return fail(
+          request,
+          reply,
+          409,
+          'CONSULTATION_LOCKED',
+          '材料不存在，或会诊未接受/已结束。',
+        );
       return envelope(request, { deleted: true });
     },
   );
-  app.post<{ Params: { id: string } }>('/api/v1/consultations/:id/complete', async (request, reply) => {
-    const report = encounters.completeConsultation(request.params.id, context());
-    if (!report) return fail(request, reply, 409, 'CONSULTATION_LOCKED', '会诊不存在或尚未接受。');
-    return envelope(request, report);
-  });
+  app.post<{ Params: { id: string } }>(
+    '/api/v1/consultations/:id/complete',
+    async (request, reply) => {
+      const report = encounters.completeConsultation(request.params.id, context());
+      if (!report)
+        return fail(request, reply, 409, 'CONSULTATION_LOCKED', '会诊不存在或尚未接受。');
+      return envelope(request, report);
+    },
+  );
   registerHealthRoutes(app, health, context);
   registerSocialRoutes(
     app,
@@ -537,16 +709,51 @@ export async function createApp(options: AppOptions = {}) {
     context,
     new AttachmentService(socialRepository, new LocalAttachmentStorage(mediaRoot)),
   );
-  app.get('/api/v1/social/events', { websocket: true }, (socket) => {
-    const unsubscribe = socialRealtime.subscribe(context().actorId, (event) => {
+  app.get('/api/v1/social/events', { websocket: true }, (socket, request) => {
+    const actorId = context().actorId;
+    const token = requestSessionToken(request);
+    const stillAuthorized = () =>
+      Boolean(trustedTestActor || (token && auth.authenticate(token)?.identityId === actorId));
+    const check = () => {
+      if (!stillAuthorized()) socket.close(1008, 'Session expired');
+    };
+    const timer = setInterval(check, 1000);
+    timer.unref();
+    const unsubscribe = socialRealtime.subscribe(actorId, (event) => {
+      if (!stillAuthorized()) return socket.close(1008, 'Session expired');
       if (socket.readyState === 1) socket.send(JSON.stringify(event));
     });
-    socket.on('close', unsubscribe);
-    socket.on('error', unsubscribe);
+    const stop = () => {
+      clearInterval(timer);
+      unsubscribe();
+    };
+    socket.on('close', stop);
+    socket.on('error', stop);
   });
-  app.get('/api/v1/audit', async (request) =>
-    envelope(request, platform.ownAudit(context().actorId)),
-  );
+  registerAuditRoutes(app, { platform, context });
+  registerSettingsRoutes(app, settings, context);
+  app.get('/api/v1/notifications', async (request) => {
+    const current = context();
+    const preferences = settings.notificationPreferences(current.actorId);
+    const inbox = localNotifications.list(current);
+    return envelope(request, {
+      preferences,
+      quietNow: isQuietTime(preferences, current.now),
+      inbox,
+      reminders: preferences.followUp ? inbox : [],
+      encounters: preferences.encounter
+        ? encounters
+            .list(current)
+            .filter((item) => ['waiting', 'scheduled'].includes(item.status))
+            .map(({ id, patientId, patientName, scheduledAt }) => ({
+              id,
+              patientId,
+              patientName,
+              scheduledAt,
+            }))
+        : [],
+    });
+  });
   app.get('/api/v1/features', async (request) => envelope(request, features));
   app.get('/api/v1/dashboard', async (request) => {
     const current = context();

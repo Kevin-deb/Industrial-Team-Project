@@ -1,3 +1,4 @@
+import { MAX_PHOTO_BYTES } from '@doctor/contracts';
 import { useEffect, useRef, useState } from 'react';
 import {
   Camera,
@@ -104,13 +105,26 @@ export function LoginPage({
     streamRef.current?.getTracks().forEach((track) => track.stop());
   }
 
-  function upload(file?: File) {
-    if (!file || !/^image\/(png|jpeg)$/.test(file.type)) return;
+  function upload(file?: File, recovery = false) {
+    if (!file) return;
+    if (!/^image\/(png|jpeg)$/.test(file.type)) {
+      setError(t('请选择 PNG 或 JPEG 图片'));
+      return;
+    }
+    if (file.size > MAX_PHOTO_BYTES) {
+      setError(t('照片不能超过 2 MiB，请压缩后重试'));
+      return;
+    }
+    setError('');
     const reader = new FileReader();
     reader.onload = () => {
-      setPhoto(String(reader.result));
-      setMethod('upload');
+      if (recovery) setRecoveryPhoto(String(reader.result));
+      else {
+        setPhoto(String(reader.result));
+        setMethod('upload');
+      }
     };
+    reader.onerror = () => setError(t('照片读取失败，请重新选择'));
     reader.readAsDataURL(file);
   }
 
@@ -282,12 +296,7 @@ export function LoginPage({
                         accept="image/png,image/jpeg"
                         capture="user"
                         onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            const reader = new FileReader();
-                            reader.onload = () => setRecoveryPhoto(String(reader.result));
-                            reader.readAsDataURL(file);
-                          }
+                          upload(e.target.files?.[0], true);
                         }}
                       />
                     </label>

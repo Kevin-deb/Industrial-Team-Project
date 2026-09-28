@@ -21,10 +21,11 @@ test(
             const db = openDatabase(':memory:');
             const hub = new SocialRealtimeHub();
             const apps = await Promise.all(
-              ['doctor-demo-001', 'doctor-demo-002'].map((actorId) =>
+              [0, 1].map(() =>
                 createApp({
                   database: db,
-                  identity: { actorId },
+                  runtime: 'local-demo',
+                  reminderPollingMs: 0,
                   socialRealtime: hub,
                   webRoot: resolve('apps/web/dist'),
                 }),
@@ -35,17 +36,44 @@ test(
               const urls = await Promise.all(
                 apps.map((app) => app.listen({ host: '127.0.0.1', port: 0 })),
               );
+              const tokens = await Promise.all(
+                apps.map(async (app, index) => {
+                  const login = await app.inject({
+                    method: 'POST',
+                    url: '/api/v1/auth/password-login',
+                    payload: {
+                      account: index === 0 ? 'lin.zhiyuan' : 'zhou.ming',
+                      password: '123456',
+                    },
+                  });
+                  assert.equal(login.statusCode, 201, login.body);
+                  return login.json().data.token as string;
+                }),
+              );
+              await Promise.all(
+                contexts.map((context, index) =>
+                  context.addInitScript((token) => {
+                    localStorage.setItem('carelink-session-token', token);
+                    localStorage.setItem('carelink-language', 'zh-CN');
+                  }, tokens[index]),
+                ),
+              );
               async function command(index: number, path: string, data: unknown, method = 'POST') {
                 const response = await fetch(urls[index] + '/api/v1/social/' + path, {
                   method,
-                  headers: { 'Content-Type': 'application/json' },
+                  headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${tokens[index]}`,
+                  },
                   body: JSON.stringify(data),
                 });
                 assert.ok(response.ok, `${response.status}: ${await response.clone().text()}`);
                 return (await response.json()).data;
               }
               async function notices(index: number) {
-                const response = await fetch(urls[index] + '/api/v1/social/notifications');
+                const response = await fetch(urls[index] + '/api/v1/social/notifications', {
+                  headers: { Authorization: `Bearer ${tokens[index]}` },
+                });
                 assert.equal(response.status, 200);
                 return (await response.json()).data as Array<{
                   id: string;
@@ -90,7 +118,15 @@ test(
               await page.goto(urls[receiver] + '/community');
               const entry = page.getByRole('button', { name: /我的消息/ });
               const unread = before.filter((n) => !n.readAt).length;
-              await expect(entry.locator('b')).toHaveText(String(unread));
+              async function expectUnread(count: number) {
+                const badge = entry.locator('.unread-count-badge');
+                if (count === 0) await expect(badge).toHaveCount(0);
+                else await expect(badge).toHaveText(String(count));
+              }
+              await expect(entry.locator('.community-entry-count > span').first()).toHaveText(
+                String(before.length),
+              );
+              await expectUnread(unread);
               await expect.poll(() => connected).toBe(true);
               if (mode === 'community-off' || mode === 'notifications-off') {
                 await command(
@@ -126,7 +162,7 @@ test(
                 const response = await created;
                 assert.equal(response.status(), 201);
                 commentId = (await response.json()).data.id;
-                await expect(entry.locator('b')).toHaveText(String(unread + 1));
+                await expectUnread(unread + 1);
                 await entry.click();
                 await expect(page.getByRole('dialog', { name: '我的消息' })).toContainText(
                   kind === 'comment' ? '评论了你的帖子' : '回复了你的评论',
@@ -155,9 +191,11 @@ test(
                     .length,
                   0,
                 );
-                await expect(entry.locator('b')).toHaveText(String(unread));
+                await expectUnread(unread);
               }
-              const persisted = await fetch(urls[sender] + `/api/v1/social/posts/${post.id}`);
+              const persisted = await fetch(urls[sender] + `/api/v1/social/posts/${post.id}`, {
+                headers: { Authorization: `Bearer ${tokens[sender]}` },
+              });
               assert.equal(persisted.status, 200);
               assert.ok(
                 (await persisted.json()).data.comments.some(
@@ -211,6 +249,142 @@ test(
       }
     } finally {
       await browser.close();
+    }
+  },
+);
+
+test(
+  'browser realtime rejects anonymous clients and closes revoked sessions without further events',
+  { timeout: 30000 },
+  async () => {
+    const db = openDatabase(':memory:');
+    const hub = new SocialRealtimeHub();
+    const app = await createApp({
+      database: db,
+      runtime: 'local-demo',
+      reminderPollingMs: 0,
+      socialRealtime: hub,
+      webRoot: resolve('apps/web/dist'),
+    });
+    const browser = await chromium.launch();
+    try {
+      const url = await app.listen({ host: '127.0.0.1', port: 0 });
+      const page = await browser.newPage();
+      await page.goto(url + '/');
+      const socketUrl = url.replace(/^http/, 'ws') + '/api/v1/social/events';
+      const anonymous = await page.evaluate(
+        (address) =>
+          new Promise<{ opened: boolean; messages: number; code: number }>((resolve, reject) => {
+            const socket = new WebSocket(address, ['carelink']);
+            let opened = false;
+            let messages = 0;
+            const timeout = setTimeout(() => {
+              socket.close();
+              reject(new Error('Anonymous socket did not close'));
+            }, 5000);
+            socket.onopen = () => {
+              opened = true;
+            };
+            socket.onmessage = () => {
+              messages += 1;
+            };
+            socket.onclose = (event) => {
+              clearTimeout(timeout);
+              resolve({ opened, messages, code: event.code });
+            };
+          }),
+        socketUrl,
+      );
+      assert.equal(
+        anonymous.opened,
+        false,
+        'an anonymous browser must not complete the WebSocket handshake',
+      );
+      assert.equal(anonymous.messages, 0);
+      const login = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/password-login',
+        payload: { account: 'lin.zhiyuan', password: '123456' },
+      });
+      assert.equal(login.statusCode, 201, login.body);
+      const { token, identityId } = login.json().data as { token: string; identityId: string };
+      await page.evaluate(
+        ({ address, token }) =>
+          new Promise<void>((resolve, reject) => {
+            const target = window as typeof window & {
+              socketProbe: { messages: string[]; closeCode: number | null; protocol: string };
+            };
+            const probe = (target.socketProbe = { messages: [], closeCode: null, protocol: '' });
+            const socket = new WebSocket(address, ['carelink', 'bearer.' + token]);
+            const timeout = setTimeout(() => {
+              socket.close();
+              reject(new Error('Authenticated socket did not open'));
+            }, 5000);
+            socket.onopen = () => {
+              clearTimeout(timeout);
+              probe.protocol = socket.protocol;
+              resolve();
+            };
+            socket.onmessage = (event) => {
+              probe.messages.push(String(event.data));
+            };
+            socket.onclose = (event) => {
+              probe.closeCode = event.code;
+            };
+            socket.onerror = () => {
+              clearTimeout(timeout);
+              reject(new Error('Authenticated WebSocket failed'));
+            };
+          }),
+        { address: socketUrl, token },
+      );
+      const inspect = () =>
+        page.evaluate(
+          () =>
+            (
+              window as typeof window & {
+                socketProbe: { messages: string[]; closeCode: number | null; protocol: string };
+              }
+            ).socketProbe,
+        );
+      assert.equal(
+        (await inspect()).protocol,
+        'carelink',
+        'the selected public protocol must not echo the credential',
+      );
+      hub.publish([identityId], {
+        type: 'social.notifications.changed',
+        occurredAt: '2026-09-28T08:00:00.000Z',
+      });
+      await expect.poll(async () => (await inspect()).messages.length).toBe(1);
+      const logout = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/logout',
+        headers: { authorization: 'Bearer ' + token },
+      });
+      assert.equal(logout.statusCode, 204);
+      // No event is needed to trigger revocation: an idle connection must close too.
+      await expect.poll(async () => (await inspect()).closeCode, { timeout: 5000 }).toBe(1008);
+      hub.publish([identityId], {
+        type: 'social.notifications.changed',
+        occurredAt: '2026-09-28T08:01:00.000Z',
+      });
+      await page.waitForTimeout(100);
+      assert.equal(
+        (await inspect()).messages.length,
+        1,
+        'a revoked session must receive no later event',
+      );
+      const unauthorized = await app.inject({
+        method: 'GET',
+        url: '/api/v1/social/notifications',
+        headers: { authorization: 'Bearer ' + token },
+      });
+      assert.equal(unauthorized.statusCode, 401);
+    } finally {
+      await browser.close();
+      await app.close();
+      db.close();
     }
   },
 );

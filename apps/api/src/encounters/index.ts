@@ -10,3 +10,4 @@ export { remoteConsultationInvitedCaseMigration } from './remote-consultation-in
 export { encountersCommands } from './commands.js';
 export { SqliteEncounterRepository } from './repository.js';
 export type { EncounterRepository, ConsultationTask } from './repository.js';
+export { consultationGrantExpiryMigration } from './grant-expiry-migration.js';

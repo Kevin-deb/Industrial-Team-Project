@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures.js';
 import { randomUUID } from 'node:crypto';
 
 test('B patient details open E with the same selected patient and reject unavailable links', async ({

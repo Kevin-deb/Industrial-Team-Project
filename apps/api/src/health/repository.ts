@@ -12,7 +12,7 @@ import type {
   Paginated,
   ReminderTask,
 } from '@doctor/contracts';
-import type { RequestContext } from '../platform/index.js';
+import { patientScopeSql, type RequestContext } from '../platform/index.js';
 
 type Row = Record<string, string | number | bigint | null | Uint8Array>;
 
@@ -51,8 +51,9 @@ export interface HealthRepository {
   createAssessment(assessment: HealthAssessment): void;
   listReminders(patientId: string, context: RequestContext): ReminderTask[];
   findReminder(id: string, context: RequestContext): ReminderTask | undefined;
-  createReminder(reminder: ReminderTask, consentReference?: string): void;
+  createReminder(reminder: ReminderTask, consentReference?: string, actorId?: string): void;
   updateReminder(reminder: ReminderTask, providerMessageId?: string): void;
+  noteReminderAttempt?(id: string, now: string): void;
   claimReminderDelivery(
     actorId: string,
     commandId: string,
@@ -389,13 +390,13 @@ export class SqliteHealthRepository implements HealthRepository {
     return row ? mapReminder(row) : undefined;
   }
 
-  createReminder(reminder: ReminderTask, consentReference?: string): void {
+  createReminder(reminder: ReminderTask, consentReference?: string, actorId?: string): void {
     this.db
       .prepare(
         `INSERT INTO reminder_tasks(
       id,patient_id,plan_id,channel,template_id,scheduled_at,status,consent_reference,
-      provider_message_id,attempts,last_error,idempotency_key
-    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
+      provider_message_id,attempts,last_error,idempotency_key,created_by
+    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       )
       .run(
         reminder.id,
@@ -410,6 +411,7 @@ export class SqliteHealthRepository implements HealthRepository {
         reminder.attempts,
         reminder.lastError ?? null,
         `health-service-${reminder.id}`,
+        actorId ?? null,
       );
   }
 
@@ -459,6 +461,48 @@ export class SqliteHealthRepository implements HealthRepository {
          SET status=?,completed_at=? WHERE actor_id=? AND command_id=?`,
       )
       .run(status, completedAt, actorId, commandId);
+  }
+
+  /** Scheduler reads only the domain-owned reminder queue; delivery still rechecks patient access. */
+  dueReminders(now: string): Array<{ task: ReminderTask; actorId: string }> {
+    return this.db
+      .prepare(
+        `SELECT r.* FROM reminder_tasks r
+      JOIN users u ON u.identity_id=r.created_by AND u.status='active'
+      JOIN doctors d ON d.identity_id=r.created_by AND d.enabled=1
+      JOIN patients p ON p.id=r.patient_id
+      WHERE (${patientScopeSql.replaceAll(':actorId', 'r.created_by')})
+      AND r.status IN ('planned','failed') AND r.attempts<3
+      AND julianday(r.scheduled_at)<=julianday(:now)
+      AND (r.last_attempt_at IS NULL OR julianday(r.last_attempt_at)<=julianday(:now,'-1 minute'))
+      ORDER BY julianday(r.scheduled_at),r.id LIMIT 25`,
+      )
+      .all({ now })
+      .map((row) => ({ task: mapReminder(row as Row), actorId: String(row.created_by) }));
+  }
+
+  noteReminderAttempt(id: string, now: string): void {
+    this.db.prepare('UPDATE reminder_tasks SET last_attempt_at=? WHERE id=?').run(now, id);
+  }
+
+  recoverInterruptedDeliveries(now: string): void {
+    this.transaction(() => {
+      this.db
+        .prepare(
+          `UPDATE reminder_tasks SET status='failed',last_error='DELIVERY_INTERRUPTED'
+        WHERE status='pending' AND id IN (
+          SELECT reminder_id FROM health_reminder_delivery_attempts
+          WHERE status='pending' AND julianday(created_at)<julianday(?,'-5 minutes')
+        )`,
+        )
+        .run(now);
+      this.db
+        .prepare(
+          `UPDATE health_reminder_delivery_attempts SET status='failed',completed_at=?
+        WHERE status='pending' AND julianday(created_at)<julianday(?,'-5 minutes')`,
+        )
+        .run(now, now);
+    });
   }
 
   private insertPlanVersion(version: CarePlanVersion): void {

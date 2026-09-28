@@ -25,7 +25,7 @@ import type {
   Patient,
   Session,
 } from '@doctor/contracts';
-import { requestApi, useApi } from '../../shared/api';
+import { ApiRequestError, requestApi, useApi } from '../../shared/api';
 import { Badge, Button, Card, EmptyState, LoadingState, Modal, PageHeader } from '../../shared/ui';
 import {
   DetailGrid,
@@ -102,8 +102,10 @@ function readFileAsDataUrl(file: File) {
 }
 
 function dosDateTime(date = new Date()) {
-  const dosTime = (date.getHours() << 11) | (date.getMinutes() << 5) | Math.floor(date.getSeconds() / 2);
-  const dosDate = ((date.getFullYear() - 1980) << 9) | ((date.getMonth() + 1) << 5) | date.getDate();
+  const dosTime =
+    (date.getHours() << 11) | (date.getMinutes() << 5) | Math.floor(date.getSeconds() / 2);
+  const dosDate =
+    ((date.getFullYear() - 1980) << 9) | ((date.getMonth() + 1) << 5) | date.getDate();
   return { dosDate, dosTime };
 }
 
@@ -181,20 +183,17 @@ function zipBlob(files: Array<{ name: string; bytes: Uint8Array }>) {
   return new Blob(parts, { type: 'application/zip' });
 }
 
-function RequestDialog({
-  onClose,
-  onCreated,
-}: {
-  onClose: () => void;
-  onCreated: () => void;
-}) {
+function RequestDialog({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const { t } = useI18n();
   const [patientName, setPatientName] = useState('李明华');
   const [patientId, setPatientId] = useState('PAT-008');
   const [patientPicker, setPatientPicker] = useState<'name' | 'id' | null>(null);
   const [title, setTitle] = useState('疑难慢病多学科会诊');
   const [specialty, setSpecialty] = useState('全科医学 · 心血管内科 · 内分泌科');
-  const [scheduledAt, setScheduledAt] = useState('2026-09-12T10:30');
+  const [scheduledAt, setScheduledAt] = useState(() => {
+    const next = new Date(Date.now() + 60 * 60 * 1000);
+    return new Date(next.getTime() - next.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  });
   const [materials, setMaterials] = useState<DraftMaterial[]>([
     {
       title: '门诊病历摘要',
@@ -221,7 +220,10 @@ function RequestDialog({
       .slice(0, 8);
   }, [patientId, patientName, patientPicker, patients.data]);
   const selectedPatient = useMemo(
-    () => (patients.data ?? []).find((patient) => patient.id === patientId && patient.name === patientName),
+    () =>
+      (patients.data ?? []).find(
+        (patient) => patient.id === patientId && patient.name === patientName,
+      ),
     [patientId, patientName, patients.data],
   );
   const filteredDoctors = doctors.data ?? [];
@@ -231,7 +233,9 @@ function RequestDialog({
     setPatientPicker(null);
   };
   const addDoctor = (doctor: ConsultationDoctorOption) => {
-    setSelectedDoctors((current) => (current.some((item) => item.id === doctor.id) ? current : [...current, doctor]));
+    setSelectedDoctors((current) =>
+      current.some((item) => item.id === doctor.id) ? current : [...current, doctor],
+    );
   };
   const removeDoctor = (id: string) => {
     setSelectedDoctors((current) => current.filter((item) => item.id !== id));
@@ -296,7 +300,9 @@ function RequestDialog({
                   </span>
                 </button>
               ))}
-              {!visiblePatients.length && <p>{t(patients.loading ? '正在加载患者' : '没有匹配的患者')}</p>}
+              {!visiblePatients.length && (
+                <p>{t(patients.loading ? '正在加载患者' : '没有匹配的患者')}</p>
+              )}
             </div>
           )}
         </label>
@@ -322,7 +328,9 @@ function RequestDialog({
                   </span>
                 </button>
               ))}
-              {!visiblePatients.length && <p>{t(patients.loading ? '正在加载患者' : '没有匹配的患者')}</p>}
+              {!visiblePatients.length && (
+                <p>{t(patients.loading ? '正在加载患者' : '没有匹配的患者')}</p>
+              )}
             </div>
           )}
         </label>
@@ -365,7 +373,11 @@ function RequestDialog({
             {reviewer ? (
               <span>
                 {t(reviewer.name)} · {t(reviewer.department)}
-                <button type="button" onClick={() => setReviewer(null)} aria-label={t('移除审核人')}>
+                <button
+                  type="button"
+                  onClick={() => setReviewer(null)}
+                  aria-label={t('移除审核人')}
+                >
                   <X size={13} />
                 </button>
               </span>
@@ -398,16 +410,24 @@ function RequestDialog({
               return (
                 <article key={doctor.id}>
                   <div>
-                  <strong>{t(doctor.name)}</strong>
-                  <small>
-                    {t(doctor.department)} · {t(doctor.title)}
-                  </small>
+                    <strong>{t(doctor.name)}</strong>
+                    <small>
+                      {t(doctor.department)} · {t(doctor.title)}
+                    </small>
                   </div>
                   <div className="consultation-doctor-actions">
-                    <Button variant="secondary" disabled={isReviewer} onClick={() => setReviewer(doctor)}>
+                    <Button
+                      variant="secondary"
+                      disabled={isReviewer}
+                      onClick={() => setReviewer(doctor)}
+                    >
                       {t(isReviewer ? '审核人' : '设为审核人')}
                     </Button>
-                    <Button variant="secondary" disabled={selected} onClick={() => addDoctor(doctor)}>
+                    <Button
+                      variant="secondary"
+                      disabled={selected}
+                      onClick={() => addDoctor(doctor)}
+                    >
                       {t(selected ? '已添加' : '添加')}
                     </Button>
                   </div>
@@ -449,18 +469,42 @@ function ConsultationRoom({
   onChanged: () => void;
 }) {
   const { t, formatDate } = useI18n();
-  const contextData = useApi<ConsultationContext>(`/consultations/${encodeURIComponent(id)}/context`);
+  const contextData = useApi<ConsultationContext>(
+    `/consultations/${encodeURIComponent(id)}/context`,
+  );
   const session = useApi<Session>('/session');
   const [liveRoom, setLiveRoom] = useState<ConsultationContext | null>(null);
   const [draft, setDraft] = useState('');
   const [previewImage, setPreviewImage] = useState<{ url: string; name?: string } | null>(null);
   const [confirmFinish, setConfirmFinish] = useState(false);
+  const [finishing, setFinishing] = useState(false);
+  const [roomError, setRoomError] = useState('');
+  const [accessLost, setAccessLost] = useState(false);
   const [participantsOpen, setParticipantsOpen] = useState(true);
   const discussionEndRef = useRef<HTMLDivElement | null>(null);
+  const showRoomError = useCallback((error: unknown) => {
+    if (error instanceof ApiRequestError && [401, 403, 404].includes(error.status)) {
+      setAccessLost(true);
+      setLiveRoom(null);
+      setPreviewImage(null);
+      setConfirmFinish(false);
+      setDraft('');
+      setRoomError('会诊已结束或访问权限已变更，请返回列表。');
+    } else {
+      setRoomError(error instanceof Error ? error.message : '操作未完成，请重试。');
+    }
+  }, []);
   const refreshRoom = useCallback(async () => {
-    const result = await requestApi<ConsultationContext>(`/consultations/${encodeURIComponent(id)}/context`);
-    setLiveRoom(result.data);
-  }, [id]);
+    try {
+      const result = await requestApi<ConsultationContext>(
+        `/consultations/${encodeURIComponent(id)}/context`,
+      );
+      setLiveRoom(result.data);
+    } catch (error) {
+      showRoomError(error);
+      throw error;
+    }
+  }, [id, showRoomError]);
   useEffect(() => {
     if (contextData.data) setLiveRoom(contextData.data);
   }, [contextData.data]);
@@ -471,8 +515,10 @@ function ConsultationRoom({
   const participants = room?.participants ?? [];
   const reportText = room?.report?.body ?? '';
   const isFinished = item?.status === 'completed';
+  const canFinish =
+    item?.status === 'scheduled' && (item.direction === 'sent' || Boolean(item.canReview));
   useEffect(() => {
-    if (isFinished) return undefined;
+    if (isFinished || accessLost) return undefined;
     const refresh = () => {
       if (document.visibilityState === 'visible') void refreshRoom().catch(() => undefined);
     };
@@ -482,7 +528,7 @@ function ConsultationRoom({
       window.clearInterval(timer);
       window.removeEventListener('focus', refresh);
     };
-  }, [isFinished, refreshRoom]);
+  }, [isFinished, accessLost, refreshRoom]);
   useEffect(() => {
     discussionEndRef.current?.scrollIntoView({ block: 'end' });
   }, [messages.length]);
@@ -518,29 +564,37 @@ function ConsultationRoom({
     setDraft('');
     await refreshRoom();
   };
-  const sendImage = (files: FileList | null) => {
+  const sendImage = async (files: FileList | null) => {
     if (isFinished) return;
     const file = files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async () => {
-      await requestApi(`/consultations/${encodeURIComponent(id)}/messages`, {
-        method: 'POST',
-        body: JSON.stringify({
-          body: file.name,
-          imageUrl: String(reader.result),
-          imageName: file.name,
-        }),
-      });
-      await refreshRoom();
-    };
-    reader.readAsDataURL(file);
+    await requestApi(`/consultations/${encodeURIComponent(id)}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({
+        body: file.name,
+        imageUrl: await readFileAsDataUrl(file),
+        imageName: file.name,
+      }),
+    });
+    await refreshRoom();
   };
   const finish = async () => {
-    await requestApi(`/consultations/${encodeURIComponent(id)}/complete`, { method: 'POST' });
-    setConfirmFinish(false);
-    await refreshRoom();
-    onChanged();
+    if (!canFinish || finishing) return;
+    setFinishing(true);
+    setRoomError('');
+    try {
+      await requestApi(`/consultations/${encodeURIComponent(id)}/complete`, { method: 'POST' });
+      setConfirmFinish(false);
+      setLiveRoom(null);
+      setPreviewImage(null);
+      onChanged();
+      // The invited reviewer loses access immediately after completion; do not fetch the closed room.
+      onBack();
+    } catch (error) {
+      showRoomError(error);
+    } finally {
+      setFinishing(false);
+    }
   };
   const downloadMaterials = () => {
     if (!item) return;
@@ -552,9 +606,12 @@ function ConsultationRoom({
       bytes: material.objectUrl
         ? dataUrlBytes(material.objectUrl)
         : textEncoder.encode(
-            [`${t('会诊材料')}：${t(material.title)}`, `${item.title} · ${item.patientName}`, '', t(material.description)].join(
-              '\n',
-            ),
+            [
+              `${t('会诊材料')}：${t(material.title)}`,
+              `${item.title} · ${item.patientName}`,
+              '',
+              t(material.description),
+            ].join('\n'),
           ),
     }));
     downloadBlob(`${item.id}-materials.zip`, zipBlob(files));
@@ -571,9 +628,12 @@ function ConsultationRoom({
     }
     downloadText(
       `${item.id}-${material.fileName.replace(/\.[^.]+$/, '')}.txt`,
-      [`${t('会诊材料')}：${t(material.title)}`, `${item.title} · ${item.patientName}`, '', t(material.description)].join(
-        '\n',
-      ),
+      [
+        `${t('会诊材料')}：${t(material.title)}`,
+        `${item.title} · ${item.patientName}`,
+        '',
+        t(material.description),
+      ].join('\n'),
     );
   };
   const deleteMaterial = async (material: ConsultationMaterial) => {
@@ -590,6 +650,20 @@ function ConsultationRoom({
     if (!reportText) return;
     downloadText(`${item.id}-consultation-report.txt`, reportText);
   };
+  if (accessLost)
+    return (
+      <div className="feature-page">
+        <p role="alert">{t(roomError)}</p>
+        <Button
+          onClick={() => {
+            onChanged();
+            onBack();
+          }}
+        >
+          {t('返回会诊列表')}
+        </Button>
+      </div>
+    );
   if ((contextData.loading && !room) || contextData.error || !room || !item)
     return <LoadingState error={contextData.error} onRetry={contextData.reload} />;
   return (
@@ -609,6 +683,7 @@ function ConsultationRoom({
           <span>{formatDate(item.scheduledAt, { dateStyle: 'medium', timeStyle: 'short' })}</span>
         </div>
       </header>
+      {roomError && !confirmFinish && <p role="alert">{t(roomError)}</p>}
       <div className="consultation-room-layout">
         <aside className="consultation-room-sidebar">
           <section className="consultation-setting-panel consultation-participant-panel">
@@ -636,7 +711,11 @@ function ConsultationRoom({
                     </span>
                     <div>
                       <strong>{t(participant.name)}</strong>
-                      <small>{index === 0 ? t('发起医生') : `${t(participant.department)} · ${t(participant.title)}`}</small>
+                      <small>
+                        {index === 0
+                          ? t('发起医生')
+                          : `${t(participant.department)} · ${t(participant.title)}`}
+                      </small>
                     </div>
                   </article>
                 ))}
@@ -662,7 +741,7 @@ function ConsultationRoom({
                   <button
                     type="button"
                     disabled={isFinished}
-                    onClick={() => deleteMaterial(material)}
+                    onClick={() => void deleteMaterial(material).catch(showRoomError)}
                     aria-label={t('删除 {name}', { name: material.title })}
                   >
                     <X size={14} />
@@ -683,7 +762,7 @@ function ConsultationRoom({
                 type="file"
                 multiple
                 disabled={isFinished}
-                onChange={(event) => addFiles(event.target.files)}
+                onChange={(event) => void addFiles(event.target.files).catch(showRoomError)}
               />
             </label>
           </section>
@@ -753,7 +832,9 @@ function ConsultationRoom({
             </div>
             <div className="consultation-room-controls">
               {isFinished && (
-                <div className="consultation-ended-banner">{t('会诊已结束，讨论和上传已锁定。')}</div>
+                <div className="consultation-ended-banner">
+                  {t('会诊已结束，讨论和上传已锁定。')}
+                </div>
               )}
               <label className={`message-image-button ${isFinished ? 'is-disabled' : ''}`}>
                 <ImagePlus size={17} />
@@ -763,7 +844,7 @@ function ConsultationRoom({
                   accept="image/*"
                   disabled={isFinished}
                   onChange={(event) => {
-                    sendImage(event.target.files);
+                    void sendImage(event.target.files).catch(showRoomError);
                     event.currentTarget.value = '';
                   }}
                 />
@@ -774,23 +855,32 @@ function ConsultationRoom({
                 disabled={isFinished}
                 onChange={(event) => setDraft(event.target.value)}
                 onKeyDown={(event) => {
-                  if (event.key === 'Enter') send();
+                  if (event.key === 'Enter') void send().catch(showRoomError);
                 }}
                 placeholder={t(isFinished ? '会诊已结束，不能继续发送消息' : '输入会诊讨论意见')}
               />
-              <Button variant="secondary" disabled={isFinished} onClick={send}>
+              <Button
+                variant="secondary"
+                disabled={isFinished}
+                onClick={() => void send().catch(showRoomError)}
+              >
                 <MessageSquare size={16} />
                 {t('发送讨论消息')}
               </Button>
-              <Button
-                className="encounter-end-button"
-                variant="secondary"
-                disabled={isFinished}
-                onClick={() => setConfirmFinish(true)}
-              >
-                <FileCheck2 size={16} />
-                {t('结束并生成报告')}
-              </Button>
+              {canFinish && (
+                <Button
+                  className="encounter-end-button"
+                  variant="secondary"
+                  disabled={finishing}
+                  onClick={() => {
+                    setRoomError('');
+                    setConfirmFinish(true);
+                  }}
+                >
+                  <FileCheck2 size={16} />
+                  {t('结束并生成报告')}
+                </Button>
+              )}
             </div>
           </section>
         </main>
@@ -817,15 +907,21 @@ function ConsultationRoom({
           </figure>
         </div>
       )}
-      {confirmFinish && (
+      {confirmFinish && canFinish && (
         <Modal title="确认结束会诊" onClose={() => setConfirmFinish(false)}>
           <div className="consultation-confirm-dialog">
+            {roomError && <p role="alert">{t(roomError)}</p>}
             <p>{t('结束后系统会生成联合会诊报告，并锁定本次会诊讨论和资料上传。')}</p>
             <div>
               <Button variant="secondary" onClick={() => setConfirmFinish(false)}>
                 {t('取消')}
               </Button>
-              <Button className="encounter-end-button" variant="secondary" onClick={finish}>
+              <Button
+                className="encounter-end-button"
+                variant="secondary"
+                disabled={finishing}
+                onClick={() => void finish()}
+              >
                 <FileCheck2 size={16} />
                 {t('确认结束')}
               </Button>
@@ -849,7 +945,9 @@ export function ConsultationsPage() {
   const close = useCallback(() => setSelectedId(null), []);
   const acceptConsultation = useCallback(
     async (id: string) => {
-      await requestApi<Consultation>(`/consultations/${encodeURIComponent(id)}/accept`, { method: 'POST' });
+      await requestApi<Consultation>(`/consultations/${encodeURIComponent(id)}/accept`, {
+        method: 'POST',
+      });
       reload();
     },
     [reload],
@@ -865,17 +963,13 @@ export function ConsultationsPage() {
     [allCases, status],
   );
   const pendingReviewCount = allCases.filter(isPendingReview).length;
-  const requestedCount = allCases.filter((item) => item.status === 'requested' && !isPendingReview(item)).length;
+  const requestedCount = allCases.filter(
+    (item) => item.status === 'requested' && !isPendingReview(item),
+  ).length;
   const scheduledCount = allCases.filter((item) => item.status === 'scheduled').length;
   const completedCount = allCases.filter((item) => item.status === 'completed').length;
   if (roomId)
-    return (
-      <ConsultationRoom
-        id={roomId}
-        onBack={() => setRoomId(null)}
-        onChanged={reload}
-      />
-    );
+    return <ConsultationRoom id={roomId} onBack={() => setRoomId(null)} onChanged={reload} />;
   return (
     <div className="feature-page">
       <PageHeader
@@ -1005,12 +1099,7 @@ export function ConsultationsPage() {
           <ReadOnlyNote />
         </>
       )}
-      {requestOpen && (
-        <RequestDialog
-          onClose={() => setRequestOpen(false)}
-          onCreated={reload}
-        />
-      )}
+      {requestOpen && <RequestDialog onClose={() => setRequestOpen(false)} onCreated={reload} />}
       {selected && (
         <FeatureDialog
           title={t(selected.title)}

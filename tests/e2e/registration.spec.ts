@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures.js';
 
 test('registers a synthetic patient and opens the saved first-version archive', async ({
   page,

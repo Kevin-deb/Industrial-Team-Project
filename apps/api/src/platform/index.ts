@@ -16,3 +16,15 @@ export { demoProviders } from './providers.js';
 export type { ExternalProviders } from './providers.js';
 export type { PlannedCommand } from './command-contract.js';
 export { registerPlannedCommands, plannedCommands } from './planned-commands.js';
+export {
+  consultationMemberSql,
+  consultationAccessUntil,
+  canCompleteConsultation,
+} from './consultation-access.js';
+export { platformNotificationsMigration } from './notifications-migration.js';
+export { LocalDemoNotifications, isQuietTime } from './local-notifications.js';
+export { settingsMigration } from './settings-migration.js';
+export { SqliteSettingsRepository } from './settings-repository.js';
+export { registerSettingsRoutes } from './settings-routes.js';
+export { auditEvolutionMigration } from './audit-evolution-migration.js';
+export { registerAuditRoutes } from './audit-routes.js';

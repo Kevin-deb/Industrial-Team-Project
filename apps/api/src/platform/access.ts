@@ -26,6 +26,10 @@ export const patientScopeSql = `
       AND (ag.task_id IS NULL OR EXISTS (
         SELECT 1 FROM consultations task WHERE task.id=ag.task_id AND task.patient_id=p.id
         AND task.status IN ('requested','scheduled') AND task.completed_at IS NULL
+         AND (task.requested_by=:actorId OR EXISTS (
+           SELECT 1 FROM consultation_participants participant
+           WHERE participant.consultation_id=task.id AND participant.identity_id=:actorId AND participant.left_at IS NULL
+         ))
       ))
     )
   )

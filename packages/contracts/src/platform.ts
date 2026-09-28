@@ -59,7 +59,7 @@ export interface AuditEvent {
   targetType: string;
   targetId: string;
   occurredAt: string;
-  outcome: 'success' | 'denied' | 'planned';
+  outcome: 'success' | 'denied' | 'planned' | 'failed';
   description: string;
 }
 

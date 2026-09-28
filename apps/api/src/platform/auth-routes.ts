@@ -1,4 +1,9 @@
 import { createHash } from 'node:crypto';
+import {
+  MAX_PHOTO_BYTES,
+  MAX_PHOTO_DATA_URL_CHARS,
+  PHOTO_REQUEST_BODY_BYTES,
+} from '@doctor/contracts';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { AuthError, AuthService, type EmailDeliveryPort } from './auth.js';
 
@@ -211,6 +216,7 @@ export function registerAuthRoutes(
   app.post(
     '/api/v1/auth/photo-check',
     {
+      bodyLimit: PHOTO_REQUEST_BODY_BYTES,
       schema: {
         body: {
           type: 'object',
@@ -219,7 +225,7 @@ export function registerAuthRoutes(
           properties: {
             ticket: { type: 'string', minLength: 1, maxLength: 256 },
             captureMethod: { type: 'string', enum: ['camera', 'upload'] },
-            photoDataUrl: { type: 'string', minLength: 24, maxLength: 2_800_000 },
+            photoDataUrl: { type: 'string', minLength: 24, maxLength: MAX_PHOTO_DATA_URL_CHARS },
           },
         },
       },
@@ -231,7 +237,7 @@ export function registerAuthRoutes(
           captureMethod: 'camera' | 'upload';
           photoDataUrl: string;
         };
-        if (!/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(body.photoDataUrl))
+        if (!validPhoto(body.photoDataUrl))
           return fail(request, reply, 422, 'INVALID_PHOTO', '请拍摄或上传 PNG/JPEG 图片。');
         const digest = createHash('sha256').update(body.photoDataUrl).digest('hex');
         const data = auth.completePhotoCheck({
@@ -270,23 +276,27 @@ export function registerAuthRoutes(
         return replyAuthError(error, request, reply, fail);
       }
     });
-    app.post(`/api/v1/auth/password/${purpose}/complete`, async (request, reply) => {
-      try {
-        const body = request.body as {
-          challengeId: string;
-          code?: string;
-          photoDataUrl?: string;
-          newPassword: string;
-        };
-        const photoAccepted = body.photoDataUrl ? validPhoto(body.photoDataUrl) : false;
-        return envelope(
-          request,
-          auth.completePasswordOperation({ ...body, purpose, photoAccepted }),
-        );
-      } catch (error) {
-        return replyAuthError(error, request, reply, fail);
-      }
-    });
+    app.post(
+      `/api/v1/auth/password/${purpose}/complete`,
+      { bodyLimit: PHOTO_REQUEST_BODY_BYTES },
+      async (request, reply) => {
+        try {
+          const body = request.body as {
+            challengeId: string;
+            code?: string;
+            photoDataUrl?: string;
+            newPassword: string;
+          };
+          const photoAccepted = body.photoDataUrl ? validPhoto(body.photoDataUrl) : false;
+          return envelope(
+            request,
+            auth.completePasswordOperation({ ...body, purpose, photoAccepted }),
+          );
+        } catch (error) {
+          return replyAuthError(error, request, reply, fail);
+        }
+      },
+    );
   }
 }
 
@@ -301,5 +311,10 @@ function maskEmail(email: string) {
 }
 
 function validPhoto(value: string) {
-  return /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(value) && value.length <= 2_800_000;
+  return (
+    typeof value === 'string' &&
+    value.length <= MAX_PHOTO_DATA_URL_CHARS &&
+    /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(value) &&
+    Buffer.from(value.slice(value.indexOf(',') + 1), 'base64').byteLength <= MAX_PHOTO_BYTES
+  );
 }

@@ -19,3 +19,6 @@ Thumbs.db
 
 release/
 .worktrees/
+
+# Windows runtime caches generated when a tool environment leaves this variable literal.
+%SystemDrive%/

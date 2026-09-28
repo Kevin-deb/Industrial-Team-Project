@@ -6,3 +6,7 @@ export * from './clinical.js';
 export * from './health.js';
 export * from './integrations.js';
 export * from './social.js';
+export * from './auth.js';
+export * from './preferences.js';
+export * from './audit.js';
+export * from './notifications.js';

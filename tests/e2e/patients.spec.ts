@@ -1,17 +1,22 @@
-import { test, expect } from '@playwright/test';
-import type { PatientArchive } from '@doctor/contracts';
+import { test, expect } from './fixtures.js';
+import type { PatientArchive, UpdatePatientRequest } from '@doctor/contracts';
 
-function editable(patient: PatientArchive, careSummary: string) {
-  const {
-    id: _id,
-    canEdit: _canEdit,
-    version: _version,
-    lastVisit: _last,
-    nextFollowUp: _next,
-    assignedDoctorId: _doctor,
-    ...fields
-  } = patient;
-  return { ...fields, careSummary, changeReason: 'Synthetic browser concurrency test' };
+function editable(patient: PatientArchive, careSummary: string): UpdatePatientRequest {
+  return {
+    name: patient.name,
+    gender: patient.gender,
+    age: patient.age,
+    phone: patient.phone,
+    diagnosis: patient.diagnosis,
+    tags: patient.tags,
+    status: patient.status,
+    symptoms: patient.symptoms,
+    allergies: patient.allergies,
+    allergyStatus: patient.allergyStatus,
+    medicalHistory: patient.medicalHistory,
+    careSummary,
+    changeReason: 'Synthetic browser concurrency test',
+  };
 }
 
 test('batch access failure and stale versions require refresh without overwriting records', async ({
@@ -37,7 +42,9 @@ test('batch access failure and stale versions require refresh without overwritin
   await expect(page.getByLabel('批量修改原因')).toHaveValue('Preserved batch draft');
   await page.unroute('**/api/v1/patients/batch');
   await Promise.all([
-    page.waitForResponse((response) => response.url().includes('/api/v1/patients?') && response.status() === 200),
+    page.waitForResponse(
+      (response) => response.url().includes('/api/v1/patients?') && response.status() === 200,
+    ),
     page.getByRole('button', { name: '刷新患者列表' }).click(),
   ]);
   await expect(page.getByText('已选择 0 位患者', { exact: true })).toBeVisible();

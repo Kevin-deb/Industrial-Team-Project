@@ -1,9 +1,16 @@
 import { readFile } from 'node:fs/promises';
 import { extname, isAbsolute, relative, resolve } from 'node:path';
 import type { FastifyInstance } from 'fastify';
+import { MAX_PHOTO_DATA_URL_CHARS } from '@doctor/contracts';
 
 export const APPLICATION_URL = 'carelink://app/';
 const MAX_BODY_SIZE = 1024 * 1024;
+const MAX_AUTH_PHOTO_BODY_SIZE = MAX_PHOTO_DATA_URL_CHARS + 16 * 1024;
+const AUTH_PHOTO_ROUTES = new Set([
+  '/api/v1/auth/photo-check',
+  '/api/v1/auth/password/recover-password/complete',
+  '/api/v1/auth/password/change-password/complete',
+]);
 const MAX_SOCIAL_ATTACHMENT_BODY_SIZE = 10 * 1024 * 1024 + 256 * 1024;
 export const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
@@ -60,6 +67,16 @@ export function canGrantMediaCapture(
   );
 }
 
+export function canGrantApplicationPermission(
+  permission: string,
+  requestingUrl: string,
+  mediaTypes: readonly string[] = [],
+): boolean {
+  return permission === 'notifications'
+    ? isApplicationUrl(requestingUrl)
+    : canGrantMediaCapture(permission, requestingUrl, mediaTypes);
+}
+
 function response(body: BodyInit | null, status = 200, headers: HeadersInit = {}): Response {
   const secured = new Headers(headers);
   secured.set('Content-Security-Policy', CONTENT_SECURITY_POLICY);
@@ -81,13 +98,28 @@ export function createProtocolHandler(services: FastifyInstance, rendererRoot: s
         const maxBodySize =
           request.method === 'POST' && url.pathname === '/api/v1/social/attachments'
             ? MAX_SOCIAL_ATTACHMENT_BODY_SIZE
-            : MAX_BODY_SIZE;
+            : request.method === 'POST' && AUTH_PHOTO_ROUTES.has(url.pathname)
+              ? MAX_AUTH_PHOTO_BODY_SIZE
+              : MAX_BODY_SIZE;
         const contentLength = Number(request.headers.get('content-length') ?? 0);
         if (contentLength > maxBodySize) return response('Request too large', 413);
-        const payload = ['GET', 'HEAD'].includes(request.method)
-          ? undefined
-          : Buffer.from(await request.arrayBuffer());
-        if (payload && payload.length > maxBodySize) return response('Request too large', 413);
+        let payload: Buffer | undefined;
+        if (!['GET', 'HEAD'].includes(request.method) && request.body) {
+          const chunks: Uint8Array[] = [];
+          const reader = request.body.getReader();
+          let bytes = 0;
+          while (true) {
+            const chunk = await reader.read();
+            if (chunk.done) break;
+            bytes += chunk.value.byteLength;
+            if (bytes > maxBodySize) {
+              await reader.cancel();
+              return response('Request too large', 413);
+            }
+            chunks.push(chunk.value);
+          }
+          payload = Buffer.concat(chunks, bytes);
+        }
         // Preserve the API's local-only origin/host guards. Never forward caller-supplied host.
         const headers: Record<string, string> = { host: '127.0.0.1', origin: 'http://127.0.0.1' };
         for (const name of [

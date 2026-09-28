@@ -1,5 +1,6 @@
 import type { SocialRealtimeEvent } from '@doctor/contracts';
 import { useEffect } from 'react';
+import { sessionToken } from '../../shared/api';
 
 declare global {
   interface Window {
@@ -28,7 +29,12 @@ export function useSocialRealtime(
     let stopped = false;
     const connect = () => {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      socket = new WebSocket(`${protocol}//${window.location.host}/api/v1/social/events`);
+      const token = sessionToken();
+      if (!token) return;
+      socket = new WebSocket(`${protocol}//${window.location.host}/api/v1/social/events`, [
+        'carelink',
+        'bearer.' + token,
+      ]);
       socket.addEventListener('open', () => onConnected?.());
       socket.addEventListener('message', (message) => {
         try {

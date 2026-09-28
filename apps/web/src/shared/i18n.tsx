@@ -8,12 +8,18 @@ import {
   type ReactNode,
 } from 'react';
 import { shellMessages } from './messages';
+import { platformMessages } from './platform-messages';
 import { demoMessages } from './demo-messages';
 import { moduleMessages } from '../modules/messages';
 
 export type Language = 'zh-CN' | 'en';
 type Values = Record<string, string | number>;
-const messages: Record<string, string> = { ...demoMessages, ...shellMessages, ...moduleMessages };
+const messages: Record<string, string> = {
+  ...demoMessages,
+  ...shellMessages,
+  ...moduleMessages,
+  ...platformMessages,
+};
 const storageKey = 'carelink-language';
 export function translate(source: string, language: Language, values: Values = {}): string {
   const message = language === 'en' ? (messages[source] ?? source) : source;

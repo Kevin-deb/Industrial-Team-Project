@@ -3,10 +3,11 @@ import { resolve, isAbsolute } from 'node:path';
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { createApp } from '../../api/src/app.js';
 import { SocialRealtimeHub } from '../../api/src/social/index.js';
-import { subscribeCurrentDoctor } from './realtime.js';
+import { createRealtimeSessionController, subscribeCurrentDoctor } from './realtime.js';
+import { acquireProfileLock } from './profile-lock.js';
 import {
   APPLICATION_URL,
-  canGrantMediaCapture,
+  canGrantApplicationPermission,
   createProtocolHandler,
   isApplicationUrl,
 } from './protocol.js';
@@ -14,8 +15,14 @@ import {
 // This name also fixes a stable per-user data location across installer upgrades.
 app.setName('CareLink Doctor');
 const isTest = process.env.CARELINK_TEST_MODE === '1';
-const testData = process.env.CARELINK_USER_DATA;
-if (isTest && testData && isAbsolute(testData)) app.setPath('userData', testData);
+const profileOverride =
+  process.env.CARELINK_PROFILE_PATH ?? (isTest ? process.env.CARELINK_USER_DATA : undefined);
+if (profileOverride) {
+  if (!isAbsolute(profileOverride))
+    throw new Error('CARELINK_PROFILE_PATH must be an absolute path.');
+  mkdirSync(profileOverride, { recursive: true });
+  app.setPath('userData', resolve(profileOverride));
+}
 protocol.registerSchemesAsPrivileged([
   {
     scheme: 'carelink',
@@ -35,7 +42,14 @@ let services: Awaited<ReturnType<typeof createApp>> | undefined;
 let closing = false;
 let mayQuit = false;
 const socialRealtime = new SocialRealtimeHub();
-let stopRealtime: (() => void) | undefined;
+const realtimeSession = createRealtimeSessionController(
+  (token, listener) => subscribeCurrentDoctor(services!, socialRealtime, listener, token),
+  (event) => {
+    if (window && !window.isDestroyed()) window.webContents.send('carelink:social-event', event);
+  },
+);
+let releaseProfileLock: (() => void) | undefined;
+app.on('will-quit', () => releaseProfileLock?.());
 
 function showStartupError(error: unknown) {
   const dataRoot = app.getPath('userData');
@@ -101,6 +115,7 @@ if (!app.requestSingleInstanceLock()) {
   });
   app.on('window-all-closed', () => app.quit());
   app.on('before-quit', (event) => {
+    realtimeSession.stop();
     if (mayQuit || !services) return;
     event.preventDefault();
     if (closing) return;
@@ -120,7 +135,7 @@ if (!app.requestSingleInstanceLock()) {
       session.defaultSession.setPermissionRequestHandler(
         (contents, permission, callback, details) =>
           callback(
-            canGrantMediaCapture(
+            canGrantApplicationPermission(
               permission,
               ('securityOrigin' in details ? details.securityOrigin : undefined) ??
                 contents.getURL(),
@@ -130,7 +145,7 @@ if (!app.requestSingleInstanceLock()) {
       );
       session.defaultSession.setPermissionCheckHandler(
         (contents, permission, requestingOrigin, details) =>
-          canGrantMediaCapture(
+          canGrantApplicationPermission(
             permission,
             details.requestingUrl ?? requestingOrigin ?? contents?.getURL() ?? '',
             details.mediaType === 'audio' || details.mediaType === 'video'
@@ -143,27 +158,17 @@ if (!app.requestSingleInstanceLock()) {
           cancel: !isApplicationUrl(details.url) && !details.url.startsWith('devtools:'),
         });
       });
+      mkdirSync(app.getPath('userData'), { recursive: true });
+      releaseProfileLock = acquireProfileLock(app.getPath('userData'));
       services = await createApp({
         databasePath: resolve(app.getPath('userData'), 'data/doctor.sqlite'),
         runtime: 'desktop-demo',
         logger: false,
         socialRealtime,
       });
-      ipcMain.handle('carelink:set-session-token', async (_event, token: unknown) => {
-        stopRealtime?.();
-        stopRealtime = undefined;
-        if (typeof token !== 'string' || !token) return { subscribed: false };
-        stopRealtime = await subscribeCurrentDoctor(
-          services!,
-          socialRealtime,
-          (event) => {
-            if (window && !window.isDestroyed())
-              window.webContents.send('carelink:social-event', event);
-          },
-          token,
-        );
-        return { subscribed: true };
-      });
+      ipcMain.handle('carelink:set-session-token', (_event, token: unknown) =>
+        realtimeSession.setSessionToken(token),
+      );
       protocol.handle('carelink', createProtocolHandler(services, resolve(__dirname, 'renderer')));
       await openWindow();
     })

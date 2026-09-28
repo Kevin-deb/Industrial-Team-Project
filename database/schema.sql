@@ -16,10 +16,10 @@ CREATE TABLE attachments (
       uploaded_by TEXT REFERENCES identities(id), uploaded_at TEXT NOT NULL, scan_status TEXT NOT NULL DEFAULT 'pending'
     );
 -- table: audit_events
-CREATE TABLE audit_events (
+CREATE TABLE "audit_events" (
       id TEXT PRIMARY KEY, actor_id TEXT NOT NULL REFERENCES identities(id), action TEXT NOT NULL,
       target_type TEXT NOT NULL, target_id TEXT NOT NULL, occurred_at TEXT NOT NULL,
-      outcome TEXT NOT NULL CHECK(outcome IN ('success','denied','planned')), description TEXT NOT NULL
+      outcome TEXT NOT NULL CHECK(outcome IN ('success','denied','planned','failed')), description TEXT NOT NULL
     );
 -- table: care_plan_versions
 CREATE TABLE care_plan_versions (
@@ -120,6 +120,17 @@ CREATE TABLE consultations (
       title TEXT NOT NULL, specialty TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN ('requested','scheduled','completed')),
       scheduled_at TEXT NOT NULL, summary TEXT NOT NULL, completed_at TEXT
     );
+-- table: doctor_notification_preferences
+CREATE TABLE doctor_notification_preferences (
+      identity_id TEXT PRIMARY KEY REFERENCES doctors(identity_id),
+      encounter INTEGER NOT NULL DEFAULT 1 CHECK(encounter IN (0,1)),
+      follow_up INTEGER NOT NULL DEFAULT 1 CHECK(follow_up IN (0,1)),
+      browser INTEGER NOT NULL DEFAULT 0 CHECK(browser IN (0,1)),
+      quiet_hours INTEGER NOT NULL DEFAULT 1 CHECK(quiet_hours IN (0,1)),
+      quiet_start TEXT NOT NULL DEFAULT '21:00' CHECK(quiet_start GLOB '[0-2][0-9]:[0-5][0-9]' AND quiet_start < '24:00'),
+      quiet_end TEXT NOT NULL DEFAULT '08:00' CHECK(quiet_end GLOB '[0-2][0-9]:[0-5][0-9]' AND quiet_end < '24:00'),
+      updated_at TEXT NOT NULL
+    );
 -- table: doctors
 CREATE TABLE doctors (
       identity_id TEXT PRIMARY KEY REFERENCES identities(id),
@@ -133,7 +144,7 @@ CREATE TABLE doctors (
       enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0,1)),
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
-    );
+    , outpatient_location TEXT NOT NULL DEFAULT '', bio TEXT NOT NULL DEFAULT '');
 -- table: email_challenges
 CREATE TABLE email_challenges (
       id TEXT PRIMARY KEY,
@@ -385,6 +396,17 @@ CREATE TABLE patients (
     , symptoms_json TEXT NOT NULL DEFAULT '[]', allergy_status TEXT NOT NULL DEFAULT 'unknown'
       CHECK(allergy_status IN ('unknown','none','recorded')), lifecycle_status TEXT NOT NULL DEFAULT 'active'
       CHECK(lifecycle_status IN ('active','released','archived')));
+-- table: platform_demo_deliveries
+CREATE TABLE platform_demo_deliveries (
+      id TEXT PRIMARY KEY,
+      reminder_id TEXT NOT NULL UNIQUE REFERENCES reminder_tasks(id),
+      patient_id TEXT NOT NULL REFERENCES patients(id),
+      channel TEXT NOT NULL CHECK(channel IN ('in-app','sms','email')),
+      template_id TEXT NOT NULL,
+      body TEXT NOT NULL,
+      idempotency_key TEXT NOT NULL,
+      delivered_at TEXT NOT NULL
+    );
 -- table: record_reviews
 CREATE TABLE record_reviews (
       id TEXT PRIMARY KEY, record_id TEXT NOT NULL REFERENCES medical_records(id), record_version INTEGER NOT NULL,
@@ -405,7 +427,7 @@ CREATE TABLE reminder_tasks (
       channel TEXT NOT NULL CHECK(channel IN ('in-app','sms','email')), template_id TEXT NOT NULL, scheduled_at TEXT NOT NULL,
       status TEXT NOT NULL CHECK(status IN ('planned','pending','sent','failed','cancelled')), consent_reference TEXT,
       provider_message_id TEXT, attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT, idempotency_key TEXT NOT NULL UNIQUE
-    );
+    , created_by TEXT REFERENCES identities(id), last_attempt_at TEXT);
 -- table: role_permissions
 CREATE TABLE role_permissions (
       role_id TEXT NOT NULL REFERENCES roles(id), permission TEXT NOT NULL,
@@ -560,6 +582,10 @@ CREATE TABLE users (
     );
 -- index: access_grants_actor_patient
 CREATE INDEX access_grants_actor_patient ON access_grants(identity_id, patient_id);
+-- index: audit_events_actor_domain
+CREATE INDEX audit_events_actor_domain ON audit_events(actor_id, target_type);
+-- index: audit_events_actor_instant
+CREATE INDEX audit_events_actor_instant ON audit_events(actor_id, julianday(occurred_at) DESC, id DESC);
 -- index: audit_events_actor_time
 CREATE INDEX audit_events_actor_time ON audit_events(actor_id, occurred_at DESC);
 -- index: clinical_materials_consultation
@@ -594,10 +620,15 @@ CREATE INDEX health_observation_confirmations_observation
 -- index: health_observations_patient_time
 CREATE INDEX health_observations_patient_time
       ON health_observations(patient_id,measured_at);
+-- index: health_reminders_due
+CREATE INDEX health_reminders_due ON reminder_tasks(status,scheduled_at,attempts);
 -- index: patient_management_history_patient
 CREATE INDEX patient_management_history_patient ON patient_management_history(patient_id,created_at);
 -- index: patients_doctor_status
 CREATE INDEX patients_doctor_status ON patients(assigned_doctor_id,status);
+-- index: platform_demo_deliveries_patient_time
+CREATE INDEX platform_demo_deliveries_patient_time
+      ON platform_demo_deliveries(patient_id, delivered_at DESC);
 -- index: social_attachments_owner_state
 CREATE INDEX social_attachments_owner_state
       ON social_attachments(owner_identity_id,state,created_at);
@@ -652,4 +683,9 @@ INSERT INTO schema_migrations(version,name,applied_at) VALUES(29,'online_care_re
 INSERT INTO schema_migrations(version,name,applied_at) VALUES(30,'remote_consultation_persistence','2026-09-21T00:00:00.000Z');
 INSERT INTO schema_migrations(version,name,applied_at) VALUES(31,'remote_consultation_invited_case','2026-09-21T00:00:00.000Z');
 INSERT INTO schema_migrations(version,name,applied_at) VALUES(32,'patients_lifecycle_management','2026-09-21T00:00:00.000Z');
+INSERT INTO schema_migrations(version,name,applied_at) VALUES(33,'platform_doctor_profile_and_notification_preferences','2026-09-21T00:00:00.000Z');
+INSERT INTO schema_migrations(version,name,applied_at) VALUES(34,'audit_failed_outcome_and_scoped_query_index','2026-09-21T00:00:00.000Z');
+INSERT INTO schema_migrations(version,name,applied_at) VALUES(35,'platform_local_test_notification_receipts','2026-09-21T00:00:00.000Z');
+INSERT INTO schema_migrations(version,name,applied_at) VALUES(36,'health_reminder_creator_and_schedule_attempts','2026-09-21T00:00:00.000Z');
+INSERT INTO schema_migrations(version,name,applied_at) VALUES(37,'consultation_grants_expire_after_session_start','2026-09-21T00:00:00.000Z');
 COMMIT;

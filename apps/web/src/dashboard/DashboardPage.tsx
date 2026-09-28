@@ -84,9 +84,7 @@ export function DashboardPage() {
         action={
           <div className="date-chip">
             <CalendarDays size={16} />
-            <span>
-              {formatDate(today, { year: 'numeric', month: 'long', day: 'numeric' })}
-            </span>
+            <span>{formatDate(today, { year: 'numeric', month: 'long', day: 'numeric' })}</span>
             <span className="date-separator" />
             {formatDate(today, { weekday: 'long' })}
             <Badge tone="slate">{t('今日')}</Badge>
@@ -111,7 +109,7 @@ export function DashboardPage() {
             </Link>
             <span>
               <ShieldCheck size={15} />
-              {t('当前为框架演示，数据均为虚构')}
+              {t('本地业务演示 · 合成数据')}
             </span>
           </div>
         </div>
@@ -167,7 +165,7 @@ export function DashboardPage() {
           <div className="card-heading">
             <div>
               <h2>
-                {t('今日问诊安排')}
+                {t('当前账号的问诊安排')}
                 <span className="count-pill">{data.schedule.length}</span>
               </h2>
               <p>{t('从一次沟通，开启持续的照护')}</p>
@@ -196,7 +194,7 @@ export function DashboardPage() {
             ))}
             <span className="muted schedule-note">
               <Clock3 size={13} />
-              {t('演示日程')}
+              {t('按实际预约日期排序')}
             </span>
           </div>
           <div className="schedule-list">
@@ -213,6 +211,7 @@ export function DashboardPage() {
                       },
                     )}
                     <span>
+                      {formatDate(item.scheduledAt, { month: 'short', day: 'numeric' })} ·{' '}
                       {item.durationMinutes}
                       {t('分钟')}
                     </span>
@@ -257,7 +256,7 @@ export function DashboardPage() {
           <div className="schedule-footer">
             <span>
               <span className="status-dot" />
-              {t('演示日程可浏览，实际接诊待上线')}
+              {t('接诊与记录保存已接通')}
             </span>
             <Link to="/encounters">
               {t('前往问诊中心')}

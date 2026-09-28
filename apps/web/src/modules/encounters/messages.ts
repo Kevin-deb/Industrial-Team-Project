@@ -87,7 +87,7 @@ export const encountersMessages: Record<string, string> = {
     'Patient has been reminded to stay online during the service window.',
   '建议改至 {date} {time}，等待患者确认。':
     'Suggested moving to {date} {time}, waiting for patient confirmation.',
-  '待患者确认': 'Waiting for patient confirmation',
+  待患者确认: 'Waiting for patient confirmation',
   患者已接受: 'Patient accepted',
   已发送: 'Sent',
   模拟患者接受: 'Simulate patient acceptance',
@@ -270,4 +270,19 @@ export const encountersMessages: Record<string, string> = {
     'After a doctor sends a reschedule notice, the patient confirms whether to accept it. Once both sides agree, the platform updates the care window and records an audit event.',
   '图文与视频诊疗使用统一接诊编号，与病历、知情同意及审计记录关联。第三方通信服务通过独立适配器接入。':
     'Text and video visits share a common encounter ID linked to records, consent, and audit events. Independent adapters will connect external communication services.',
+  '问诊已结束，本机预览已关闭': 'The visit has ended. Local preview is closed.',
+  远端患者连接尚未接入: 'Remote patient connection is not available',
+  本机摄像头预览中: 'Local camera preview active',
+  本机摄像头预览: 'Local camera preview',
+  '问诊文本记录已保存；未录音录像。':
+    'The visit text record has been saved. No audio or video was recorded.',
+  '问诊已结束，未找到已保存的问诊记录。':
+    'The visit has ended, but no saved visit record was found.',
+  '仅预览本机画面；尚未连接患者，未录音录像。':
+    'Local camera preview only. No patient connection, audio recording, or video recording.',
+  麦克风未接入: 'Microphone is not connected',
+  停止本机预览: 'Stop local preview',
+  开启本机预览: 'Start local preview',
+  '没有已保存的问诊记录，无法导出。': 'No saved visit record is available to export.',
+  '操作未完成，请重试。': 'The action could not be completed. Please try again.',
 };

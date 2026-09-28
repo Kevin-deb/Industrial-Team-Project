@@ -48,4 +48,40 @@ export const auditMessages: Record<string, string> = {
     'Audit exports will support date, action, and permission-scope filters. Export requests and outcomes will be recorded.',
   '导出格式、保留周期和机构审查要求需要在正式环境中配置。当前没有生成或下载日志文件。':
     'Export formats, retention periods, and institutional review requirements will be configured for production. No log file has been created or downloaded.',
+  失败: 'Failed',
+  失败操作: 'Failed actions',
+  操作名称: 'Action name',
+  开始时间: 'From',
+  结束时间: 'To',
+  正在导出: 'Exporting',
+  当前筛选范围: 'Current filter',
+  当前筛选范围的总数: 'Total matching events',
+  每页记录数: 'Rows per page',
+  查询: 'Search',
+  重置: 'Reset',
+  上一页: 'Previous',
+  下一页: 'Next',
+  健康观测: 'Health observation',
+  健康评估: 'Health assessment',
+  随访提醒: 'Follow-up reminder',
+  医嘱: 'Medical order',
+  会诊材料: 'Consultation material',
+  同行社区: 'Peer community',
+  '查询自己的访问和操作记录，按时间、操作及结果导出。':
+    'Search your access and activity records, and export by time, action, and outcome.',
+  '查询和导出仅包含当前账号的记录；导出行为也会留下审计记录。':
+    'Searches and exports contain only your account’s records. Exports are also audited.',
+  '开始时间不能晚于结束时间。': 'The start time must not be after the end time.',
+  '时间按本机时区输入。导出使用已查询的条件，包含全部匹配记录。':
+    'Enter times in your local time zone. Exports use the applied filters and include all matching records.',
+  '已生成符合当前查询条件的全部日志文件。':
+    'A file containing all events matching the applied filters has been generated.',
+  '导出失败，请稍后重试。': 'Export failed. Please try again.',
+  '调整时间、操作状态、对象类型或搜索关键词。':
+    'Try another time range, outcome, target type, or search term.',
+  '第 {page} / {pages} 页': 'Page {page} of {pages}',
+  '请填写有效的审计时间范围，开始时间不能晚于结束时间。':
+    'Enter a valid audit time range; the start must not be after the end.',
+  '导出记录超过五万条，请缩小时间范围。':
+    'The export exceeds 50,000 rows. Choose a smaller time range.',
 };

@@ -30,3 +30,4 @@ export {
 } from './reference-ranges.js';
 export type { ReferenceRangeProvider } from './reference-ranges.js';
 export { calculateTrendSeries } from './trends.js';
+export { healthReminderSchedulingMigration } from './reminder-scheduling-migration.js';

@@ -16,7 +16,14 @@ import type {
   EncounterNotice,
   SavedEncounterRecord,
 } from '@doctor/contracts';
-import { patientScopeSql, type RequestContext } from '../platform/index.js';
+import { randomUUID } from 'node:crypto';
+import {
+  patientScopeSql,
+  consultationMemberSql,
+  consultationAccessUntil,
+  canCompleteConsultation,
+  type RequestContext,
+} from '../platform/index.js';
 
 export interface ConsultationTask {
   id: string;
@@ -37,7 +44,12 @@ export interface EncounterRepository {
   ): EncounterMessage | undefined;
   complete(
     id: string,
-    input: { mode: 'text' | 'video'; messageCount: number; audioSaved: boolean; videoSaved: boolean },
+    input: {
+      mode: 'text' | 'video';
+      messageCount: number;
+      audioSaved: boolean;
+      videoSaved: boolean;
+    },
     context: RequestContext,
   ): SavedEncounterRecord | undefined;
   listAvailability(context: RequestContext): EncounterAvailabilityWindow[];
@@ -52,7 +64,12 @@ export interface EncounterRepository {
   ): EncounterAvailabilityWindow | undefined;
   listNotices(context: RequestContext): EncounterNotice[];
   createNotice(
-    input: { encounterId: string; kind: EncounterNotice['kind']; content: string; proposedScheduledAt?: string },
+    input: {
+      encounterId: string;
+      kind: EncounterNotice['kind'];
+      content: string;
+      proposedScheduledAt?: string;
+    },
     context: RequestContext,
   ): EncounterNotice | undefined;
   acceptNotice(id: string, context: RequestContext): EncounterNotice | undefined;
@@ -161,15 +178,24 @@ export class SqliteEncounterRepository implements EncounterRepository {
 
   complete(
     id: string,
-    input: { mode: 'text' | 'video'; messageCount: number; audioSaved: boolean; videoSaved: boolean },
+    input: {
+      mode: 'text' | 'video';
+      messageCount: number;
+      audioSaved: boolean;
+      videoSaved: boolean;
+    },
     context: RequestContext,
   ): SavedEncounterRecord | undefined {
     const encounter = this.findEncounterRow(id, context);
     if (!encounter) return undefined;
     const existing = this.db
-      .prepare('SELECT * FROM encounter_saved_records WHERE encounter_id=? ORDER BY saved_at DESC LIMIT 1')
+      .prepare(
+        'SELECT * FROM encounter_saved_records WHERE encounter_id=? ORDER BY saved_at DESC LIMIT 1',
+      )
       .get(id);
-    this.db.prepare("UPDATE encounters SET status='completed',ended_at=? WHERE id=?").run(context.now, id);
+    this.db
+      .prepare("UPDATE encounters SET status='completed',ended_at=? WHERE id=?")
+      .run(context.now, id);
     if (existing) return this.mapSavedRecord(existing);
     const record: SavedEncounterRecord = {
       id: `ESR-${id}-${Date.now()}`,
@@ -241,7 +267,9 @@ export class SqliteEncounterRepository implements EncounterRepository {
       .prepare('SELECT * FROM encounter_availability_windows WHERE id=? AND doctor_id=?')
       .get(id, context.actorId);
     if (!row || capacity < Number(row.booked)) return undefined;
-    this.db.prepare('UPDATE encounter_availability_windows SET capacity=? WHERE id=?').run(capacity, id);
+    this.db
+      .prepare('UPDATE encounter_availability_windows SET capacity=? WHERE id=?')
+      .run(capacity, id);
     return this.mapAvailability({ ...row, capacity });
   }
 
@@ -259,7 +287,12 @@ export class SqliteEncounterRepository implements EncounterRepository {
   }
 
   createNotice(
-    input: { encounterId: string; kind: EncounterNotice['kind']; content: string; proposedScheduledAt?: string },
+    input: {
+      encounterId: string;
+      kind: EncounterNotice['kind'];
+      content: string;
+      proposedScheduledAt?: string;
+    },
     context: RequestContext,
   ): EncounterNotice | undefined {
     const encounter = this.findEncounterRow(input.encounterId, context);
@@ -306,21 +339,21 @@ export class SqliteEncounterRepository implements EncounterRepository {
         .prepare("UPDATE encounters SET scheduled_at=?,status='waiting' WHERE id=?")
         .run(String(row.proposed_scheduled_at), String(row.encounter_id));
     this.db
-      .prepare("UPDATE encounter_notices SET status='患者已接受',content=content || ' 平台已自动调整接诊时段。' WHERE id=?")
+      .prepare(
+        "UPDATE encounter_notices SET status='患者已接受',content=content || ' 平台已自动调整接诊时段。' WHERE id=?",
+      )
       .run(id);
-    return this.mapNotice({ ...row, status: '患者已接受', content: `${row.content} 平台已自动调整接诊时段。` });
+    return this.mapNotice({
+      ...row,
+      status: '患者已接受',
+      content: `${row.content} 平台已自动调整接诊时段。`,
+    });
   }
   listConsultations(context: RequestContext): Consultation[] {
     return this.db
       .prepare(
         `SELECT c.*,p.name patient_name FROM consultations c JOIN patients p ON p.id=c.patient_id
-         WHERE ${patientScopeSql}
-           AND (
-             c.requested_by=:actorId OR EXISTS (
-               SELECT 1 FROM consultation_participants cp
-               WHERE cp.consultation_id=c.id AND cp.identity_id=:actorId
-             )
-           )
+         WHERE ${patientScopeSql} AND ${consultationMemberSql}
          ORDER BY c.scheduled_at`,
       )
       .all({ ...context })
@@ -338,7 +371,7 @@ export class SqliteEncounterRepository implements EncounterRepository {
       messages: this.consultationMessages(id),
       report: this.consultationReport(id),
       access: '按本次会诊任务共享必要资料',
-      accessUntil: String(row.scheduled_at),
+      accessUntil: consultationAccessUntil(String(row.scheduled_at)),
     };
   }
 
@@ -373,25 +406,44 @@ export class SqliteEncounterRepository implements EncounterRepository {
     context: RequestContext,
   ): Consultation | undefined {
     const patient = this.db
-      .prepare(`SELECT p.id,p.name FROM patients p WHERE p.id=:patientId AND ${patientScopeSql}`)
+      .prepare(
+        `SELECT p.id,p.name FROM patients p WHERE p.id=:patientId AND p.assigned_doctor_id=:actorId AND ${patientScopeSql}`,
+      )
       .get({ patientId: input.patientId, ...context });
     if (!patient) return undefined;
-    const id = `CON-${Date.now()}`;
-    const participants = Array.from(new Set([context.actorId, input.reviewerId, ...input.participantIds])).filter(Boolean);
+    const id = `CON-${randomUUID()}`;
+    const participants = Array.from(
+      new Set([context.actorId, input.reviewerId, ...input.participantIds]),
+    ).filter(Boolean);
     this.db.exec('BEGIN IMMEDIATE');
     try {
       this.db
         .prepare(
           'INSERT INTO consultations(id,patient_id,requested_by,title,specialty,status,scheduled_at,summary) VALUES(?,?,?,?,?,?,?,?)',
         )
-        .run(id, input.patientId, context.actorId, input.title, input.specialty, 'requested', input.scheduledAt, input.summary);
+        .run(
+          id,
+          input.patientId,
+          context.actorId,
+          input.title,
+          input.specialty,
+          'requested',
+          input.scheduledAt,
+          input.summary,
+        );
       for (const participantId of participants)
         this.db
-          .prepare('INSERT OR IGNORE INTO consultation_participants(consultation_id,identity_id,participant_role) VALUES(?,?,?)')
+          .prepare(
+            'INSERT OR IGNORE INTO consultation_participants(consultation_id,identity_id,participant_role) VALUES(?,?,?)',
+          )
           .run(
             id,
             participantId,
-            participantId === context.actorId ? 'requester' : participantId === input.reviewerId ? 'reviewer' : 'expert',
+            participantId === context.actorId
+              ? 'requester'
+              : participantId === input.reviewerId
+                ? 'reviewer'
+                : 'expert',
           );
       for (const participantId of participants)
         if (participantId !== context.actorId)
@@ -407,7 +459,7 @@ export class SqliteEncounterRepository implements EncounterRepository {
               input.patientId,
               'patient:read',
               id,
-              input.scheduledAt,
+              consultationAccessUntil(input.scheduledAt),
               null,
               context.now,
             );
@@ -456,7 +508,9 @@ export class SqliteEncounterRepository implements EncounterRepository {
     if (!this.canReviewConsultation(id, context.actorId)) return undefined;
     this.db.prepare("UPDATE consultations SET status='scheduled' WHERE id=?").run(id);
     this.db
-      .prepare('UPDATE consultation_participants SET joined_at=? WHERE consultation_id=? AND identity_id=?')
+      .prepare(
+        'UPDATE consultation_participants SET joined_at=? WHERE consultation_id=? AND identity_id=?',
+      )
       .run(context.now, id, context.actorId);
     return this.mapConsultation({ ...row, status: 'scheduled' }, context);
   }
@@ -467,7 +521,8 @@ export class SqliteEncounterRepository implements EncounterRepository {
     context: RequestContext,
   ): ConsultationMessage | undefined {
     const row = this.findConsultationRow(id, context);
-    if (!row || String(row.status) === 'requested' || String(row.status) === 'completed') return undefined;
+    if (!row || String(row.status) === 'requested' || String(row.status) === 'completed')
+      return undefined;
     const message = {
       id: `CMSG-${id}-${Date.now()}`,
       authorId: context.actorId,
@@ -481,7 +536,15 @@ export class SqliteEncounterRepository implements EncounterRepository {
       .prepare(
         'INSERT INTO consultation_messages(id,consultation_id,sender_identity_id,body,sent_at,image_url,image_name) VALUES(?,?,?,?,?,?,?)',
       )
-      .run(message.id, id, context.actorId, message.body, message.sentAt, message.imageUrl ?? null, message.imageName ?? null);
+      .run(
+        message.id,
+        id,
+        context.actorId,
+        message.body,
+        message.sentAt,
+        message.imageUrl ?? null,
+        message.imageName ?? null,
+      );
     return message;
   }
 
@@ -491,7 +554,8 @@ export class SqliteEncounterRepository implements EncounterRepository {
     context: RequestContext,
   ): ConsultationMaterial | undefined {
     const row = this.findConsultationRow(id, context);
-    if (!row || String(row.status) === 'requested' || String(row.status) === 'completed') return undefined;
+    if (!row || String(row.status) === 'requested' || String(row.status) === 'completed')
+      return undefined;
     const material = {
       id: `CMU-${id}-${Date.now()}`,
       title: input.title,
@@ -520,52 +584,87 @@ export class SqliteEncounterRepository implements EncounterRepository {
 
   deleteConsultationMaterial(id: string, materialId: string, context: RequestContext): boolean {
     const row = this.findConsultationRow(id, context);
-    if (!row || String(row.status) === 'requested' || String(row.status) === 'completed') return false;
+    if (!row || String(row.status) === 'requested' || String(row.status) === 'completed')
+      return false;
     const upload = this.db
       .prepare('SELECT 1 FROM consultation_material_uploads WHERE id=? AND consultation_id=?')
       .get(materialId, id);
     if (upload) {
-      this.db.prepare('DELETE FROM consultation_material_uploads WHERE id=? AND consultation_id=?').run(materialId, id);
+      this.db
+        .prepare('DELETE FROM consultation_material_uploads WHERE id=? AND consultation_id=?')
+        .run(materialId, id);
       return true;
     }
     const material = this.db
       .prepare('SELECT 1 FROM clinical_materials WHERE id=? AND consultation_id=?')
       .get(materialId, id);
     if (!material) return false;
-    this.db.prepare('DELETE FROM clinical_materials WHERE id=? AND consultation_id=?').run(materialId, id);
+    this.db
+      .prepare('DELETE FROM clinical_materials WHERE id=? AND consultation_id=?')
+      .run(materialId, id);
     return true;
   }
 
   completeConsultation(id: string, context: RequestContext): ConsultationReport | undefined {
-    const row = this.findConsultationRow(id, context);
-    if (!row || String(row.status) === 'requested') return undefined;
-    const existing = this.consultationReport(id);
-    this.db.prepare("UPDATE consultations SET status='completed',completed_at=? WHERE id=?").run(context.now, id);
-    if (existing) return existing;
-    const body = this.buildConsultationReportBody(id, row);
-    const report: ConsultationReport = {
-      id: `CR-${id}-${Date.now()}`,
-      body,
-      status: 'confirmed',
-      createdAt: context.now,
-    };
-    this.db
-      .prepare(
-        `INSERT INTO consultation_reports(
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      const row = this.findConsultationRow(id, context);
+      if (
+        !row ||
+        String(row.status) === 'requested' ||
+        !canCompleteConsultation(
+          {
+            requestedBy: String(row.requested_by),
+            reviewerId: this.consultationReviewer(id)?.id,
+          },
+          context,
+        )
+      ) {
+        this.db.exec('ROLLBACK');
+        return undefined;
+      }
+      const existing = this.consultationReport(id);
+      const report: ConsultationReport = existing ?? {
+        id: `CR-${id}-${randomUUID()}`,
+        body: this.buildConsultationReportBody(id, row),
+        status: 'confirmed',
+        createdAt: context.now,
+      };
+      // Closing the task, revoking access and preserving its report are one atomic operation.
+      // A storage failure must leave the active consultation and its access unchanged.
+      this.db
+        .prepare(
+          "UPDATE consultations SET status='completed',completed_at=COALESCE(completed_at,?) WHERE id=?",
+        )
+        .run(context.now, id);
+      this.db
+        .prepare('UPDATE access_grants SET revoked_at=? WHERE task_id=? AND revoked_at IS NULL')
+        .run(context.now, id);
+      if (!existing)
+        this.db
+          .prepare(
+            `
+        INSERT INTO consultation_reports(
           id,consultation_id,version,body_json,status,confirmed_by,confirmed_at,created_at
-        ) VALUES(?,?,?,?,?,?,?,?)`,
-      )
-      .run(
-        report.id,
-        id,
-        1,
-        JSON.stringify({ body: report.body }),
-        report.status,
-        context.actorId,
-        context.now,
-        report.createdAt,
-      );
-    return report;
+        ) VALUES(?,?,?,?,?,?,?,?)
+      `,
+          )
+          .run(
+            report.id,
+            id,
+            1,
+            JSON.stringify({ body: report.body }),
+            report.status,
+            context.actorId,
+            context.now,
+            report.createdAt,
+          );
+      this.db.exec('COMMIT');
+      return report;
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
   }
 
   findReference(id: string, context: RequestContext) {
@@ -584,10 +683,10 @@ export class SqliteEncounterRepository implements EncounterRepository {
         `SELECT c.id,c.patient_id,c.status,c.completed_at,c.requested_by,
           (EXISTS(
             SELECT 1 FROM consultation_participants cp
-            WHERE cp.consultation_id=c.id AND cp.identity_id=:actorId
+            WHERE cp.consultation_id=c.id AND cp.identity_id=:actorId AND cp.left_at IS NULL
           ) OR c.requested_by=:actorId) is_participant
          FROM consultations c JOIN patients p ON p.id=c.patient_id
-         WHERE c.id=:id AND ${patientScopeSql}`,
+         WHERE c.id=:id AND ${patientScopeSql} AND ${consultationMemberSql}`,
       )
       .get({ id, ...context });
     if (!row) return undefined;
@@ -612,7 +711,7 @@ export class SqliteEncounterRepository implements EncounterRepository {
          JOIN consultations c ON c.id=r.consultation_id
          JOIN patients p ON p.id=c.patient_id
          WHERE r.consultation_id=:consultationId AND r.id=:reportId AND r.status='confirmed'
-           AND ${patientScopeSql}`,
+           AND ${patientScopeSql} AND ${consultationMemberSql}`,
       )
       .get({ consultationId, reportId, ...context });
     return row ? { id: String(row.id) } : undefined;
@@ -631,7 +730,7 @@ export class SqliteEncounterRepository implements EncounterRepository {
     return this.db
       .prepare(
         `SELECT c.*,p.name patient_name FROM consultations c JOIN patients p ON p.id=c.patient_id
-         WHERE c.id=:id AND ${patientScopeSql}`,
+         WHERE c.id=:id AND ${patientScopeSql} AND ${consultationMemberSql}`,
       )
       .get({ id, ...context });
   }
@@ -661,7 +760,7 @@ export class SqliteEncounterRepository implements EncounterRepository {
       .prepare(
         `SELECT i.id,i.display_name,i.title,i.department,cp.participant_role
          FROM consultation_participants cp JOIN identities i ON i.id=cp.identity_id
-         WHERE cp.consultation_id=? ORDER BY cp.participant_role DESC,i.id`,
+         WHERE cp.consultation_id=? AND cp.left_at IS NULL ORDER BY cp.participant_role DESC,i.id`,
       )
       .all(id)
       .map((row) => ({
@@ -678,7 +777,7 @@ export class SqliteEncounterRepository implements EncounterRepository {
       .prepare(
         `SELECT i.id,i.display_name FROM consultation_participants cp
          JOIN identities i ON i.id=cp.identity_id
-         WHERE cp.consultation_id=? AND cp.participant_role='reviewer'
+         WHERE cp.consultation_id=? AND cp.participant_role='reviewer' AND cp.left_at IS NULL
          ORDER BY i.id LIMIT 1`,
       )
       .get(id);
@@ -689,7 +788,7 @@ export class SqliteEncounterRepository implements EncounterRepository {
     const row = this.db
       .prepare(
         `SELECT 1 FROM consultation_participants
-         WHERE consultation_id=? AND identity_id=? AND participant_role='reviewer'`,
+         WHERE consultation_id=? AND identity_id=? AND participant_role='reviewer' AND left_at IS NULL`,
       )
       .get(id, actorId);
     return Boolean(row);
@@ -697,7 +796,9 @@ export class SqliteEncounterRepository implements EncounterRepository {
 
   private consultationMaterials(id: string): ConsultationMaterial[] {
     const uploads = this.db
-      .prepare('SELECT * FROM consultation_material_uploads WHERE consultation_id=? ORDER BY uploaded_at,id')
+      .prepare(
+        'SELECT * FROM consultation_material_uploads WHERE consultation_id=? ORDER BY uploaded_at,id',
+      )
       .all(id)
       .map((row) => ({
         id: String(row.id),
@@ -751,7 +852,9 @@ export class SqliteEncounterRepository implements EncounterRepository {
 
   private consultationReport(id: string): ConsultationReport | null {
     const row = this.db
-      .prepare('SELECT * FROM consultation_reports WHERE consultation_id=? ORDER BY version DESC LIMIT 1')
+      .prepare(
+        'SELECT * FROM consultation_reports WHERE consultation_id=? ORDER BY version DESC LIMIT 1',
+      )
       .get(id);
     if (!row) return null;
     let body = String(row.body_json);
@@ -763,7 +866,9 @@ export class SqliteEncounterRepository implements EncounterRepository {
     }
     if (this.isLegacyConsultationReport(body)) {
       const consultation = this.db
-        .prepare('SELECT c.*,p.name patient_name FROM consultations c JOIN patients p ON p.id=c.patient_id WHERE c.id=?')
+        .prepare(
+          'SELECT c.*,p.name patient_name FROM consultations c JOIN patients p ON p.id=c.patient_id WHERE c.id=?',
+        )
         .get(id);
       if (consultation) body = this.buildConsultationReportBody(id, consultation);
     }
@@ -862,7 +967,9 @@ export class SqliteEncounterRepository implements EncounterRepository {
   }
 
   private isLegacyConsultationReport(body: string): boolean {
-    return body.includes('系统已根据会诊材料和实时讨论生成会诊意见') && !body.includes('会诊讨论记录');
+    return (
+      body.includes('系统已根据会诊材料和实时讨论生成会诊意见') && !body.includes('会诊讨论记录')
+    );
   }
 
   private identityName(id: string): string {
@@ -922,7 +1029,9 @@ export class SqliteEncounterRepository implements EncounterRepository {
 
   private savedRecords(encounterId: string): SavedEncounterRecord[] {
     return this.db
-      .prepare('SELECT * FROM encounter_saved_records WHERE encounter_id=? ORDER BY saved_at DESC,id')
+      .prepare(
+        'SELECT * FROM encounter_saved_records WHERE encounter_id=? ORDER BY saved_at DESC,id',
+      )
       .all(encounterId)
       .map((row) => this.mapSavedRecord(row));
   }

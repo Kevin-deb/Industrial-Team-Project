@@ -8,30 +8,19 @@ import { createApp } from '../../api/src/app.js';
 import {
   CONTENT_SECURITY_POLICY,
   canGrantMediaCapture,
+  canGrantApplicationPermission,
   createProtocolHandler,
   isApplicationUrl,
 } from '../src/protocol.js';
 
 async function login(app: Awaited<ReturnType<typeof createApp>>) {
-  const start = await app.inject({
-    method: 'POST', url: '/api/v1/auth/login',
+  const result = await app.inject({
+    method: 'POST',
+    url: '/api/v1/auth/password-login',
     payload: { account: 'lin.zhiyuan', password: '123456' },
   });
-  const challengeId = start.json().data.challengeId;
-  const code = (await app.inject('/api/v1/auth/demo-email/' + challengeId)).json().data.code;
-  const verified = await app.inject({
-    method: 'POST', url: '/api/v1/auth/email/verify', payload: { challengeId, code },
-  });
-  return (
-    await app.inject({
-      method: 'POST', url: '/api/v1/auth/photo-check',
-      payload: {
-        ticket: verified.json().data.photoTicket,
-        captureMethod: 'camera',
-        photoDataUrl: 'data:image/png;base64,iVBORw0KGgo=',
-      },
-    })
-  ).json().data.token as string;
+  assert.equal(result.statusCode, 201, result.body);
+  return result.json().data.token as string;
 }
 
 test('private protocol forwards the authenticated session but never caller identity headers', async () => {
@@ -55,15 +44,35 @@ test('private protocol forwards the authenticated session but never caller ident
 
 test('desktop registration forwards the submission key and replays without duplicates', async () => {
   const root = mkdtempSync(resolve(tmpdir(), 'carelink-registration-protocol-'));
-  const app = await createApp({ runtime: 'desktop-demo', identity: { actorId: 'doctor-demo-001' } });
+  const app = await createApp({
+    runtime: 'desktop-demo',
+    identity: { actorId: 'doctor-demo-001' },
+  });
   const handler = createProtocolHandler(app, root);
   const key = randomUUID();
-  const body = JSON.stringify({ name: 'Synthetic desktop registration', gender: '男', age: 40,
-    phone: '', diagnosis: 'Synthetic condition', tags: [], status: 'follow-up', symptoms: [],
-    allergies: [], allergyStatus: 'unknown', medicalHistory: [], careSummary: '', changeReason: 'Synthetic registration' });
-  const send = () => handler(new Request('carelink://app/api/v1/patients', {
-    method: 'POST', headers: { 'content-type': 'application/json', 'Idempotency-Key': key }, body,
-  }));
+  const body = JSON.stringify({
+    name: 'Synthetic desktop registration',
+    gender: '男',
+    age: 40,
+    phone: '',
+    diagnosis: 'Synthetic condition',
+    tags: [],
+    status: 'follow-up',
+    symptoms: [],
+    allergies: [],
+    allergyStatus: 'unknown',
+    medicalHistory: [],
+    careSummary: '',
+    changeReason: 'Synthetic registration',
+  });
+  const send = () =>
+    handler(
+      new Request('carelink://app/api/v1/patients', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'Idempotency-Key': key },
+        body,
+      }),
+    );
   try {
     const first = await send();
     assert.equal(first.status, 201);
@@ -72,14 +81,20 @@ test('desktop registration forwards the submission key and replays without dupli
     assert.equal(retry.status, 200);
     assert.equal((await retry.json()).data.id, patient.id);
     assert.equal(retry.headers.get('etag'), '"patient-v1"');
-  } finally { await app.close(); rmSync(root, { recursive: true, force: true }); }
+  } finally {
+    await app.close();
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('private application protocol serves offline UI routes and keeps API contracts intact', async () => {
   const root = mkdtempSync(resolve(tmpdir(), 'carelink-protocol-'));
   writeFileSync(resolve(root, 'index.html'), '<h1>CareLink</h1>');
   writeFileSync(resolve(root, 'app.js'), 'console.log("carelink")');
-  const app = await createApp({ runtime: 'desktop-demo', identity: { actorId: 'doctor-demo-001' } });
+  const app = await createApp({
+    runtime: 'desktop-demo',
+    identity: { actorId: 'doctor-demo-001' },
+  });
   const handler = createProtocolHandler(app, root);
   try {
     for (const path of ['/', '/patients', '/records']) {
@@ -107,7 +122,10 @@ test('private application protocol serves offline UI routes and keeps API contra
 
 test('private protocol rejects foreign origins, path escapes, oversized requests and asset mutations', async () => {
   const root = mkdtempSync(resolve(tmpdir(), 'carelink-security-'));
-  const app = await createApp({ runtime: 'desktop-demo', identity: { actorId: 'doctor-demo-001' } });
+  const app = await createApp({
+    runtime: 'desktop-demo',
+    identity: { actorId: 'doctor-demo-001' },
+  });
   const handler = createProtocolHandler(app, root);
   try {
     for (const value of [
@@ -153,7 +171,10 @@ test('private protocol rejects foreign origins, path escapes, oversized requests
 
 test('private protocol forwards medical-record concurrency preconditions', async () => {
   const root = mkdtempSync(resolve(tmpdir(), 'carelink-record-protocol-'));
-  const app = await createApp({ runtime: 'desktop-demo', identity: { actorId: 'doctor-demo-001' } });
+  const app = await createApp({
+    runtime: 'desktop-demo',
+    identity: { actorId: 'doctor-demo-001' },
+  });
   const handler = createProtocolHandler(app, root);
   const recordBody = {
     chiefComplaint: 'Synthetic protocol test',
@@ -202,7 +223,10 @@ test('production environment still refuses standalone demo but permits explicit 
   process.env.NODE_ENV = 'production';
   try {
     await assert.rejects(createApp(), /refuses NODE_ENV=production/);
-    const app = await createApp({ runtime: 'desktop-demo', identity: { actorId: 'doctor-demo-001' } });
+    const app = await createApp({
+      runtime: 'desktop-demo',
+      identity: { actorId: 'doctor-demo-001' },
+    });
     try {
       const result = await app.inject('/api/v1/health');
       assert.equal(result.json().data.mode, 'demo');
@@ -217,7 +241,11 @@ test('production environment still refuses standalone demo but permits explicit 
 
 test('desktop protocol carries social media bytes but keeps the generic one MiB request limit', async () => {
   const root = mkdtempSync(resolve(tmpdir(), 'carelink-media-protocol-'));
-  const app = await createApp({ runtime: 'desktop-demo', identity: { actorId: 'doctor-demo-001' }, mediaRoot: resolve(root, 'media') });
+  const app = await createApp({
+    runtime: 'desktop-demo',
+    identity: { actorId: 'doctor-demo-001' },
+    mediaRoot: resolve(root, 'media'),
+  });
   const handler = createProtocolHandler(app, root);
   try {
     const png = Buffer.concat([
@@ -271,4 +299,74 @@ test('desktop allows microphone and camera capture only for the bundled applicat
   assert.equal(canGrantMediaCapture('notifications', 'carelink://app/', ['audio']), false);
   assert.match(CONTENT_SECURITY_POLICY, /img-src 'self' data: blob:/);
   assert.match(CONTENT_SECURITY_POLICY, /media-src 'self' blob:/);
+});
+
+test('only authentication photo routes accept the bounded large-photo request', async () => {
+  const root = mkdtempSync(resolve(tmpdir(), 'carelink-photo-protocol-'));
+  const app = await createApp({ runtime: 'desktop-demo' });
+  const handler = createProtocolHandler(app, root);
+  try {
+    const start = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/photo-login/start',
+      payload: { account: 'lin.zhiyuan' },
+    });
+    assert.equal(start.statusCode, 202, start.body);
+    const png = Buffer.concat([
+      Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+        'base64',
+      ),
+      Buffer.alloc(1100 * 1024),
+    ]);
+    const body = JSON.stringify({
+      ticket: start.json().data.photoTicket,
+      captureMethod: 'upload',
+      photoDataUrl: 'data:image/png;base64,' + png.toString('base64'),
+    });
+    assert.ok(Buffer.byteLength(body) > 1024 * 1024);
+    const accepted = await handler(
+      new Request('carelink://app/api/v1/auth/photo-check', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body,
+      }),
+    );
+    assert.equal(accepted.status, 201, await accepted.clone().text());
+    assert.ok((await accepted.json()).data.token);
+    for (const path of [
+      '/api/v1/auth/photo-check',
+      '/api/v1/auth/password/recover-password/complete',
+      '/api/v1/auth/password/change-password/complete',
+    ]) {
+      const tooLarge = await handler(
+        new Request('carelink://app' + path, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: 'x'.repeat(3 * 1024 * 1024),
+        }),
+      );
+      assert.equal(tooLarge.status, 413, path);
+    }
+    const generic = await handler(
+      new Request('carelink://app/api/v1/patients', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body,
+      }),
+    );
+    assert.equal(generic.status, 413);
+  } finally {
+    await app.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('desktop grants user-requested notifications only to its bundled renderer', () => {
+  assert.equal(canGrantApplicationPermission('notifications', 'carelink://app/settings'), true);
+  assert.equal(canGrantApplicationPermission('notifications', 'https://example.com/'), false);
+  assert.equal(canGrantApplicationPermission('notifications', 'carelink://app.evil/'), false);
+  assert.equal(canGrantApplicationPermission('geolocation', 'carelink://app/'), false);
+  assert.equal(canGrantApplicationPermission('media', 'carelink://app/', ['audio']), true);
+  assert.equal(canGrantApplicationPermission('media', 'https://example.com/', ['video']), false);
 });
