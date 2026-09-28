@@ -185,22 +185,16 @@ function zipBlob(files: Array<{ name: string; bytes: Uint8Array }>) {
 
 function RequestDialog({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const { t } = useI18n();
-  const [patientName, setPatientName] = useState('黄文海');
-  const [patientId, setPatientId] = useState('PAT-008');
+  const [patientName, setPatientName] = useState('');
+  const [patientId, setPatientId] = useState('');
   const [patientPicker, setPatientPicker] = useState<'name' | 'id' | null>(null);
-  const [title, setTitle] = useState('疑难慢病多学科会诊');
-  const [specialty, setSpecialty] = useState('全科医学 · 心血管内科 · 内分泌科');
+  const [title, setTitle] = useState('');
+  const [specialty, setSpecialty] = useState('');
   const [scheduledAt, setScheduledAt] = useState(() => {
     const next = new Date(Date.now() + 60 * 60 * 1000);
     return new Date(next.getTime() - next.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
   });
-  const [materials, setMaterials] = useState<DraftMaterial[]>([
-    {
-      title: '门诊病历摘要',
-      fileName: '门诊病历摘要.txt',
-      description: '发起会诊时补充的患者资料。',
-    },
-  ]);
+  const [materials, setMaterials] = useState<DraftMaterial[]>([]);
   const [reviewer, setReviewer] = useState<ConsultationDoctorOption | null>(null);
   const [selectedDoctors, setSelectedDoctors] = useState<ConsultationDoctorOption[]>([]);
   const [doctorQuery, setDoctorQuery] = useState('');
@@ -228,24 +222,6 @@ function RequestDialog({ onClose, onCreated }: { onClose: () => void; onCreated:
     [patientId, patientName, patients.data],
   );
   const filteredDoctors = doctors.data ?? [];
-  useEffect(() => {
-    if (!patients.data?.length || selectedPatient) return;
-    const fallback = patients.data.find((patient) => patient.id === patientId) ?? patients.data[0];
-    if (!fallback) return;
-    setPatientName(fallback.name);
-    setPatientId(fallback.id);
-  }, [patientId, patients.data, selectedPatient]);
-  useEffect(() => {
-    if (!filteredDoctors.length) return;
-    setReviewer((current) => current ?? filteredDoctors[0]!);
-    setSelectedDoctors((current) => {
-      if (current.length) return current;
-      const firstParticipant =
-        filteredDoctors.find((doctor) => doctor.id !== filteredDoctors[0]!.id) ??
-        filteredDoctors[0]!;
-      return [firstParticipant];
-    });
-  }, [filteredDoctors]);
   const selectPatient = (patient: Patient) => {
     setPatientName(patient.name);
     setPatientId(patient.id);

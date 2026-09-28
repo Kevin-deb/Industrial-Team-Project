@@ -379,9 +379,12 @@ export class SqliteEncounterRepository implements EncounterRepository {
     const pattern = `%${query.trim()}%`;
     return this.db
       .prepare(
-        `SELECT id,display_name,title,department FROM identities
-         WHERE id<>:actorId AND (:query='' OR display_name LIKE :pattern OR department LIKE :pattern OR title LIKE :pattern)
-         ORDER BY department,display_name LIMIT 20`,
+        `SELECT i.id,i.display_name,i.title,i.department FROM identities i
+         JOIN doctors d ON d.identity_id=i.id
+         JOIN users u ON u.identity_id=i.id
+         WHERE i.id<>:actorId AND d.enabled=1 AND u.status='active'
+         AND (:query='' OR i.display_name LIKE :pattern OR i.department LIKE :pattern OR i.title LIKE :pattern)
+         ORDER BY i.department,i.display_name LIMIT 20`,
       )
       .all({ actorId: context.actorId, query: query.trim(), pattern })
       .map((row) => ({
