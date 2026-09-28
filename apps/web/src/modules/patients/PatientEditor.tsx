@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Save, X } from 'lucide-react';
 import type { PatientArchive, UpdatePatientRequest } from '@doctor/contracts';
 import { ApiRequestError, requestApi } from '../../shared/api';
-import { useI18n } from '../../shared/i18n';
+import { localizeDemoData, restoreDemoData, useI18n } from '../../shared/i18n';
 import { Button } from '../../shared/ui';
 import { allergyLabels, editableFields, parseLines, patientFields, statusLabels } from './fields';
 import { LocalizedDateInput } from './LocalizedDateInput';
@@ -26,17 +26,21 @@ export function PatientEditor({
   onBusy: (value: boolean) => void;
   registrationKey?: string;
 }) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const creating = registrationKey !== undefined;
-  const initialFields = { ...editableFields(patient), gender: creating ? '' : patient.gender };
+  const displayedPatient = creating ? patient : localizeDemoData(patient, language);
+  const initialFields = {
+    ...editableFields(displayedPatient),
+    gender: creating ? '' : displayedPatient.gender,
+  };
   const [fields, setFields] = useState(initialFields);
   const [lastVisit, setLastVisit] = useState('');
   const [nextFollowUp, setNextFollowUp] = useState('');
   const [arrays, setArrays] = useState({
-    tags: patient.tags.join('\n'),
-    symptoms: patient.symptoms.join('\n'),
-    allergies: patient.allergies.join('\n'),
-    medicalHistory: patient.medicalHistory.join('\n'),
+    tags: displayedPatient.tags.join('\n'),
+    symptoms: displayedPatient.symptoms.join('\n'),
+    allergies: displayedPatient.allergies.join('\n'),
+    medicalHistory: displayedPatient.medicalHistory.join('\n'),
   });
   const [reason, setReason] = useState('');
   const [reasonError, setReasonError] = useState(false);
@@ -44,20 +48,21 @@ export function PatientEditor({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
-  const input: UpdatePatientRequest = {
+  const displayedInput: UpdatePatientRequest = {
     ...fields,
     gender: fields.gender as PatientArchive['gender'],
     ...Object.fromEntries(Object.entries(arrays).map(([key, value]) => [key, parseLines(value)])),
     changeReason: reason.trim(),
   };
+  const input = creating ? displayedInput : restoreDemoData(displayedInput, language);
   const dirty =
     JSON.stringify({ ...fields, ...arrays, reason, lastVisit, nextFollowUp }) !==
     JSON.stringify({
       ...initialFields,
-      tags: patient.tags.join('\n'),
-      symptoms: patient.symptoms.join('\n'),
-      allergies: patient.allergies.join('\n'),
-      medicalHistory: patient.medicalHistory.join('\n'),
+      tags: displayedPatient.tags.join('\n'),
+      symptoms: displayedPatient.symptoms.join('\n'),
+      allergies: displayedPatient.allergies.join('\n'),
+      medicalHistory: displayedPatient.medicalHistory.join('\n'),
       reason: '',
       lastVisit: '',
       nextFollowUp: '',
@@ -67,10 +72,10 @@ export function PatientEditor({
   }, [dirty, onDirty]);
   const changed =
     creating ||
-    Object.keys(editableFields(patient)).some(
+    Object.keys(editableFields(displayedPatient)).some(
       (key) =>
-        JSON.stringify(input[key as keyof UpdatePatientRequest]) !==
-        JSON.stringify(patient[key as keyof PatientArchive]),
+        JSON.stringify(displayedInput[key as keyof UpdatePatientRequest]) !==
+        JSON.stringify(displayedPatient[key as keyof PatientArchive]),
     );
   const update = <K extends keyof typeof fields>(key: K, value: (typeof fields)[K]) =>
     setFields((previous) => ({ ...previous, [key]: value }));

@@ -62,6 +62,24 @@ export function localizeDemoData<T>(data: T, language: Language): T {
   return visit(data) as T;
 }
 
+const sourceMessages = new Map(Object.entries(messages).map(([source, translated]) => [translated, source]));
+
+/** Restores known translated fixture values before an edited demo record is persisted. */
+export function restoreDemoData<T>(data: T, language: Language): T {
+  if (language === 'zh-CN' || data == null) return data;
+  function visit(value: unknown, key = ''): unknown {
+    if (stableFields.has(key)) return value;
+    if (typeof value === 'string') return sourceMessages.get(value) ?? value;
+    if (Array.isArray(value)) return value.map((item) => visit(item));
+    if (typeof value === 'object' && value !== null)
+      return Object.fromEntries(
+        Object.entries(value).map(([field, item]) => [field, visit(item, field)]),
+      );
+    return value;
+  }
+  return visit(data) as T;
+}
+
 interface I18nContextValue {
   language: Language;
   setLanguage: (language: Language) => void;

@@ -333,7 +333,7 @@ describe('Patients workflows', () => {
     );
   });
 
-  it('saves original values with If-Match even in English and renders successful persistence', async () => {
+  it('edits localized values in English while preserving original fixture values on save', async () => {
     localStorage.setItem('carelink-language', 'en');
     const fetch = vi.fn(async (_path: string, init?: RequestInit) => {
       if (init?.method === 'PATCH')
@@ -347,8 +347,9 @@ describe('Patients workflows', () => {
     vi.stubGlobal('fetch', fetch);
     detail();
     fireEvent.click(await screen.findByRole('button', { name: 'Edit record' }));
-    expect(screen.getByLabelText('Name')).toHaveValue('陈建国');
-    expect(screen.getByLabelText('Health category')).toHaveValue('高血压');
+    expect(screen.getByLabelText('Name')).toHaveValue('Chen Jianguo');
+    expect(screen.getByLabelText('Health category')).toHaveValue('Hypertension');
+    expect(screen.getByLabelText('Category tags')).toHaveValue('Hypertension');
     fireEvent.change(screen.getByLabelText('Care summary'), {
       target: { value: 'Revised summary' },
     });
