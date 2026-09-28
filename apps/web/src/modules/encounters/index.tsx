@@ -211,32 +211,36 @@ function bodyFromBrief(
   template: MedicalRecordTemplateDefinition,
   brief: ClinicalBrief,
   encounter: Encounter,
+  t: (source: string, values?: Record<string, string | number>) => string,
 ) {
   const body = emptyRecordBody(template);
   if (template.id === 'outpatient') {
-    body.chiefComplaint = brief.chiefComplaint;
-    body.presentIllness = brief.presentIllness;
+    body.chiefComplaint = t(brief.chiefComplaint);
+    body.presentIllness = t(brief.presentIllness);
     body.medicalAndAllergyHistory = [
-      `既往史：${brief.pastHistory}`,
-      `手术史：${brief.surgicalHistory}`,
-      `用药史：${brief.medicationHistory}`,
-      `过敏史：${brief.allergyHistory}`,
+      `${t('既往史')}：${t(brief.pastHistory)}`,
+      `${t('手术史')}：${t(brief.surgicalHistory)}`,
+      `${t('用药史')}：${t(brief.medicationHistory)}`,
+      `${t('过敏史')}：${t(brief.allergyHistory)}`,
     ].join('\n');
-    body.examinationAndInvestigations =
-      '在线问诊资料待医生补充，必要时建议线下查体或完善辅助检查。';
-    body.assessmentAndPlan = `围绕“${encounter.reason}”继续评估，结合沟通记录完善诊疗计划。`;
+    body.examinationAndInvestigations = t(
+      '在线问诊资料待医生补充，必要时建议线下查体或完善辅助检查。',
+    );
+    body.assessmentAndPlan = t('围绕“{reason}”继续评估，结合沟通记录完善诊疗计划。', {
+      reason: t(encounter.reason),
+    });
   } else if (template.id === 'followup') {
-    body.followUpPurpose = encounter.reason;
-    body.healthMonitoringData = '患者通过在线诊疗提交资料，待医生结合健康数据补充。';
-    body.currentMedicationAndAdherence = brief.medicationHistory;
-    body.lifestyleAndCare = '生活方式与照护情况待问诊过程中补充。';
-    body.nextFollowUpArrangement = '根据本次问诊结果安排后续随访。';
+    body.followUpPurpose = t(encounter.reason);
+    body.healthMonitoringData = t('患者通过在线诊疗提交资料，待医生结合健康数据补充。');
+    body.currentMedicationAndAdherence = t(brief.medicationHistory);
+    body.lifestyleAndCare = t('生活方式与照护情况待问诊过程中补充。');
+    body.nextFollowUpArrangement = t('根据本次问诊结果安排后续随访。');
   } else if (template.id === 'consult') {
-    body.consultationRequestAndPurpose = encounter.reason;
-    body.participatingClinicians = '在线诊疗医生';
-    body.caseSummary = `${brief.chiefComplaint}\n${brief.presentIllness}`;
-    body.discussionNotes = '诊间沟通后补充。';
-    body.combinedOpinionAndNextSteps = '待医生形成综合意见。';
+    body.consultationRequestAndPurpose = t(encounter.reason);
+    body.participatingClinicians = t('在线诊疗医生');
+    body.caseSummary = `${t(brief.chiefComplaint)}\n${t(brief.presentIllness)}`;
+    body.discussionNotes = t('诊间沟通后补充。');
+    body.combinedOpinionAndNextSteps = t('待医生形成综合意见。');
   }
   return body;
 }
@@ -277,14 +281,14 @@ function EncounterRecordDialog({
   useEffect(() => {
     if (!template || Object.keys(body).length) return;
     setTemplateId(template.id);
-    setBody(bodyFromBrief(template, brief, encounter));
-  }, [body, brief, encounter, template]);
+    setBody(bodyFromBrief(template, brief, encounter, t));
+  }, [body, brief, encounter, template, t]);
 
   function changeTemplate(nextId: MedicalRecordTemplateId) {
     const nextTemplate = templates?.find((item) => item.id === nextId);
     if (!nextTemplate) return;
     setTemplateId(nextId);
-    setBody(bodyFromBrief(nextTemplate, brief, encounter));
+    setBody(bodyFromBrief(nextTemplate, brief, encounter, t));
   }
 
   async function saveRecord() {

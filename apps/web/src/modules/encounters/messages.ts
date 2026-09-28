@@ -115,6 +115,8 @@ export const encountersMessages: Record<string, string> = {
   '生活方式与照护情况待问诊过程中补充。':
     'Lifestyle and care circumstances will be completed during the consultation.',
   '根据本次问诊结果安排后续随访。': 'Arrange follow-up based on this consultation.',
+  '围绕“{reason}”继续评估，结合沟通记录完善诊疗计划。':
+    'Continue assessing “{reason}” and complete the care plan based on the conversation record.',
   在线诊疗医生: 'Online care physician',
   '诊间沟通后补充。': 'To be completed after room discussion.',
   '待医生形成综合意见。': 'Awaiting the physician’s combined opinion.',

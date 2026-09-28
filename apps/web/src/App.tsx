@@ -54,6 +54,14 @@ const navigation = [
   { path: '/health', label: '健康管理', en: 'Health management', icon: HeartPulse },
 ];
 
+function initialsForDisplay(name: string | undefined, fallback: string, language: string) {
+  if (!name) return fallback;
+  if (language !== 'en') return fallback;
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return fallback;
+  return parts[0]?.[0]?.toUpperCase() ?? fallback;
+}
+
 function Brand() {
   const { t, language, setLanguage, formatDate } = useI18n();
 
@@ -86,6 +94,12 @@ export function App() {
   const { enabled: communityEnabled } = useCommunityPreference();
   const unread = useSocialUnread(communityEnabled);
   const readAllNotifications = useReadAllNotifications();
+  const doctorName = t(session?.doctor.name ?? '演示医生');
+  const doctorInitials = initialsForDisplay(
+    doctorName,
+    session?.doctor.avatarInitials ?? t('医'),
+    language,
+  );
   useEffect(() => {
     setSidebarOpen(false);
     window.scrollTo(0, 0);
@@ -179,12 +193,12 @@ export function App() {
             </button>
           </div>
           <button className="sidebar-profile" onClick={() => navigate('/settings')}>
-            <div className="avatar avatar-teal">{session?.doctor.avatarInitials ?? t('医')}</div>
+            <div className="avatar avatar-teal">{doctorInitials}</div>
             <div>
               <strong>
-                {session?.doctor.name ?? t('演示医生')} <span>{t('医生')}</span>
+                {doctorName} <span>{t('医生')}</span>
               </strong>
-              <small>{session?.doctor.department ?? t('医生服务中心')}</small>
+              <small>{t(session?.doctor.department ?? '医生服务中心')}</small>
             </div>
             <ChevronRight size={16} />
           </button>
@@ -260,9 +274,7 @@ export function App() {
               onClick={() => navigate('/settings')}
               aria-label={t('打开个人设置')}
             >
-              <div className="avatar avatar-teal small">
-                {session?.doctor.avatarInitials ?? t('医')}
-              </div>
+              <div className="avatar avatar-teal small">{doctorInitials}</div>
               <ChevronDown size={14} />
             </button>
             <button
