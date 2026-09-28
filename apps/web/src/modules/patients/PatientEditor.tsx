@@ -5,6 +5,7 @@ import { ApiRequestError, requestApi } from '../../shared/api';
 import { useI18n } from '../../shared/i18n';
 import { Button } from '../../shared/ui';
 import { allergyLabels, editableFields, parseLines, patientFields, statusLabels } from './fields';
+import { LocalizedDateInput } from './LocalizedDateInput';
 
 export function PatientEditor({
   patient,
@@ -256,19 +257,18 @@ export function PatientEditor({
             <>
               <label>
                 {t('最近就诊（可选）')}
-                <input
-                  type="date"
+                <LocalizedDateInput
+                  label={t('最近就诊（可选）')}
                   value={lastVisit}
-                  onChange={(event) => setLastVisit(event.target.value)}
+                  onChange={setLastVisit}
                 />
               </label>
               <label>
                 {t('下次随访（可选）')}
-                <input
-                  type="date"
-                  min={lastVisit || undefined}
+                <LocalizedDateInput
+                  label={t('下次随访（可选）')}
                   value={nextFollowUp}
-                  onChange={(event) => setNextFollowUp(event.target.value)}
+                  onChange={setNextFollowUp}
                 />
               </label>
             </>

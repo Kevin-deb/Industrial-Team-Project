@@ -19,6 +19,9 @@ export const patientsMessages: Record<string, string> = {
   取消建档: 'Cancel registration',
   '最近就诊（可选）': 'Last visit (optional)',
   '下次随访（可选）': 'Next follow-up (optional)',
+  年: 'Year',
+  月: 'Month',
+  日: 'Day',
   '放弃尚未保存的建档内容？': 'Discard the unsaved registration draft?',
   '当前医生没有患者建档权限。': 'The current doctor does not have permission to register patients.',
   '患者建档必须携带有效的提交标识。':

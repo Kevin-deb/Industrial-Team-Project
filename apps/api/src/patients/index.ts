@@ -6,4 +6,8 @@ export type { PatientRepository } from './repository.js';
 export { patientsArchiveMigration } from './archive-migration.js';
 export { patientsRegistrationMigration } from './registration-migration.js';
 export { patientsLifecycleMigration } from './lifecycle-migration.js';
+export {
+  patientsSearchAliasesMigration,
+  seedPatientSearchAliases,
+} from './search-aliases-migration.js';
 export { registerPatientRoutes } from './routes.js';
