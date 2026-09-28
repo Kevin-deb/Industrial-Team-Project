@@ -22,3 +22,6 @@ release/
 
 # Windows runtime caches generated when a tool environment leaves this variable literal.
 %SystemDrive%/
+
+# Generated from locked OCR npm packages before web dev/build.
+apps/web/public/ocr/

@@ -1,12 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { createApp } from '../../api/src/app.js';
 import {
   CONTENT_SECURITY_POLICY,
+  OCR_WORKER_SECURITY_POLICY,
   canGrantMediaCapture,
   canGrantApplicationPermission,
   createProtocolHandler,
@@ -369,4 +370,35 @@ test('desktop grants user-requested notifications only to its bundled renderer',
   assert.equal(canGrantApplicationPermission('geolocation', 'carelink://app/'), false);
   assert.equal(canGrantApplicationPermission('media', 'carelink://app/', ['audio']), true);
   assert.equal(canGrantApplicationPermission('media', 'https://example.com/', ['video']), false);
+});
+
+test('OCR assets allow local workers and scope WASM execution to the OCR worker response', async () => {
+  const root = mkdtempSync(resolve(tmpdir(), 'carelink-ocr-protocol-'));
+  mkdirSync(resolve(root, 'ocr'));
+  writeFileSync(resolve(root, 'index.html'), '<h1>CareLink</h1>');
+  writeFileSync(resolve(root, 'ocr/worker.min.js'), 'self.onmessage = () => {};');
+  writeFileSync(resolve(root, 'ocr/tesseract-core.wasm'), Buffer.from([0, 97, 115, 109]));
+  const app = await createApp({ runtime: 'desktop-demo' });
+  const handler = createProtocolHandler(app, root);
+  try {
+    const page = await handler(new Request('carelink://app/records'));
+    const worker = await handler(new Request('carelink://app/ocr/worker.min.js'));
+    const wasm = await handler(new Request('carelink://app/ocr/tesseract-core.wasm'));
+    assert.equal(worker.status, 200);
+    assert.match(worker.headers.get('content-type')!, /javascript/);
+    assert.equal(wasm.headers.get('content-type'), 'application/wasm');
+    assert.equal(page.headers.get('content-security-policy'), CONTENT_SECURITY_POLICY);
+    assert.equal(worker.headers.get('content-security-policy'), OCR_WORKER_SECURITY_POLICY);
+    assert.match(CONTENT_SECURITY_POLICY, /worker-src 'self'/);
+    assert.doesNotMatch(CONTENT_SECURITY_POLICY, /unsafe-eval|https:|http:/);
+    assert.match(OCR_WORKER_SECURITY_POLICY, /'wasm-unsafe-eval'/);
+    assert.doesNotMatch(
+      OCR_WORKER_SECURITY_POLICY,
+      /'unsafe-eval'|worker-src[^;]*blob:|https:|http:/,
+    );
+    assert.equal((await handler(new Request('carelink://other/ocr/worker.min.js'))).status, 403);
+  } finally {
+    await app.close();
+    rmSync(root, { recursive: true, force: true });
+  }
 });

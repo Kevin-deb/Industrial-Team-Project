@@ -6,6 +6,8 @@ CareLink is a bilingual Windows desktop application for a five-person doctor-ser
 
 Email codes can be received through the local test mailbox. Photo verification is a demonstration, not biometric recognition. Patient SMS/email reminders are delivered to a clearly labelled local inbox. Video remains a local camera preview; two-party calling, recording/playback and external patient delivery are not implemented. The UI must not claim media was saved.
 
+**Paper-record photo recognition:** editable clinical records now accept a camera photo or JPG/PNG/WebP upload. Chinese/English OCR runs locally, followed by field review and explicit confirmation before filling the existing draft. See the [usage, compatibility and handoff guide](docs/handoffs/D-record-photo-ocr.md).
+
 ## Run the current source on Windows
 
 Use Node.js **24.14.0 or later in the 24.x line**. Initial dependency and Electron downloads need internet access. In this repository:

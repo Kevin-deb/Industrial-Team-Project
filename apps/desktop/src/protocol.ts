@@ -24,14 +24,21 @@ export const CONTENT_SECURITY_POLICY = [
   "object-src 'none'",
   "base-uri 'none'",
   "form-action 'none'",
-  "worker-src 'none'",
+  "worker-src 'self'",
 ].join('; ');
+
+// WASM execution is limited to the bundled OCR worker; ordinary pages keep strict script CSP.
+export const OCR_WORKER_SECURITY_POLICY = CONTENT_SECURITY_POLICY.replace(
+  "script-src 'self'",
+  "script-src 'self' 'wasm-unsafe-eval'",
+);
 
 const MIME_TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
+  '.wasm': 'application/wasm',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
   '.ico': 'image/x-icon',
@@ -77,9 +84,14 @@ export function canGrantApplicationPermission(
     : canGrantMediaCapture(permission, requestingUrl, mediaTypes);
 }
 
-function response(body: BodyInit | null, status = 200, headers: HeadersInit = {}): Response {
+function response(
+  body: BodyInit | null,
+  status = 200,
+  headers: HeadersInit = {},
+  policy = CONTENT_SECURITY_POLICY,
+): Response {
   const secured = new Headers(headers);
-  secured.set('Content-Security-Policy', CONTENT_SECURITY_POLICY);
+  secured.set('Content-Security-Policy', policy);
   secured.set('X-Content-Type-Options', 'nosniff');
   secured.set('Referrer-Policy', 'no-referrer');
   secured.set('Cache-Control', 'no-store');
@@ -169,9 +181,16 @@ export function createProtocolHandler(services: FastifyInstance, rendererRoot: s
       if (relativeTarget.startsWith('..') || isAbsolute(relativeTarget))
         return response('Forbidden', 403);
       const content = await readFile(target);
-      return response(request.method === 'HEAD' ? null : new Uint8Array(content), 200, {
-        'Content-Type': MIME_TYPES[extname(target)] ?? 'application/octet-stream',
-      });
+      return response(
+        request.method === 'HEAD' ? null : new Uint8Array(content),
+        200,
+        {
+          'Content-Type': MIME_TYPES[extname(target)] ?? 'application/octet-stream',
+        },
+        url.pathname === '/ocr/worker.min.js'
+          ? OCR_WORKER_SECURITY_POLICY
+          : CONTENT_SECURITY_POLICY,
+      );
     } catch (error) {
       if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')
         return response('Not found', 404);

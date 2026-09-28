@@ -1,0 +1,131 @@
+.record-photo-import {
+  min-width: 0;
+}
+.record-photo-import p {
+  margin: 8px 0;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.record-photo-import small {
+  color: #61758a;
+  line-height: 1.55;
+}
+.record-photo-panel {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid #c9dded;
+  border-radius: 14px;
+  background: #f5faff;
+}
+.record-photo-header,
+.record-photo-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.record-photo-header {
+  justify-content: space-between;
+}
+.record-photo-header strong {
+  color: #173b5b;
+  font-size: 16px;
+}
+.record-photo-panel .record-photo-patient {
+  padding: 10px 14px;
+  background: #e5f0fa;
+  border-radius: 8px;
+}
+.record-photo-panel .record-photo-file {
+  min-width: 0;
+  flex: 1 1 260px;
+}
+.record-photo-file input {
+  max-width: 100%;
+  padding: 8px;
+}
+.record-photo-preview,
+.record-photo-camera {
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+  min-width: 0;
+}
+.record-photo-preview img,
+.record-photo-camera video {
+  width: 100%;
+  max-height: 380px;
+  object-fit: contain;
+  background: #e7edf2;
+  border-radius: 8px;
+}
+.record-photo-progress {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+.record-photo-progress progress {
+  width: min(100%, 420px);
+  accent-color: #1b718a;
+}
+.record-photo-panel .record-photo-error {
+  border: 1px solid #efbdbd;
+  background: #fff1f1;
+  color: #9b2828;
+  border-radius: 8px;
+  padding: 12px;
+}
+.record-photo-panel h3 {
+  margin: 8px 0 0;
+  font-size: 16px;
+}
+.record-photo-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.record-photo-field {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  min-width: 0;
+}
+.record-photo-panel label.record-photo-check {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 9px;
+  cursor: pointer;
+}
+.record-photo-panel .record-photo-check input {
+  width: 17px;
+  height: 17px;
+  flex-shrink: 0;
+  margin: 2px 0 0;
+  accent-color: #1b718a;
+}
+.record-photo-field details {
+  font-size: 12px;
+  color: #836011;
+}
+.record-photo-field details p {
+  max-height: 120px;
+  overflow: auto;
+  white-space: pre-wrap;
+  color: #475569;
+}
+.record-photo-confirm {
+  padding: 12px;
+  border-radius: 8px;
+  background: #e5f0fa;
+}
+@media (max-width: 640px) {
+  .record-photo-panel {
+    padding: 12px;
+  }
+  .record-photo-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

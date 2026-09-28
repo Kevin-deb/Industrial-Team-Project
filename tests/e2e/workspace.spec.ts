@@ -12,7 +12,9 @@ test('dashboard and all doctor modules load with local API data', async ({ page,
   await expect(page.locator('.metric-value').first()).toContainText(
     data.stats.patients.toString().padStart(2, '0'),
   );
-  await expect(page.getByText('当前为框架演示，数据均为虚构')).toBeVisible();
+  await expect(
+    page.locator('.welcome-banner').getByText('本地业务演示 · 合成数据', { exact: true }),
+  ).toBeVisible();
   await expect(page.getByRole('img', { name: '患者最近七次模拟收缩压趋势' })).toBeVisible();
   await page.screenshot({ path: 'test-results/dashboard-desktop.png', fullPage: true });
   for (const route of [

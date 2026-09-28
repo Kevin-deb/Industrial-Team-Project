@@ -20,6 +20,7 @@ import { useI18n } from '../../shared/i18n';
 import { Badge, Button, LoadingState } from '../../shared/ui';
 import { FeatureDialog, ReadOnlyNote } from '../ui';
 import { emptyOrderPayload, emptyRecordBody } from './templates';
+import { RecordPhotoImport } from './RecordPhotoImport';
 
 interface EditorProps {
   recordId?: string;
@@ -536,6 +537,38 @@ export function RecordEditor({ recordId, onClose, onSaved }: EditorProps) {
               />
             </label>
           </div>
+          {editable && !saving && (
+            <RecordPhotoImport
+              key={[
+                recordId ?? record?.id ?? 'new',
+                record?.version ?? 0,
+                form.patientId,
+                form.templateId,
+              ].join(':')}
+              template={template!}
+              current={{ title: form.title, diagnosis: form.diagnosis, body: form.body }}
+              patientLabel={
+                form.patientId
+                  ? [
+                      patients?.find((patient) => patient.id === form.patientId)?.name ??
+                        record?.patientName ??
+                        '',
+                      form.patientId,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')
+                  : ''
+              }
+              onApply={(patch) =>
+                setForm((value) => ({
+                  ...value,
+                  ...(patch.title !== undefined ? { title: patch.title } : {}),
+                  ...(patch.diagnosis !== undefined ? { diagnosis: patch.diagnosis } : {}),
+                  body: { ...value.body, ...patch.body },
+                }))
+              }
+            />
+          )}
           <div className="record-editor-fields">
             <div className="record-editor-section-title">
               <div>
