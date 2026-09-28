@@ -228,6 +228,30 @@ describe('Patients workflows', () => {
     await screen.findByText('已选择 0 位患者');
   });
 
+  it('uses English day, month and year controls when registering in English', async () => {
+    localStorage.setItem('carelink-language', 'en');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (path: string) =>
+        path.endsWith('/summary')
+          ? response({ total: 1, canRegister: true })
+          : response([patient], { total: 1 }),
+      ),
+    );
+    render(
+      <I18nProvider>
+        <MemoryRouter>
+          <PatientsPage />
+        </MemoryRouter>
+      </I18nProvider>,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Register patient' }));
+    expect(screen.getByLabelText('Last visit (optional): Day')).toBeVisible();
+    expect(screen.getByLabelText('Last visit (optional): Month')).toBeVisible();
+    expect(screen.getByLabelText('Last visit (optional): Year')).toBeVisible();
+    expect(screen.queryByText('年/月/日')).not.toBeInTheDocument();
+  });
+
   it('preserves batch selection and reason on a stale batch and requires refresh', async () => {
     const fetch = vi.fn(async (path: string, init?: RequestInit) => {
       if (init?.method === 'POST')

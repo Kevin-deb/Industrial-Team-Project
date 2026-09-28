@@ -85,6 +85,14 @@
   outline: 2px solid #35897c;
   outline-offset: 2px;
 }
+.patients-date-input {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.patients-date-input span {
+  min-width: 0;
+}
 .patients-pagination,
 .patients-page-controls,
 .patients-actions,

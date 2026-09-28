@@ -19,6 +19,8 @@ import {
   patientsArchiveMigration,
   patientsRegistrationMigration,
   patientsLifecycleMigration,
+  patientsSearchAliasesMigration,
+  seedPatientSearchAliases,
 } from '../patients/index.js';
 import {
   encountersMigration,
@@ -108,6 +110,7 @@ export const migrations = [
   healthReminderSchedulingMigration,
   consultationGrantExpiryMigration,
   clinicalReviewerAssignmentMigration,
+  patientsSearchAliasesMigration,
 ];
 
 const legacyAuthOrder = [
@@ -199,6 +202,7 @@ export function openDatabase(path: string): DatabaseSync {
     seedHealthDemo(database);
     seedSocialDemo(database);
     seedAuthFoundation(database);
+    seedPatientSearchAliases(database);
     return database;
   } catch (error) {
     database.close();

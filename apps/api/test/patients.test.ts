@@ -519,6 +519,28 @@ test('server search covers stored symptoms, categories and tags with correct sco
   }
 });
 
+test('patient search accepts localized English demo names, conditions and symptoms', async () => {
+  const db = openDatabase(':memory:');
+  const app = await createApp({ database: db });
+  try {
+    for (const [query, expectedId] of [
+      ['Chen Jianguo', 'PAT-001'],
+      ['hypertension', 'PAT-001'],
+      ['dizziness', 'PAT-001'],
+    ] as const) {
+      const result = (await app.inject('/api/v1/patients?q=' + encodeURIComponent(query))).json();
+      assert.ok(result.data.some((patient: { id: string }) => patient.id === expectedId));
+    }
+    const disease = (
+      await app.inject('/api/v1/patients?disease=' + encodeURIComponent('Type 2 diabetes'))
+    ).json();
+    assert.ok(disease.data.some((patient: { id: string }) => patient.id === 'PAT-002'));
+  } finally {
+    await app.close();
+    db.close();
+  }
+});
+
 test('audit failure rolls back patient data and archive version together', async () => {
   const db = openDatabase(':memory:');
   const app = await createApp({ database: db });

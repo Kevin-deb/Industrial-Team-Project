@@ -183,7 +183,12 @@ export class SqlitePatientRepository implements PatientRepository {
     const params: Record<string, SQLInputValue> = { ...context };
     if (query.q) {
       conditions.push(
-        "instr(lower(p.name || ' ' || p.id || ' ' || p.diagnosis || ' ' || p.tags_json || ' ' || p.symptoms_json || ' ' || p.medical_history_json || ' ' || p.care_summary),lower(:q))>0",
+        `(instr(lower(p.name || ' ' || p.id || ' ' || p.diagnosis || ' ' || p.tags_json || ' ' || p.symptoms_json || ' ' || p.medical_history_json || ' ' || p.care_summary),lower(:q))>0
+          OR EXISTS (
+            SELECT 1 FROM patient_search_aliases alias
+            WHERE alias.patient_id=p.id
+              AND instr(lower(alias.name || ' ' || alias.diagnosis || ' ' || alias.search_text),lower(:q))>0
+          ))`,
       );
       params.q = query.q.trim();
     }
@@ -192,7 +197,11 @@ export class SqlitePatientRepository implements PatientRepository {
       params.status = query.status;
     }
     if (query.disease) {
-      conditions.push('instr(lower(p.diagnosis),lower(:disease))>0');
+      conditions.push(`(instr(lower(p.diagnosis),lower(:disease))>0
+        OR EXISTS (
+          SELECT 1 FROM patient_search_aliases alias
+          WHERE alias.patient_id=p.id AND instr(lower(alias.diagnosis),lower(:disease))>0
+        ))`);
       params.disease = query.disease.trim();
     }
     const where = conditions.join(' AND ');

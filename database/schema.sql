@@ -384,6 +384,15 @@ CREATE TABLE patient_registration_requests (
     created_at TEXT NOT NULL,
     PRIMARY KEY(actor_id,request_key)
   );
+-- table: patient_search_aliases
+CREATE TABLE patient_search_aliases (
+      patient_id TEXT NOT NULL REFERENCES patients(id),
+      locale TEXT NOT NULL,
+      name TEXT NOT NULL,
+      diagnosis TEXT NOT NULL,
+      search_text TEXT NOT NULL,
+      PRIMARY KEY(patient_id, locale)
+    );
 -- table: patients
 CREATE TABLE patients (
       id TEXT PRIMARY KEY, name TEXT NOT NULL, gender TEXT NOT NULL CHECK(gender IN ('女','男')),
@@ -626,6 +635,9 @@ CREATE INDEX health_observations_patient_time
 CREATE INDEX health_reminders_due ON reminder_tasks(status,scheduled_at,attempts);
 -- index: patient_management_history_patient
 CREATE INDEX patient_management_history_patient ON patient_management_history(patient_id,created_at);
+-- index: patient_search_aliases_lookup
+CREATE INDEX patient_search_aliases_lookup
+      ON patient_search_aliases(locale, patient_id);
 -- index: patients_doctor_status
 CREATE INDEX patients_doctor_status ON patients(assigned_doctor_id,status);
 -- index: platform_demo_deliveries_patient_time
@@ -691,4 +703,5 @@ INSERT INTO schema_migrations(version,name,applied_at) VALUES(35,'platform_local
 INSERT INTO schema_migrations(version,name,applied_at) VALUES(36,'health_reminder_creator_and_schedule_attempts','2026-09-21T00:00:00.000Z');
 INSERT INTO schema_migrations(version,name,applied_at) VALUES(37,'consultation_grants_expire_after_session_start','2026-09-21T00:00:00.000Z');
 INSERT INTO schema_migrations(version,name,applied_at) VALUES(38,'clinical_record_assigned_reviewers','2026-09-21T00:00:00.000Z');
+INSERT INTO schema_migrations(version,name,applied_at) VALUES(39,'patients_localized_search_aliases','2026-09-21T00:00:00.000Z');
 COMMIT;
