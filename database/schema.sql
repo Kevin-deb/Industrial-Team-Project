@@ -342,7 +342,7 @@ CREATE TABLE medical_records (
       status TEXT NOT NULL CHECK(status IN ('draft','pending-review','archived')),
       author_id TEXT NOT NULL REFERENCES identities(id), updated_at TEXT NOT NULL,
       version INTEGER NOT NULL CHECK(version>0), archived_at TEXT
-    );
+    , reviewer_id TEXT REFERENCES identities(id));
 -- table: outbox_events
 CREATE TABLE outbox_events (
       id TEXT PRIMARY KEY, event_type TEXT NOT NULL, schema_version INTEGER NOT NULL DEFAULT 1,
@@ -598,6 +598,8 @@ CREATE INDEX clinical_orders_record ON medical_orders(record_id, created_at DESC
 CREATE INDEX clinical_records_encounter ON medical_records(encounter_id) WHERE encounter_id IS NOT NULL;
 -- index: clinical_records_patient_updated
 CREATE INDEX clinical_records_patient_updated ON medical_records(patient_id,updated_at DESC);
+-- index: clinical_records_reviewer_status
+CREATE INDEX clinical_records_reviewer_status ON medical_records(reviewer_id,status,updated_at DESC);
 -- index: clinical_records_status_updated
 CREATE INDEX clinical_records_status_updated ON medical_records(status,updated_at DESC);
 -- index: consultation_material_uploads_task
@@ -688,4 +690,5 @@ INSERT INTO schema_migrations(version,name,applied_at) VALUES(34,'audit_failed_o
 INSERT INTO schema_migrations(version,name,applied_at) VALUES(35,'platform_local_test_notification_receipts','2026-09-21T00:00:00.000Z');
 INSERT INTO schema_migrations(version,name,applied_at) VALUES(36,'health_reminder_creator_and_schedule_attempts','2026-09-21T00:00:00.000Z');
 INSERT INTO schema_migrations(version,name,applied_at) VALUES(37,'consultation_grants_expire_after_session_start','2026-09-21T00:00:00.000Z');
+INSERT INTO schema_migrations(version,name,applied_at) VALUES(38,'clinical_record_assigned_reviewers','2026-09-21T00:00:00.000Z');
 COMMIT;

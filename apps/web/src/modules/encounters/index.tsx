@@ -32,6 +32,7 @@ import type {
   EncounterNotice,
   EncounterMessage as ApiEncounterMessage,
   MedicalRecordDetail,
+  MedicalRecordReviewerOption,
   MedicalRecordTemplateDefinition,
   MedicalRecordTemplateId,
 } from '@doctor/contracts';
@@ -257,7 +258,13 @@ function EncounterRecordDialog({
     loading,
     error,
   } = useApi<MedicalRecordTemplateDefinition[]>('/record-templates');
+  const {
+    data: reviewers,
+    loading: reviewersLoading,
+    error: reviewersError,
+  } = useApi<MedicalRecordReviewerOption[]>('/record-reviewers');
   const [templateId, setTemplateId] = useState<MedicalRecordTemplateId>('outpatient');
+  const [reviewerId, setReviewerId] = useState('');
   const [title, setTitle] = useState(`${encounter.patientName}在线问诊病历`);
   const [diagnosis, setDiagnosis] = useState(encounter.reason);
   const [body, setBody] = useState<Record<string, string>>({});
@@ -286,6 +293,7 @@ function EncounterRecordDialog({
       const payload: CreateMedicalRecordRequest = {
         patientId: encounter.patientId,
         encounterId: encounter.id,
+        reviewerId,
         templateId: template.id,
         title: title.trim(),
         diagnosis: diagnosis.trim(),
@@ -314,8 +322,10 @@ function EncounterRecordDialog({
       onClose={onClose}
       wide
     >
-      {loading || error || !template ? (
-        <LoadingState error={error || (!loading ? '无法加载病历模板' : null)} />
+      {loading || reviewersLoading || error || reviewersError || !template ? (
+        <LoadingState
+          error={error || reviewersError || (!loading && !reviewersLoading ? '无法加载病历模板' : null)}
+        />
       ) : (
         <form
           className="record-editor"
@@ -336,6 +346,21 @@ function EncounterRecordDialog({
             <label>
               <span>{t('关联问诊')}</span>
               <input value={`${encounter.id} · ${encounter.reason}`} disabled readOnly />
+            </label>
+            <label>
+              <span>{t('审核医师')}</span>
+              <select
+                aria-label={t('选择审核医师')}
+                value={reviewerId}
+                onChange={(event) => setReviewerId(event.target.value)}
+              >
+                <option value="">{t('请选择审核医师')}</option>
+                {(reviewers ?? []).map((reviewer) => (
+                  <option key={reviewer.id} value={reviewer.id}>
+                    {reviewer.name} · {reviewer.department} · {reviewer.title}
+                  </option>
+                ))}
+              </select>
             </label>
             <label>
               <span>{t('病历模板')}</span>
@@ -405,7 +430,10 @@ function EncounterRecordDialog({
             <Button variant="secondary" type="button" onClick={onClose}>
               {t('关闭')}
             </Button>
-            <Button type="submit" disabled={saving || !title.trim() || !diagnosis.trim()}>
+            <Button
+              type="submit"
+              disabled={saving || !reviewerId || !title.trim() || !diagnosis.trim()}
+            >
               <FileText size={16} />
               {t(saving ? '保存中' : '保存到电子病历')}
             </Button>

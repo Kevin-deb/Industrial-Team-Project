@@ -140,7 +140,11 @@ function sendLifecycle(
       reply,
       403,
       result.code,
-      result.code === 'RECORD_REVIEW_OWN_VERSION' ? messages.ownVersion : messages.reviewDenied,
+      result.code === 'RECORD_REVIEW_OWN_VERSION'
+        ? messages.ownVersion
+        : result.code === 'RECORD_REVIEWER_NOT_ASSIGNED'
+          ? messages.wrongReviewer
+          : messages.reviewDenied,
     );
   return fail(request, reply, 409, result.code, messages[result.code] ?? messages.invalidState);
 }
@@ -150,6 +154,10 @@ export function registerClinicalRoutes(
   deps: ClinicalRouteDependencies,
 ): void {
   app.get('/api/v1/record-templates', async (request) => envelope(request, medicalRecordTemplates));
+
+  app.get('/api/v1/record-reviewers', async (request) =>
+    envelope(request, deps.clinical.listReviewers(deps.context())),
+  );
 
   app.get<{
     Querystring: { patientId?: string; encounterId?: string; status?: MedicalRecord['status'] };
@@ -232,11 +240,12 @@ export function registerClinicalRoutes(
       schema: {
         body: {
           type: 'object',
-          required: ['patientId', 'templateId', 'title', 'diagnosis', 'body'],
+          required: ['patientId', 'reviewerId', 'templateId', 'title', 'diagnosis', 'body'],
           additionalProperties: false,
           properties: {
             patientId: { type: 'string', minLength: 1, maxLength: 80 },
             encounterId: { type: 'string', minLength: 1, maxLength: 80 },
+            reviewerId: { type: 'string', minLength: 1, maxLength: 80 },
             templateId: { type: 'string', enum: Object.keys(clinicalTemplateFields) },
             ...bodyProperties,
           },
@@ -256,6 +265,14 @@ export function registerClinicalRoutes(
           404,
           'PATIENT_NOT_FOUND',
           '未找到患者，或该患者不在当前医生的授权范围。',
+        );
+      if (!deps.clinical.canAssignReviewer(request.body.reviewerId, context))
+        return fail(
+          request,
+          reply,
+          422,
+          'INVALID_RECORD_REVIEWER',
+          '请选择一名具备审核权限且不是当前医生的审核医师。',
         );
       if (request.body.encounterId) {
         const encounter = deps.encounters.findReference(request.body.encounterId, context);
@@ -293,9 +310,12 @@ export function registerClinicalRoutes(
         params: paramsSchema,
         body: {
           type: 'object',
-          required: ['title', 'diagnosis', 'body'],
+          required: ['reviewerId', 'title', 'diagnosis', 'body'],
           additionalProperties: false,
-          properties: bodyProperties,
+          properties: {
+            reviewerId: { type: 'string', minLength: 1, maxLength: 80 },
+            ...bodyProperties,
+          },
         },
       },
     },
@@ -308,6 +328,14 @@ export function registerClinicalRoutes(
       const diagnosis = request.body.diagnosis.trim();
       if (!title || !diagnosis)
         return fail(request, reply, 422, 'INVALID_RECORD_FIELDS', '请填写病历标题和诊断。');
+      if (!deps.clinical.canAssignReviewer(request.body.reviewerId, context))
+        return fail(
+          request,
+          reply,
+          422,
+          'INVALID_RECORD_REVIEWER',
+          '请选择一名具备审核权限且不是当前医生的审核医师。',
+        );
       const current = deps.clinical.findRecord(request.params.id, context);
       if (!current)
         return fail(
@@ -355,6 +383,7 @@ export function registerClinicalRoutes(
     conflict: '该提交标识已用于其他病历操作，请先核对当前状态。',
     incomplete: '提交审核前请完整填写标题、诊断和模板必填正文。',
     ownVersion: '不能审核自己撰写的当前病历版本。',
+    wrongReviewer: '当前医生不是该病历指定的审核医师。',
     reviewDenied: '当前医生没有病历审核权限。',
     invalidState: '当前病历状态不允许执行该操作。',
     RECORD_NOT_SUBMITTABLE: '只有当前医生可编辑的草稿才能提交审核。',

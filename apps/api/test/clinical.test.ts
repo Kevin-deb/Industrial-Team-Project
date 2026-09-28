@@ -27,6 +27,7 @@ function draft(
   return {
     patientId: 'PAT-001',
     encounterId: 'ENC-001',
+    reviewerId: 'doctor-demo-002',
     templateId,
     title: `${templateId} draft`,
     diagnosis: 'Synthetic diagnosis',
@@ -232,6 +233,7 @@ test('draft updates append versions and reject missing or stale preconditions', 
     });
     const record = created.json().data;
     const payload = {
+      reviewerId: 'doctor-demo-002',
       title: 'Revised draft',
       diagnosis: 'Revised synthetic diagnosis',
       body: body('outpatient', 'updated'),
@@ -360,6 +362,7 @@ test('non-draft records stay read-only and order writes require an idempotency k
       url: '/api/v1/records/REC-001',
       headers: { 'if-match': '"record-v1"' },
       payload: {
+        reviewerId: 'doctor-demo-002',
         title: 'Cannot edit',
         diagnosis: 'Synthetic',
         body: body('followup'),
@@ -439,14 +442,39 @@ test('record submit, review, archive and correction follow the local lifecycle',
     assert.equal(replayed.statusCode, 200);
     assert.equal(replayed.json().data.status, 'pending-review');
 
-    const selfReview = await app.inject({
+    const wrongReviewer = await app.inject({
       method: 'POST',
       url: `/api/v1/records/${record.id}/reviews`,
       headers: lifecycleHeaders(1),
       payload: { decision: 'approved', comment: 'should fail' },
     });
-    assert.equal(selfReview.statusCode, 403);
-    assert.equal(selfReview.json().error.code, 'RECORD_REVIEW_OWN_VERSION');
+    assert.equal(wrongReviewer.statusCode, 403);
+    assert.equal(wrongReviewer.json().error.code, 'RECORD_REVIEWER_NOT_ASSIGNED');
+
+    const reviewerApp = await createApp({
+      database: db,
+      now: () => '2026-09-21T10:10:00.000Z',
+      identity: { actorId: 'doctor-demo-002' },
+    });
+    try {
+      const reviewerView = await reviewerApp.inject(`/api/v1/records/${record.id}`);
+      assert.equal(reviewerView.statusCode, 200, reviewerView.body);
+      assert.equal(reviewerView.json().data.availableActions.canReview, true);
+
+      db.prepare("UPDATE medical_records SET reviewer_id='doctor-demo-002' WHERE id='REC-003'")
+        .run();
+      const selfAuthored = await reviewerApp.inject({
+        method: 'POST',
+        url: '/api/v1/records/REC-003/reviews',
+        headers: lifecycleHeaders(1),
+        payload: { decision: 'approved', comment: 'should fail' },
+      });
+      assert.equal(selfAuthored.statusCode, 403);
+      assert.equal(selfAuthored.json().error.code, 'RECORD_REVIEW_OWN_VERSION');
+      db.prepare("UPDATE medical_records SET reviewer_id=? WHERE id='REC-003'").run(DEMO_DOCTOR_ID);
+    } finally {
+      await reviewerApp.close();
+    }
 
     const reviewed = await app.inject({
       method: 'POST',

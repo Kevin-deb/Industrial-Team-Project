@@ -4,6 +4,7 @@ export { clinicalEvolutionMigration } from './evolution-migration.js';
 export { clinicalLifecycleMigration } from './lifecycle-migration.js';
 export { clinicalOrdersMigration } from './orders-migration.js';
 export { clinicalMaterialsMigration } from './materials-migration.js';
+export { clinicalReviewerAssignmentMigration } from './reviewer-assignment-migration.js';
 export { clinicalCommands } from './commands.js';
 export { SqliteClinicalRepository } from './repository.js';
 export type { ClinicalRepository } from './repository.js';

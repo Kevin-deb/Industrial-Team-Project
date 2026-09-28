@@ -36,6 +36,7 @@ import {
   clinicalMaterialsMigration,
   clinicalMigration,
   clinicalOrdersMigration,
+  clinicalReviewerAssignmentMigration,
 } from '../clinical/index.js';
 import {
   healthEvolutionMigration,
@@ -106,6 +107,7 @@ export const migrations = [
   platformNotificationsMigration,
   healthReminderSchedulingMigration,
   consultationGrantExpiryMigration,
+  clinicalReviewerAssignmentMigration,
 ];
 
 const legacyAuthOrder = [

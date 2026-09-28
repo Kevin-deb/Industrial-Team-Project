@@ -10,6 +10,12 @@ export const recordsMessages: Record<string, string> = {
   关联问诊: 'Linked encounter',
   选择关联问诊: 'Select linked encounter',
   不关联问诊: 'No linked encounter',
+  审核医师: 'Reviewing doctor',
+  选择审核医师: 'Select reviewing doctor',
+  请选择审核医师: 'Select a reviewing doctor',
+  未指定: 'Not assigned',
+  '请填写患者、审核医师、病历标题和诊断。':
+    'Enter patient, reviewing doctor, record title, and diagnosis.',
   病历模板: 'Record template',
   选择病历模板: 'Select record template',
   病历标题: 'Record title',
@@ -180,6 +186,10 @@ export const recordsMessages: Record<string, string> = {
     'Complete the title, diagnosis, and required template fields before submitting.',
   '不能审核自己撰写的当前病历版本。': 'You cannot review your own current record version.',
   '当前医生没有病历审核权限。': 'The current doctor does not have record-review permission.',
+  '当前医生不是该病历指定的审核医师。':
+    'The current doctor is not the assigned reviewer for this record.',
+  '请选择一名具备审核权限且不是当前医生的审核医师。':
+    'Select a reviewer with review permission who is not the current doctor.',
   '当前病历状态不允许执行该操作。': 'The current record state does not allow this action.',
   '只有当前医生可编辑的草稿才能提交审核。': 'Only an editable draft can be submitted for review.',
   '只有待审核且尚未批准的病历版本可以审核。':

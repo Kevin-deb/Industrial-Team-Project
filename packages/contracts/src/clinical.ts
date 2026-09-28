@@ -6,9 +6,18 @@ export interface MedicalRecord {
   diagnosis: string;
   status: 'draft' | 'pending-review' | 'archived';
   authorName: string;
+  reviewerId: string | null;
+  reviewerName: string | null;
   updatedAt: string;
   version: number;
   orderCount: number;
+}
+
+export interface MedicalRecordReviewerOption {
+  id: string;
+  name: string;
+  title: string;
+  department: string;
 }
 
 export type MedicalRecordTemplateId = 'outpatient' | 'followup' | 'consult';
@@ -72,6 +81,7 @@ export interface MedicalRecordVersion {
 export interface CreateMedicalRecordRequest {
   patientId: string;
   encounterId?: string;
+  reviewerId: string;
   templateId: MedicalRecordTemplateId;
   title: string;
   diagnosis: string;
@@ -79,6 +89,7 @@ export interface CreateMedicalRecordRequest {
 }
 
 export interface UpdateMedicalRecordRequest {
+  reviewerId: string;
   title: string;
   diagnosis: string;
   body: MedicalRecordBody;

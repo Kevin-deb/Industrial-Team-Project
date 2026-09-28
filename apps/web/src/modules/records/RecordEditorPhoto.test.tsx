@@ -31,6 +31,9 @@ const patients = [
   { id: 'PAT-001', name: '张三' },
   { id: 'PAT-002', name: '李四' },
 ];
+const reviewers = [
+  { id: 'doctor-demo-002', name: '审核医生', title: '主任医师', department: '全科医学科' },
+];
 const saved: MedicalRecordDetail = {
   id: 'REC-OCR',
   patientId: 'PAT-001',
@@ -39,6 +42,8 @@ const saved: MedicalRecordDetail = {
   diagnosis: '手动诊断',
   status: 'draft',
   authorName: '医生',
+  reviewerId: 'doctor-demo-002',
+  reviewerName: '审核医生',
   updatedAt: '2026-09-28T10:00:00Z',
   version: 1,
   orderCount: 0,
@@ -67,6 +72,7 @@ function setup(record?: MedicalRecordDetail) {
   const fetch = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
     const path = String(input);
     if (path.includes('record-templates')) return reply(templates);
+    if (path.includes('record-reviewers')) return reply(reviewers);
     if (path.includes('/patients')) return reply(patients);
     if (path.includes('/versions')) return reply([]);
     if (path.endsWith('/records') && options?.method === 'POST') return reply(saved);
@@ -84,6 +90,9 @@ function setup(record?: MedicalRecordDetail) {
 async function startPendingRecognition() {
   await screen.findByRole('button', { name: '保存草稿' });
   fireEvent.change(screen.getByLabelText('选择患者'), { target: { value: 'PAT-001' } });
+  fireEvent.change(screen.getByLabelText('选择审核医师'), {
+    target: { value: 'doctor-demo-002' },
+  });
   fireEvent.click(screen.getByTestId('record-photo-open'));
   fireEvent.change(screen.getByTestId('record-photo-file'), {
     target: { files: [new File(['image'], 'record.png', { type: 'image/png' })] },
@@ -140,6 +149,7 @@ describe('Record editor photo context isolation', () => {
     expect(posted?.[0]).toBe('/api/v1/records');
     expect(JSON.parse(String(posted?.[1]?.body))).toEqual({
       patientId: 'PAT-001',
+      reviewerId: 'doctor-demo-002',
       templateId: 'outpatient',
       title: '手动标题',
       diagnosis: '手动诊断',

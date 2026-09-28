@@ -8,9 +8,250 @@ function hasTable(db: DatabaseSync, table: string): boolean {
   return !!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table);
 }
 
+function seedCorePatientAndEncounterDemo(db: DatabaseSync): void {
+  const insertPatient = db.prepare(`INSERT OR IGNORE INTO patients(
+    id,name,gender,age,phone,diagnosis,tags_json,status,last_visit,next_follow_up,assigned_doctor_id,allergies_json,medical_history_json,care_summary
+  ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+  const patients = [
+    [
+      'PAT-001',
+      '陈建国',
+      '男',
+      68,
+      '138****0021',
+      '高血压',
+      ['慢病管理', '高血压'],
+      'attention',
+      '2026-09-08',
+      '2026-09-10',
+      ['青霉素'],
+      ['高血压病史 8 年', '近两日自述头晕'],
+      '监测数据待医生复核；本条为合成演示资料。',
+    ],
+    [
+      'PAT-002',
+      '王秀英',
+      '女',
+      72,
+      '139****0316',
+      '2 型糖尿病',
+      ['糖尿病', '定期随访'],
+      'follow-up',
+      '2026-09-07',
+      '2026-09-10',
+      [],
+      ['2 型糖尿病病史 6 年', '近期自述乏力'],
+      '随访与健康数据评估待开展；本条为合成演示资料。',
+    ],
+    [
+      'PAT-003',
+      '李志明',
+      '男',
+      65,
+      '137****1809',
+      '高血压',
+      ['高血压', '健康监测'],
+      'stable',
+      '2026-09-09',
+      '2026-09-17',
+      [],
+      ['高血压病史 3 年'],
+      '健康趋势展示案例；本条为合成演示资料。',
+    ],
+    [
+      'PAT-004',
+      '张淑兰',
+      '女',
+      76,
+      '136****0718',
+      '冠心病',
+      ['冠心病', '重点关注'],
+      'attention',
+      '2026-09-06',
+      '2026-09-11',
+      ['磺胺类'],
+      ['冠心病病史 5 年', '间歇性胸闷待评估'],
+      '拟多学科资料讨论；本条为合成演示资料。',
+    ],
+    [
+      'PAT-005',
+      '刘桂芬',
+      '女',
+      63,
+      '135****0425',
+      '2 型糖尿病',
+      ['糖尿病', '健康计划'],
+      'stable',
+      '2026-09-08',
+      '2026-09-18',
+      [],
+      ['2 型糖尿病病史 2 年'],
+      '健康计划页面示例；本条为合成演示资料。',
+    ],
+    [
+      'PAT-006',
+      '赵德华',
+      '男',
+      70,
+      '138****0652',
+      '慢性阻塞性肺疾病',
+      ['呼吸健康', '定期随访'],
+      'follow-up',
+      '2026-09-05',
+      '2026-09-12',
+      [],
+      ['慢性阻塞性肺疾病病史 4 年', '偶有咳嗽'],
+      '图文问诊排期示例；本条为合成演示资料。',
+    ],
+    [
+      'PAT-007',
+      '孙雅琴',
+      '女',
+      67,
+      '139****0723',
+      '骨关节炎',
+      ['康复管理', '健康计划'],
+      'stable',
+      '2026-09-04',
+      '2026-09-19',
+      [],
+      ['膝骨关节炎病史 3 年'],
+      '康复资料占位案例；本条为合成演示资料。',
+    ],
+    [
+      'PAT-008',
+      '黄文海',
+      '男',
+      74,
+      '137****0809',
+      '高血压',
+      ['高血压', '定期随访'],
+      'follow-up',
+      '2026-09-03',
+      '2026-09-13',
+      [],
+      ['高血压病史 10 年'],
+      '常规复查排期示例；本条为合成演示资料。',
+    ],
+  ] as const;
+  for (const p of patients) {
+    insertPatient.run(
+      p[0],
+      p[1],
+      p[2],
+      p[3],
+      p[4],
+      p[5],
+      JSON.stringify(p[6]),
+      p[7],
+      p[8],
+      p[9],
+      DEMO_DOCTOR_ID,
+      JSON.stringify(p[10]),
+      JSON.stringify(p[11]),
+      p[12],
+    );
+    db.prepare('INSERT OR IGNORE INTO patient_archive_versions VALUES(?,?,?,?,?,?,?)').run(
+      'archive-' + p[0],
+      p[0],
+      1,
+      JSON.stringify({ diagnosis: p[5], synthetic: true }),
+      DEMO_DOCTOR_ID,
+      '2026-09-01T00:00:00.000Z',
+      'Synthetic demonstration baseline',
+    );
+  }
+  insertPatient.run(
+    'PAT-RESTRICTED',
+    '范围外演示患者',
+    '女',
+    60,
+    '***',
+    '范围隔离测试',
+    '[]',
+    'stable',
+    '2026-09-01',
+    '2026-09-20',
+    'doctor-demo-002',
+    '[]',
+    '[]',
+    '仅用于验证数据权限。',
+  );
+  const encounter = db.prepare(
+    'INSERT OR IGNORE INTO encounters(id,patient_id,doctor_id,type,status,scheduled_at,reason,duration_minutes) VALUES(?,?,?,?,?,?,?,?)',
+  );
+  for (const item of [
+    [
+      'ENC-001',
+      'PAT-001',
+      DEMO_DOCTOR_ID,
+      'video',
+      'waiting',
+      '2026-09-22T08:30:00+08:00',
+      '血压监测随访',
+      20,
+    ],
+    [
+      'ENC-005',
+      'PAT-004',
+      DEMO_DOCTOR_ID,
+      'video',
+      'waiting',
+      '2026-09-22T09:30:00+08:00',
+      '胸闷症状复查',
+      20,
+    ],
+    [
+      'ENC-006',
+      'PAT-005',
+      DEMO_DOCTOR_ID,
+      'text',
+      'waiting',
+      '2026-09-23T09:20:00+08:00',
+      '饮食运动计划调整',
+      15,
+    ],
+    [
+      'ENC-008',
+      'PAT-001',
+      DEMO_DOCTOR_ID,
+      'text',
+      'completed',
+      '2026-09-08T16:00:00+08:00',
+      '家庭血压记录复核',
+      15,
+    ],
+    [
+      'ENC-011',
+      'PAT-003',
+      DEMO_DOCTOR_ID,
+      'video',
+      'completed',
+      '2026-09-07T09:00:00+08:00',
+      '头晕症状随访',
+      20,
+    ],
+    [
+      'ENC-012',
+      'PAT-004',
+      DEMO_DOCTOR_ID,
+      'text',
+      'waiting',
+      '2026-09-21T08:00:00+08:00',
+      '冠心病用药答疑',
+      15,
+    ],
+  ] as const)
+    encounter.run(...item);
+}
+
 /** Fixed synthetic fixtures; never call provider adapters or imply that notifications were sent. */
 export function seedDemo(db: DatabaseSync): void {
-  if (db.prepare('SELECT id FROM identities WHERE id=?').get(DEMO_DOCTOR_ID)) return;
+  if (db.prepare('SELECT id FROM identities WHERE id=?').get(DEMO_DOCTOR_ID)) {
+    seedCorePatientAndEncounterDemo(db);
+    seedOnlineCareDemo(db);
+    return;
+  }
   db.exec('BEGIN IMMEDIATE');
   try {
     const identity = db.prepare(
@@ -263,9 +504,16 @@ export function seedDemo(db: DatabaseSync): void {
       15,
     );
     seedOnlineCareDemo(db);
-    const record = db.prepare(
-      'INSERT INTO medical_records(id,patient_id,title,diagnosis,status,author_id,updated_at,version,archived_at) VALUES(?,?,?,?,?,?,?,?,?)',
-    );
+    const hasRecordReviewer = !!db
+      .prepare("SELECT 1 FROM pragma_table_info('medical_records') WHERE name='reviewer_id'")
+      .get();
+    const record = hasRecordReviewer
+      ? db.prepare(
+          'INSERT INTO medical_records(id,patient_id,title,diagnosis,status,author_id,reviewer_id,updated_at,version,archived_at) VALUES(?,?,?,?,?,?,?,?,?,?)',
+        )
+      : db.prepare(
+          'INSERT INTO medical_records(id,patient_id,title,diagnosis,status,author_id,updated_at,version,archived_at) VALUES(?,?,?,?,?,?,?,?,?)',
+        );
     const records = [
       [
         'REC-001',
@@ -274,6 +522,7 @@ export function seedDemo(db: DatabaseSync): void {
         '高血压',
         'draft',
         DEMO_DOCTOR_ID,
+        'doctor-demo-002',
         '2026-09-10T08:45:00+08:00',
       ],
       [
@@ -283,6 +532,7 @@ export function seedDemo(db: DatabaseSync): void {
         '2 型糖尿病',
         'pending-review',
         'doctor-demo-003',
+        DEMO_DOCTOR_ID,
         '2026-09-09T16:20:00+08:00',
       ],
       [
@@ -292,6 +542,7 @@ export function seedDemo(db: DatabaseSync): void {
         '冠心病',
         'pending-review',
         'doctor-demo-002',
+        DEMO_DOCTOR_ID,
         '2026-09-09T14:10:00+08:00',
       ],
       [
@@ -301,6 +552,7 @@ export function seedDemo(db: DatabaseSync): void {
         '高血压',
         'archived',
         'doctor-demo-003',
+        DEMO_DOCTOR_ID,
         '2026-09-08T11:00:00+08:00',
       ],
       [
@@ -310,6 +562,7 @@ export function seedDemo(db: DatabaseSync): void {
         '糖尿病前期管理',
         'draft',
         DEMO_DOCTOR_ID,
+        'doctor-demo-002',
         '2026-09-02T10:20:00+08:00',
       ],
     ];
@@ -319,7 +572,19 @@ export function seedDemo(db: DatabaseSync): void {
       )
       .get();
     for (const r of records) {
-      record.run(...r, 1, r[4] === 'archived' ? r[6]! : null);
+      if (hasRecordReviewer) record.run(...r, 1, r[4] === 'archived' ? r[7]! : null);
+      else
+        record.run(
+          r[0]!,
+          r[1]!,
+          r[2]!,
+          r[3]!,
+          r[4]!,
+          r[5]!,
+          r[7]!,
+          1,
+          r[4] === 'archived' ? r[7]! : null,
+        );
       if (hasClinicalTemplateVersion)
         db.prepare(
           `INSERT INTO medical_record_versions(
@@ -339,7 +604,7 @@ export function seedDemo(db: DatabaseSync): void {
             nextFollowUpArrangement: '',
           }),
           r[5]!,
-          r[6]!,
+          r[7]!,
           r[2]!,
           r[3]!,
         );
@@ -355,7 +620,7 @@ export function seedDemo(db: DatabaseSync): void {
           'general-followup-v1',
           JSON.stringify({ chiefComplaint: '仅用于演示，非临床病历', synthetic: true }),
           r[5]!,
-          r[6]!,
+          r[7]!,
         );
     }
     db.prepare('INSERT INTO record_reviews VALUES(?,?,?,?,?,?,?)').run(
@@ -454,11 +719,51 @@ export function seedDemo(db: DatabaseSync): void {
         ) VALUES(?,?,?,?,?,?,?)`,
       );
       for (const material of [
-        ['CMU-001', 'CON-001', '近三个月血压趋势', '患者家庭血压监测汇总。', '近三个月血压趋势.txt', DEMO_DOCTOR_ID, '2026-09-10T09:00:00+08:00'],
-        ['CMU-002', 'CON-001', '心电图摘要', '近期心电图核心结论。', '心电图摘要.txt', DEMO_DOCTOR_ID, '2026-09-10T09:05:00+08:00'],
-        ['CMU-003', 'CON-001', '当前用药清单', '患者现用药物与剂量。', '当前用药清单.txt', DEMO_DOCTOR_ID, '2026-09-10T09:10:00+08:00'],
-        ['CMU-004', 'CON-002', '血糖监测记录', '近两周空腹与餐后血糖。', '血糖监测记录.txt', DEMO_DOCTOR_ID, '2026-09-10T10:00:00+08:00'],
-        ['CMU-005', 'CON-002', '饮食运动记录', '患者近期饮食与运动摘要。', '饮食运动记录.txt', DEMO_DOCTOR_ID, '2026-09-10T10:05:00+08:00'],
+        [
+          'CMU-001',
+          'CON-001',
+          '近三个月血压趋势',
+          '患者家庭血压监测汇总。',
+          '近三个月血压趋势.txt',
+          DEMO_DOCTOR_ID,
+          '2026-09-10T09:00:00+08:00',
+        ],
+        [
+          'CMU-002',
+          'CON-001',
+          '心电图摘要',
+          '近期心电图核心结论。',
+          '心电图摘要.txt',
+          DEMO_DOCTOR_ID,
+          '2026-09-10T09:05:00+08:00',
+        ],
+        [
+          'CMU-003',
+          'CON-001',
+          '当前用药清单',
+          '患者现用药物与剂量。',
+          '当前用药清单.txt',
+          DEMO_DOCTOR_ID,
+          '2026-09-10T09:10:00+08:00',
+        ],
+        [
+          'CMU-004',
+          'CON-002',
+          '血糖监测记录',
+          '近两周空腹与餐后血糖。',
+          '血糖监测记录.txt',
+          DEMO_DOCTOR_ID,
+          '2026-09-10T10:00:00+08:00',
+        ],
+        [
+          'CMU-005',
+          'CON-002',
+          '饮食运动记录',
+          '患者近期饮食与运动摘要。',
+          '饮食运动记录.txt',
+          DEMO_DOCTOR_ID,
+          '2026-09-10T10:05:00+08:00',
+        ],
       ])
         consultationMaterial.run(...material);
     }
@@ -654,7 +959,13 @@ export function seedDemo(db: DatabaseSync): void {
 }
 
 function seedOnlineCareDemo(db: DatabaseSync): void {
-  if (!db.prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='encounter_clinical_briefs'").get())
+  if (
+    !db
+      .prepare(
+        "SELECT 1 FROM sqlite_schema WHERE type='table' AND name='encounter_clinical_briefs'",
+      )
+      .get()
+  )
     return;
   db.exec(`
     INSERT OR IGNORE INTO encounter_clinical_briefs VALUES
@@ -695,11 +1006,51 @@ function seedOnlineCareDemo(db: DatabaseSync): void {
 export function seedAuthFoundation(db: DatabaseSync): void {
   const at = '2026-09-01T00:00:00.000Z';
   const clinicians = [
-    ['doctor-demo-001', 'lin.zhiyuan', 'lin.zhiyuan@carelink.demo', 'DEMO-LIC-001', '全科医学', '13800000001', '1001'],
-    ['doctor-demo-002', 'zhou.ming', 'zhou.ming@carelink.demo', 'DEMO-LIC-002', '心血管内科', '13800000002', '1002'],
-    ['doctor-demo-003', 'xu.qing', 'xu.qing@carelink.demo', 'DEMO-LIC-003', '内分泌科', '13800000003', '1003'],
-    ['doctor-demo-004', 'liang.ruochuan', 'liang.ruochuan@carelink.demo', 'DEMO-LIC-004', '老年医学', '13800000004', '1004'],
-    ['doctor-demo-005', 'shen.anning', 'shen.anning@carelink.demo', 'DEMO-LIC-005', '呼吸与重症医学', '13800000005', '1005'],
+    [
+      'doctor-demo-001',
+      'lin.zhiyuan',
+      'lin.zhiyuan@carelink.demo',
+      'DEMO-LIC-001',
+      '全科医学',
+      '13800000001',
+      '1001',
+    ],
+    [
+      'doctor-demo-002',
+      'zhou.ming',
+      'zhou.ming@carelink.demo',
+      'DEMO-LIC-002',
+      '心血管内科',
+      '13800000002',
+      '1002',
+    ],
+    [
+      'doctor-demo-003',
+      'xu.qing',
+      'xu.qing@carelink.demo',
+      'DEMO-LIC-003',
+      '内分泌科',
+      '13800000003',
+      '1003',
+    ],
+    [
+      'doctor-demo-004',
+      'liang.ruochuan',
+      'liang.ruochuan@carelink.demo',
+      'DEMO-LIC-004',
+      '老年医学',
+      '13800000004',
+      '1004',
+    ],
+    [
+      'doctor-demo-005',
+      'shen.anning',
+      'shen.anning@carelink.demo',
+      'DEMO-LIC-005',
+      '呼吸与重症医学',
+      '13800000005',
+      '1005',
+    ],
   ] as const;
   db.exec('BEGIN IMMEDIATE');
   try {
@@ -738,9 +1089,18 @@ export function seedAuthFoundation(db: DatabaseSync): void {
 
     db.prepare('INSERT OR IGNORE INTO roles VALUES(?,?)').run('expert', 'demo-expert');
     db.prepare('INSERT OR IGNORE INTO roles VALUES(?,?)').run('admin', 'demo-admin');
-    for (const permission of ['patient:read', 'clinical:read', 'encounter:read', 'health:read', 'audit:self'])
+    for (const permission of [
+      'patient:read',
+      'clinical:read',
+      'encounter:read',
+      'health:read',
+      'audit:self',
+    ])
       db.prepare('INSERT OR IGNORE INTO role_permissions VALUES(?,?)').run('expert', permission);
-    db.prepare('INSERT OR IGNORE INTO role_permissions VALUES(?,?)').run('admin', 'accounts:manage');
+    db.prepare('INSERT OR IGNORE INTO role_permissions VALUES(?,?)').run(
+      'admin',
+      'accounts:manage',
+    );
     for (const identityId of ['doctor-demo-002', 'doctor-demo-003', 'doctor-demo-004'])
       db.prepare('INSERT OR IGNORE INTO identity_roles VALUES(?,?)').run(identityId, 'attending');
     db.prepare('INSERT OR IGNORE INTO identity_roles VALUES(?,?)').run('doctor-demo-005', 'expert');
@@ -825,7 +1185,15 @@ export function seedAuthFoundation(db: DatabaseSync): void {
         `INSERT OR IGNORE INTO consultation_material_uploads(
           id,consultation_id,title,description,file_name,uploaded_by,uploaded_at
         ) VALUES(?,?,?,?,?,?,?)`,
-      ).run(material[0]!, 'CON-IN-001', material[1]!, material[2]!, material[3]!, 'doctor-demo-002', at);
+      ).run(
+        material[0]!,
+        'CON-IN-001',
+        material[1]!,
+        material[2]!,
+        material[3]!,
+        'doctor-demo-002',
+        at,
+      );
     for (const material of [
       ['CMU-009', '足部照片摘要', '患者足部皮肤状态与破溃风险摘要。', '足部照片摘要.txt'],
       ['CMU-010', '血糖波动记录', '近两周空腹及餐后血糖波动。', '血糖波动记录.txt'],
@@ -835,7 +1203,15 @@ export function seedAuthFoundation(db: DatabaseSync): void {
         `INSERT OR IGNORE INTO consultation_material_uploads(
           id,consultation_id,title,description,file_name,uploaded_by,uploaded_at
         ) VALUES(?,?,?,?,?,?,?)`,
-      ).run(material[0]!, 'CON-IN-002', material[1]!, material[2]!, material[3]!, 'doctor-demo-003', at);
+      ).run(
+        material[0]!,
+        'CON-IN-002',
+        material[1]!,
+        material[2]!,
+        material[3]!,
+        'doctor-demo-003',
+        at,
+      );
     db.prepare(
       'INSERT OR IGNORE INTO consultation_messages(id,consultation_id,sender_identity_id,body,sent_at) VALUES(?,?,?,?,?)',
     ).run(

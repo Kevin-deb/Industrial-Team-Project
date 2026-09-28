@@ -8,6 +8,7 @@ import type {
   MedicalOrderTemplateDefinition,
   MedicalOrderTemplateId,
   MedicalRecordDetail,
+  MedicalRecordReviewerOption,
   MedicalRecordTemplateDefinition,
   MedicalRecordTemplateId,
   MedicalRecordVersion,
@@ -31,6 +32,7 @@ interface EditorProps {
 interface FormState {
   patientId: string;
   encounterId: string;
+  reviewerId: string;
   templateId: MedicalRecordTemplateId;
   title: string;
   diagnosis: string;
@@ -40,6 +42,7 @@ interface FormState {
 const blankForm = (): FormState => ({
   patientId: '',
   encounterId: '',
+  reviewerId: '',
   templateId: 'outpatient',
   title: '',
   diagnosis: '',
@@ -50,6 +53,7 @@ function formFromRecord(record: MedicalRecordDetail): FormState {
   return {
     patientId: record.patientId,
     encounterId: record.encounterId ?? '',
+    reviewerId: record.reviewerId ?? '',
     templateId: record.templateId,
     title: record.title,
     diagnosis: record.diagnosis,
@@ -74,6 +78,11 @@ export function RecordEditor({ recordId, onClose, onSaved }: EditorProps) {
     loading: templatesLoading,
     error: templatesError,
   } = useApi<MedicalRecordTemplateDefinition[]>('/record-templates');
+  const {
+    data: reviewers,
+    loading: reviewersLoading,
+    error: reviewersError,
+  } = useApi<MedicalRecordReviewerOption[]>('/record-reviewers');
   const {
     data: orderTemplates,
     loading: orderTemplatesLoading,
@@ -185,8 +194,8 @@ export function RecordEditor({ recordId, onClose, onSaved }: EditorProps) {
   }
 
   async function save() {
-    if (!form.patientId || !form.title.trim() || !form.diagnosis.trim()) {
-      setNotice({ tone: 'error', text: '请填写患者、病历标题和诊断。' });
+    if (!form.patientId || !form.reviewerId || !form.title.trim() || !form.diagnosis.trim()) {
+      setNotice({ tone: 'error', text: '请填写患者、审核医师、病历标题和诊断。' });
       return;
     }
     setSaving(true);
@@ -197,6 +206,7 @@ export function RecordEditor({ recordId, onClose, onSaved }: EditorProps) {
         const payload: UpdateMedicalRecordRequest = {
           title: form.title.trim(),
           diagnosis: form.diagnosis.trim(),
+          reviewerId: form.reviewerId,
           body: form.body,
         };
         saved = (
@@ -210,6 +220,7 @@ export function RecordEditor({ recordId, onClose, onSaved }: EditorProps) {
         const payload: CreateMedicalRecordRequest = {
           patientId: form.patientId,
           ...(form.encounterId ? { encounterId: form.encounterId } : {}),
+          reviewerId: form.reviewerId,
           templateId: form.templateId,
           title: form.title.trim(),
           diagnosis: form.diagnosis.trim(),
@@ -424,6 +435,7 @@ export function RecordEditor({ recordId, onClose, onSaved }: EditorProps) {
     patientsLoading ||
     encountersLoading ||
     templatesLoading ||
+    reviewersLoading ||
     orderTemplatesLoading ||
     consultationsLoading;
   const error =
@@ -431,6 +443,7 @@ export function RecordEditor({ recordId, onClose, onSaved }: EditorProps) {
     patientsError ||
     encountersError ||
     templatesError ||
+    reviewersError ||
     orderTemplatesError ||
     consultationsError ||
     (!templatesLoading && !template ? '无法加载病历模板' : null);
@@ -486,6 +499,24 @@ export function RecordEditor({ recordId, onClose, onSaved }: EditorProps) {
                 {matchingEncounters.map((encounter) => (
                   <option key={encounter.id} value={encounter.id}>
                     {encounter.id} · {encounter.reason}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>{t('审核医师')}</span>
+              <select
+                aria-label={t('选择审核医师')}
+                value={form.reviewerId}
+                disabled={!editable}
+                onChange={(event) =>
+                  setForm((value) => ({ ...value, reviewerId: event.target.value }))
+                }
+              >
+                <option value="">{t('请选择审核医师')}</option>
+                {(reviewers ?? []).map((reviewer) => (
+                  <option key={reviewer.id} value={reviewer.id}>
+                    {reviewer.name} · {reviewer.department} · {reviewer.title}
                   </option>
                 ))}
               </select>
@@ -883,7 +914,7 @@ export function RecordEditor({ recordId, onClose, onSaved }: EditorProps) {
             {record?.availableActions.canSubmit && (
               <Button
                 type="button"
-                disabled={saving || dirty || !complete}
+                disabled={saving || dirty || !complete || !form.reviewerId}
                 onClick={() => void runCommand(`/records/${record.id}/submit`, '病历已提交审核。')}
               >
                 <Send size={16} />

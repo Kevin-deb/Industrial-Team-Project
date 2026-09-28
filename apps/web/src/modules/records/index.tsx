@@ -135,6 +135,7 @@ export function RecordsPage() {
                         <tr>
                           <th>{t('病历名称')}</th>
                           <th>{t('患者')}</th>
+                          <th>{t('审核医师')}</th>
                           <th>{t('更新时间')}</th>
                           <th>{t('版本')}</th>
                           <th>{t('状态')}</th>
@@ -156,6 +157,7 @@ export function RecordsPage() {
                               </div>
                             </td>
                             <td>{record.patientName}</td>
+                            <td>{record.reviewerName ?? t('未指定')}</td>
                             <td>
                               {formatDate(record.updatedAt, {
                                 dateStyle: 'medium',

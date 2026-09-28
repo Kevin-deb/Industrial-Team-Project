@@ -12,6 +12,7 @@ import type {
   MedicalOrderVersion,
   MedicalRecord,
   MedicalRecordDetail,
+  MedicalRecordReviewerOption,
   MedicalRecordTemplateId,
   MedicalRecordVersion,
   ReviewMedicalRecordRequest,
@@ -44,7 +45,13 @@ export type LifecycleCommandResult =
   | { kind: 'stale'; currentVersion: number }
   | { kind: 'conflict' }
   | { kind: 'incomplete' }
-  | { kind: 'forbidden'; code: 'RECORD_REVIEW_DENIED' | 'RECORD_REVIEW_OWN_VERSION' }
+  | {
+      kind: 'forbidden';
+      code:
+        | 'RECORD_REVIEW_DENIED'
+        | 'RECORD_REVIEW_OWN_VERSION'
+        | 'RECORD_REVIEWER_NOT_ASSIGNED';
+    }
   | {
       kind: 'invalid-state';
       code:
@@ -93,6 +100,8 @@ export type MaterialCommandResult =
     };
 
 export interface ClinicalRepository {
+  listReviewers(context: RequestContext): MedicalRecordReviewerOption[];
+  canAssignReviewer(reviewerId: string, context: RequestContext): boolean;
   listRecords(filters: RecordFilters, context: RequestContext): MedicalRecord[];
   findRecord(id: string, context: RequestContext): MedicalRecordDetail | undefined;
   listVersions(id: string, context: RequestContext): MedicalRecordVersion[] | undefined;
@@ -207,6 +216,9 @@ function mapSummary(row: Row): MedicalRecord {
     diagnosis: String(row.diagnosis),
     status: row.status as MedicalRecord['status'],
     authorName: String(row.author_name),
+    reviewerId: row.reviewer_id === null ? null : String(row.reviewer_id),
+    reviewerName:
+      row.assigned_reviewer_name === null ? null : String(row.assigned_reviewer_name),
     updatedAt: String(row.updated_at),
     version: Number(row.version),
     orderCount: Number(row.order_count),
@@ -305,6 +317,7 @@ function mapMaterial(row: Row): ClinicalMaterialReference {
 }
 
 const recordSelect = `SELECT r.*,p.name patient_name,i.display_name author_name,
+  assigned_reviewer.display_name assigned_reviewer_name,
   v.template_id,v.template_version,v.body_json,v.authored_at,v.amendment_reason,
   v.authored_by version_authored_by,
   rv.record_version review_record_version,rv.decision review_decision,
@@ -313,6 +326,7 @@ const recordSelect = `SELECT r.*,p.name patient_name,i.display_name author_name,
   FROM medical_records r
   JOIN patients p ON p.id=r.patient_id
   JOIN identities i ON i.id=r.author_id
+  LEFT JOIN identities assigned_reviewer ON assigned_reviewer.id=r.reviewer_id
   JOIN medical_record_versions v ON v.record_id=r.id AND v.version=r.version
   LEFT JOIN record_reviews rv ON rv.id=(
     SELECT latest.id FROM record_reviews latest WHERE latest.record_id=r.id
@@ -345,6 +359,8 @@ const materialSelect = `SELECT m.*,i.display_name created_by_name
   JOIN patients p ON p.id=m.patient_id
   JOIN identities i ON i.id=m.created_by`;
 
+const recordScopeSql = `(${patientScopeSql} OR r.reviewer_id=:actorId)`;
+
 export class SqliteClinicalRepository implements ClinicalRepository {
   constructor(
     private readonly db: DatabaseSync,
@@ -355,8 +371,39 @@ export class SqliteClinicalRepository implements ClinicalRepository {
     >,
   ) {}
 
+  listReviewers(context: RequestContext): MedicalRecordReviewerOption[] {
+    return this.db
+      .prepare(
+        `SELECT DISTINCT i.id,i.display_name,i.title,i.department
+         FROM identities i
+         JOIN identity_roles ir ON ir.identity_id=i.id
+         JOIN role_permissions rp ON rp.role_id=ir.role_id
+         WHERE rp.permission='clinical:review' AND i.id<>:actorId
+         ORDER BY i.department,i.display_name`,
+      )
+      .all({ actorId: context.actorId })
+      .map((row) => ({
+        id: String(row.id),
+        name: String(row.display_name),
+        title: String(row.title),
+        department: String(row.department),
+      }));
+  }
+
+  canAssignReviewer(reviewerId: string, context: RequestContext): boolean {
+    return !!this.db
+      .prepare(
+        `SELECT 1
+         FROM identities i
+         JOIN identity_roles ir ON ir.identity_id=i.id
+         JOIN role_permissions rp ON rp.role_id=ir.role_id
+         WHERE i.id=:reviewerId AND i.id<>:actorId AND rp.permission='clinical:review'`,
+      )
+      .get({ reviewerId, actorId: context.actorId });
+  }
+
   listRecords(filters: RecordFilters, context: RequestContext): MedicalRecord[] {
-    const clauses = [patientScopeSql];
+    const clauses = [recordScopeSql];
     if (filters.patientId) clauses.push('r.patient_id=:patientId');
     if (filters.encounterId) clauses.push('r.encounter_id=:encounterId');
     if (filters.status) clauses.push('r.status=:status');
@@ -368,7 +415,7 @@ export class SqliteClinicalRepository implements ClinicalRepository {
 
   findRecord(id: string, context: RequestContext): MedicalRecordDetail | undefined {
     const row = this.db
-      .prepare(`${recordSelect} WHERE r.id=:id AND ${patientScopeSql}`)
+      .prepare(`${recordSelect} WHERE r.id=:id AND ${recordScopeSql}`)
       .get({ id, ...context });
     return row ? this.mapDetail(row as Row, context) : undefined;
   }
@@ -376,7 +423,7 @@ export class SqliteClinicalRepository implements ClinicalRepository {
   listVersions(id: string, context: RequestContext): MedicalRecordVersion[] | undefined {
     if (!this.findRecord(id, context)) return undefined;
     return this.db
-      .prepare(`${versionSelect} WHERE r.id=:id AND ${patientScopeSql} ORDER BY v.version DESC`)
+      .prepare(`${versionSelect} WHERE r.id=:id AND ${recordScopeSql} ORDER BY v.version DESC`)
       .all({ id, ...context })
       .map((row) => mapVersion(row as Row));
   }
@@ -387,7 +434,7 @@ export class SqliteClinicalRepository implements ClinicalRepository {
     context: RequestContext,
   ): MedicalRecordVersion | undefined {
     const row = this.db
-      .prepare(`${versionSelect} WHERE r.id=:id AND v.version=:version AND ${patientScopeSql}`)
+      .prepare(`${versionSelect} WHERE r.id=:id AND v.version=:version AND ${recordScopeSql}`)
       .get({ id, version, ...context });
     return row ? mapVersion(row as Row) : undefined;
   }
@@ -405,8 +452,8 @@ export class SqliteClinicalRepository implements ClinicalRepository {
       this.db
         .prepare(
           `INSERT INTO medical_records(
-            id,patient_id,encounter_id,title,diagnosis,status,author_id,updated_at,version,archived_at
-          ) VALUES(?,?,?,?,?,'draft',?,?,1,NULL)`,
+            id,patient_id,encounter_id,title,diagnosis,status,author_id,reviewer_id,updated_at,version,archived_at
+          ) VALUES(?,?,?,?,?,'draft',?,?,?,1,NULL)`,
         )
         .run(
           id,
@@ -415,6 +462,7 @@ export class SqliteClinicalRepository implements ClinicalRepository {
           input.title,
           input.diagnosis,
           context.actorId,
+          input.reviewerId,
           context.now,
         );
       this.db
@@ -487,8 +535,10 @@ export class SqliteClinicalRepository implements ClinicalRepository {
           input.diagnosis,
         );
       this.db
-        .prepare('UPDATE medical_records SET title=?,diagnosis=?,updated_at=?,version=? WHERE id=?')
-        .run(input.title, input.diagnosis, context.now, nextVersion, id);
+        .prepare(
+          'UPDATE medical_records SET title=?,diagnosis=?,reviewer_id=?,updated_at=?,version=? WHERE id=?',
+        )
+        .run(input.title, input.diagnosis, input.reviewerId, context.now, nextVersion, id);
       this.db.exec('COMMIT');
     } catch (error) {
       this.db.exec('ROLLBACK');
@@ -512,6 +562,8 @@ export class SqliteClinicalRepository implements ClinicalRepository {
       context,
       (current) => {
         if (String(current.status) !== 'draft' || !this.canEditLocked(current, context))
+          return { kind: 'invalid-state', code: 'RECORD_NOT_SUBMITTABLE' };
+        if (current.reviewer_id === null || String(current.reviewer_id) === context.actorId)
           return { kind: 'invalid-state', code: 'RECORD_NOT_SUBMITTABLE' };
         const templateId = resolveTemplateId(String(current.template_id));
         const body = mapBody(templateId, String(current.body_json));
@@ -544,6 +596,8 @@ export class SqliteClinicalRepository implements ClinicalRepository {
       (current) => {
         if (!this.permissions.hasPermission(context.actorId, 'clinical:review'))
           return { kind: 'forbidden', code: 'RECORD_REVIEW_DENIED' };
+        if (String(current.reviewer_id) !== context.actorId)
+          return { kind: 'forbidden', code: 'RECORD_REVIEWER_NOT_ASSIGNED' };
         if (String(current.version_authored_by) === context.actorId)
           return { kind: 'forbidden', code: 'RECORD_REVIEW_OWN_VERSION' };
         if (String(current.status) !== 'pending-review' || this.isCurrentVersionApproved(current))
@@ -1074,6 +1128,8 @@ export class SqliteClinicalRepository implements ClinicalRepository {
         canReview:
           status === 'pending-review' &&
           canReviewPermission &&
+          row.reviewer_id !== null &&
+          String(row.reviewer_id) === context.actorId &&
           String(row.version_authored_by) !== context.actorId &&
           !approvedCurrent,
         canArchive: status === 'pending-review' && approvedCurrent,
@@ -1098,7 +1154,7 @@ export class SqliteClinicalRepository implements ClinicalRepository {
 
   private lockRecord(id: string, context: RequestContext): Row | undefined {
     const row = this.db
-      .prepare(`${recordSelect} WHERE r.id=:id AND ${patientScopeSql}`)
+      .prepare(`${recordSelect} WHERE r.id=:id AND ${recordScopeSql}`)
       .get({ id, ...context });
     return row ? (row as Row) : undefined;
   }

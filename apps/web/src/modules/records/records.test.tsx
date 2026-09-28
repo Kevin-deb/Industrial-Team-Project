@@ -22,6 +22,9 @@ const templateFixture: MedicalRecordTemplateDefinition[] = [
     fields: [{ key: 'chiefComplaint', labelKey: '主诉', maxLength: 5000, requiredOnSubmit: true }],
   },
 ];
+const reviewerFixture = [
+  { id: 'doctor-demo-001', name: '林知远', title: '主任医师', department: '全科医学科' },
+];
 
 function apiResponse(data: unknown) {
   return new Response(JSON.stringify({ data, meta: { mode: 'demo', requestId: 'test' } }), {
@@ -34,7 +37,13 @@ function renderRecords() {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL) =>
-      apiResponse(String(input).includes('record-templates') ? templateFixture : []),
+      apiResponse(
+        String(input).includes('record-templates')
+          ? templateFixture
+          : String(input).includes('record-reviewers')
+            ? reviewerFixture
+            : [],
+      ),
     ),
   );
   return render(
@@ -88,6 +97,8 @@ const reviewRecord: MedicalRecordDetail = {
   diagnosis: '2 型糖尿病',
   status: 'pending-review',
   authorName: '许清',
+  reviewerId: 'doctor-demo-001',
+  reviewerName: '林知远',
   updatedAt: '2026-09-09T16:20:00+08:00',
   version: 1,
   orderCount: 0,
@@ -131,6 +142,7 @@ describe('Record editor lifecycle actions', () => {
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
         if (url.includes('record-templates')) return apiResponse(templateFixture);
+        if (url.includes('record-reviewers')) return apiResponse(reviewerFixture);
         if (url.includes('/patients')) return apiResponse([]);
         if (url.includes('/encounters')) return apiResponse([]);
         if (url.includes('/versions')) return apiResponse(historyFixture);
@@ -156,6 +168,7 @@ describe('Record editor lifecycle actions', () => {
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
         if (url.includes('record-templates')) return apiResponse(templateFixture);
+        if (url.includes('record-reviewers')) return apiResponse(reviewerFixture);
         if (url.includes('/patients')) return apiResponse([]);
         if (url.includes('/encounters')) return apiResponse([]);
         if (url.includes('/versions')) return apiResponse(historyFixture);
@@ -227,6 +240,7 @@ describe('Record editor orders and consultation materials', () => {
         if (url.includes('/consultations')) return apiResponse(consultationFixture);
         if (url.includes('/orders')) return apiResponse(orderFixture);
         if (url.includes('record-templates')) return apiResponse(templateFixture);
+        if (url.includes('record-reviewers')) return apiResponse(reviewerFixture);
         if (url.includes('/patients')) return apiResponse([]);
         if (url.includes('/encounters')) return apiResponse([]);
         if (url.includes('/versions')) return apiResponse(historyFixture);
@@ -259,6 +273,7 @@ describe('Record editor orders and consultation materials', () => {
         if (url.includes('/consultations')) return apiResponse(consultationFixture);
         if (url.includes('/orders')) return apiResponse(orderFixture);
         if (url.includes('record-templates')) return apiResponse(templateFixture);
+        if (url.includes('record-reviewers')) return apiResponse(reviewerFixture);
         if (url.includes('/patients')) return apiResponse([]);
         if (url.includes('/encounters')) return apiResponse([]);
         if (url.includes('/versions')) return apiResponse(historyFixture);
