@@ -185,7 +185,7 @@ function zipBlob(files: Array<{ name: string; bytes: Uint8Array }>) {
 
 function RequestDialog({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const { t } = useI18n();
-  const [patientName, setPatientName] = useState('李明华');
+  const [patientName, setPatientName] = useState('黄文海');
   const [patientId, setPatientId] = useState('PAT-008');
   const [patientPicker, setPatientPicker] = useState<'name' | 'id' | null>(null);
   const [title, setTitle] = useState('疑难慢病多学科会诊');
@@ -205,6 +205,7 @@ function RequestDialog({ onClose, onCreated }: { onClose: () => void; onCreated:
   const [selectedDoctors, setSelectedDoctors] = useState<ConsultationDoctorOption[]>([]);
   const [doctorQuery, setDoctorQuery] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [notice, setNotice] = useState('');
   const patients = useApi<Patient[]>('/patients?pageSize=100');
   const doctors = useApi<ConsultationDoctorOption[]>(
     `/consultation-doctors?q=${encodeURIComponent(doctorQuery.trim())}`,
@@ -227,10 +228,29 @@ function RequestDialog({ onClose, onCreated }: { onClose: () => void; onCreated:
     [patientId, patientName, patients.data],
   );
   const filteredDoctors = doctors.data ?? [];
+  useEffect(() => {
+    if (!patients.data?.length || selectedPatient) return;
+    const fallback = patients.data.find((patient) => patient.id === patientId) ?? patients.data[0];
+    if (!fallback) return;
+    setPatientName(fallback.name);
+    setPatientId(fallback.id);
+  }, [patientId, patients.data, selectedPatient]);
+  useEffect(() => {
+    if (!filteredDoctors.length) return;
+    setReviewer((current) => current ?? filteredDoctors[0]!);
+    setSelectedDoctors((current) => {
+      if (current.length) return current;
+      const firstParticipant =
+        filteredDoctors.find((doctor) => doctor.id !== filteredDoctors[0]!.id) ??
+        filteredDoctors[0]!;
+      return [firstParticipant];
+    });
+  }, [filteredDoctors]);
   const selectPatient = (patient: Patient) => {
     setPatientName(patient.name);
     setPatientId(patient.id);
     setPatientPicker(null);
+    setNotice('');
   };
   const addDoctor = (doctor: ConsultationDoctorOption) => {
     setSelectedDoctors((current) =>
@@ -253,8 +273,13 @@ function RequestDialog({ onClose, onCreated }: { onClose: () => void; onCreated:
     setMaterials((current) => [...current, ...uploaded]);
   };
   const create = async () => {
-    if (!selectedPatient || !reviewer || !selectedDoctors.length || submitting) return;
+    if (submitting) return;
+    if (!selectedPatient || !reviewer || !selectedDoctors.length) {
+      setNotice('请选择患者、审核人和至少一名参与医生。');
+      return;
+    }
     setSubmitting(true);
+    setNotice('');
     try {
       await requestApi<Consultation>('/consultations', {
         method: 'POST',
@@ -271,6 +296,8 @@ function RequestDialog({ onClose, onCreated }: { onClose: () => void; onCreated:
       });
       onCreated();
       onClose();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : '会诊申请提交失败，请稍后重试。');
     } finally {
       setSubmitting(false);
     }
@@ -447,9 +474,14 @@ function RequestDialog({ onClose, onCreated }: { onClose: () => void; onCreated:
             <span key={material.fileName}>{material.title}</span>
           ))}
         </div>
+        {notice && (
+          <p className="record-editor-notice error" role="alert">
+            {t(notice)}
+          </p>
+        )}
         <Button
           onClick={create}
-          disabled={!selectedPatient || !reviewer || !selectedDoctors.length || submitting}
+          disabled={submitting}
         >
           <FilePlus2 size={16} />
           {t(submitting ? '提交中' : '提交会诊申请')}

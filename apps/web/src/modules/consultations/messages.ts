@@ -113,6 +113,10 @@ export const consultationsMessages: Record<string, string> = {
   已添加: 'Added',
   添加: 'Add',
   没有匹配的医生: 'No matching doctors',
+  '请选择患者、审核人和至少一名参与医生。':
+    'Select a patient, one reviewer, and at least one participating doctor.',
+  '会诊申请提交失败，请稍后重试。':
+    'The consultation request could not be submitted. Please try again later.',
   王辉: 'Wang Hui',
   周敏: 'Zhou Min',
   陈晓岚: 'Chen Xiaolan',
