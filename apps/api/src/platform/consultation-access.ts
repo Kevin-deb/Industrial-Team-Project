@@ -4,7 +4,6 @@ export const consultationMemberSql = `(
   c.requested_by=:actorId OR EXISTS (
     SELECT 1 FROM consultation_participants member
     WHERE member.consultation_id=c.id AND member.identity_id=:actorId AND member.left_at IS NULL
-    AND c.status IN ('requested','scheduled') AND c.completed_at IS NULL
   )
 )`;
 

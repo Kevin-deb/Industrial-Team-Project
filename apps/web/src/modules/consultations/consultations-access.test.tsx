@@ -115,6 +115,70 @@ it('an ordinary invited expert has no complete action', async () => {
   expect(screen.getByRole('button', { name: '发送讨论消息' })).toBeEnabled();
 });
 
+it('downloads a completed consultation report from the detail dialog without room access', async () => {
+  localStorage.setItem('carelink-language', 'en');
+  const click = vi.fn();
+  const createObjectURL = vi.fn(() => 'blob:report');
+  const revokeObjectURL = vi.fn();
+  Object.defineProperty(HTMLAnchorElement.prototype, 'click', {
+    configurable: true,
+    value: click,
+  });
+  Object.defineProperty(URL, 'createObjectURL', {
+    configurable: true,
+    value: createObjectURL,
+  });
+  Object.defineProperty(URL, 'revokeObjectURL', {
+    configurable: true,
+    value: revokeObjectURL,
+  });
+  const completedItem: Consultation = {
+    ...consultation,
+    status: 'completed',
+    canReview: false,
+    report: {
+      id: 'CR-TEST',
+      body: [
+        '联合会诊报告',
+        '',
+        '会诊编号：CON-TEST',
+        '会诊主题：老年心血管多学科会诊',
+        '患者姓名：张淑兰',
+        '一、会诊材料',
+        '- 近三个月血压趋势：患者家庭血压监测汇总。',
+        '三、会诊意见',
+        '已查阅近三个月血压趋势等资料。',
+        '五、报告说明',
+        '本报告由系统根据当前会诊资料、参会人员和诊室讨论记录自动生成；后续如接入真实签署流程，可继续补充审核人与签名信息。',
+      ].join('\n'),
+      status: 'confirmed',
+      createdAt: '2026-09-28T11:00:00Z',
+    },
+  };
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => api([completedItem])),
+  );
+  render(
+    <I18nProvider>
+      <ConsultationsPage />
+    </I18nProvider>,
+  );
+  fireEvent.click(await screen.findByRole('button', { name: 'View details' }));
+  expect(screen.getByRole('button', { name: 'Enter room' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Download report' }));
+  expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob));
+  const [[downloadedBlob]] = createObjectURL.mock.calls as unknown as [[Blob]];
+  const content = await downloadedBlob.text();
+  expect(content).toContain('Joint consultation report');
+  expect(content).toContain('Consultation title: Geriatric cardiovascular consultation');
+  expect(content).toContain('Summary of home blood pressure monitoring.');
+  expect(content).not.toContain('联合会诊报告');
+  expect(content).not.toContain('患者家庭血压监测汇总');
+  expect(click).toHaveBeenCalled();
+  expect(revokeObjectURL).toHaveBeenCalledWith('blob:report');
+});
+
 it('failed completion stays visible with an error so the doctor can retry', async () => {
   vi.stubGlobal(
     'fetch',

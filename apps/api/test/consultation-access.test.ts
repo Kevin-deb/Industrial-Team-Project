@@ -44,7 +44,7 @@ function fixture() {
   return { db, repository, access, task, permanentGrant };
 }
 
-test('consultation access is valid at the scheduled start and expires exactly four hours later', () => {
+test('consultation room opens at the scheduled start while patient access still expires', () => {
   const { db, repository, access, task } = fixture();
   try {
     assert.equal(access.canReadPatient(input.patientId, reviewer), true);
@@ -73,7 +73,11 @@ test('consultation access is valid at the scheduled start and expires exactly fo
     );
     const expired = { ...reviewer, now: '2026-09-28T13:00:00.000Z' };
     assert.equal(access.canReadPatient(input.patientId, expired), false);
-    assert.equal(repository.consultationContext(task.id, expired), undefined);
+    assert.equal(
+      repository.consultationContext(task.id, expired)!.consultation.id,
+      task.id,
+      'the room remains available after the scheduled start even when patient grants expire',
+    );
   } finally {
     db.close();
   }
@@ -261,7 +265,12 @@ test('completion is owner/reviewer-only and report failure rolls back closure an
       undefined,
       'independent patient access does not reopen a closed task',
     );
-    assert.ok(!repository.listConsultations(reviewer).some((item) => item.id === task.id));
+    const completedHistory = repository
+      .listConsultations(reviewer)
+      .find((item) => item.id === task.id);
+    assert.equal(completedHistory?.status, 'completed');
+    assert.equal(completedHistory?.report?.id, completed.id);
+    assert.ok(completedHistory?.report?.body.includes('Test discussion'));
     const originalCompletedAt = db
       .prepare('SELECT completed_at FROM consultations WHERE id=?')
       .get(task.id)!.completed_at;

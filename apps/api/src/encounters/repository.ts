@@ -809,6 +809,7 @@ export class SqliteEncounterRepository implements EncounterRepository {
       canReview: reviewer?.id === context.actorId,
       canAccept: this.canAcceptConsultation(id, context.actorId),
       canConfirm: this.canConfirmConsultation(id, context.actorId),
+      report: this.consultationReport(id),
     };
   }
 

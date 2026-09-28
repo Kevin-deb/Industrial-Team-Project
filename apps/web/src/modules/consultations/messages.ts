@@ -43,6 +43,8 @@ export const consultationsMessages: Record<string, string> = {
   '请先确认参会，再进入诊室。': 'Confirm participation before entering the room.',
   '会诊未到计划时间，不能进入诊室。':
     'The consultation has not reached its scheduled time, so the room cannot be entered.',
+  '会诊已结束，诊室已锁定；可在下方下载报告。':
+    'The consultation has ended and the room is locked. Download the report below.',
   返回会诊列表: 'Back to consultations',
   收到的申请: 'Received request',
   我发起的: 'Sent by me',
@@ -81,10 +83,15 @@ export const consultationsMessages: Record<string, string> = {
   审核后归档: 'Review and archive',
   会诊材料: 'Consultation materials',
   近三个月血压趋势: 'Blood pressure trend from the last three months',
+  '患者家庭血压监测汇总。': 'Summary of home blood pressure monitoring.',
   心电图摘要: 'ECG summary',
+  '近期心电图核心结论。': 'Key findings from the recent ECG.',
   当前用药清单: 'Current medication list',
+  '患者现用药物与剂量。': 'Current medications and dosages.',
   血糖监测记录: 'Blood glucose records',
+  '近两周空腹与餐后血糖。': 'Fasting and postprandial glucose over the past two weeks.',
   饮食运动记录: 'Diet and exercise log',
+  '患者近期饮食与运动摘要。': 'Summary of recent diet and exercise.',
   既往随访摘要: 'Previous follow-up summary',
   病情摘要: 'Case summary',
   检查结果: 'Investigation results',
@@ -124,6 +131,8 @@ export const consultationsMessages: Record<string, string> = {
   参与人员: 'Participants',
   发起医生: 'Initiating doctor',
   参与专家: 'Participating specialist',
+  会诊专家: 'Consultation specialist',
+  受邀医生: 'Invited doctor',
   选择参与医生: 'Select participating doctors',
   '可选择多名专家参与本次远程会诊。':
     'Select multiple specialists to join this remote consultation.',
@@ -142,6 +151,19 @@ export const consultationsMessages: Record<string, string> = {
   没有匹配的医生: 'No matching doctors',
   '请选择患者、审核人和至少一名参与医生。':
     'Select a patient, one reviewer, and at least one participating doctor.',
+  '会诊申请信息不完整。': 'Complete the consultation request information.',
+  '请选择当前时间之后的有效会诊时间。':
+    'Select a valid consultation time later than the current time.',
+  '请选择有效的医生参与会诊。': 'Select valid doctors to join the consultation.',
+  '未找到该会诊。': 'Consultation not found.',
+  '未找到患者或没有访问权限。': 'Patient not found or access is not available.',
+  '会诊不存在或当前状态不能接受。':
+    'The consultation does not exist or cannot be approved in its current status.',
+  '会诊未通过或不能确认参会。':
+    'The consultation is not approved or participation cannot be confirmed.',
+  '会诊未接受、已结束或不可访问。':
+    'The consultation has not been accepted, has ended, or is not accessible.',
+  '会诊不存在或尚未接受。': 'The consultation does not exist or has not been accepted.',
   '会诊申请提交失败，请稍后重试。':
     'The consultation request could not be submitted. Please try again later.',
   王辉: 'Wang Hui',
@@ -166,6 +188,8 @@ export const consultationsMessages: Record<string, string> = {
     'Postoperative rehabilitation materials submitted. Please help assess the follow-up plan.',
   '患者近期足部麻木加重，邀请全科一起评估综合干预方案。':
     'The patient’s foot numbness has recently worsened. Inviting general medicine to assess a combined intervention plan.',
+  '暂无专家讨论发言，暂不能形成完整联合意见。建议各专科医生补充意见后再归档报告。':
+    'No specialist discussion messages are available, so a complete joint opinion cannot be formed yet. Specialists should add comments before the report is archived.',
   '报告已生成，可下载查看完整内容': 'Report generated. Download to view the full content.',
   进入视频会议: 'Join video meeting',
   发送讨论消息: 'Send discussion message',

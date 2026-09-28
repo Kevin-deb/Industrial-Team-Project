@@ -91,6 +91,7 @@ export interface Consultation {
   canReview?: boolean;
   canAccept?: boolean;
   canConfirm?: boolean;
+  report?: ConsultationReport | null;
 }
 
 export interface ConsultationParticipant {
