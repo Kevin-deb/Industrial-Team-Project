@@ -267,16 +267,27 @@ export const encountersMessages: Record<string, string> = {
   '高血压病史3年，平时血压控制尚可。':
     'History of hypertension for three years, generally controlled.',
   '否认重大手术史。': 'Denies major surgical history.',
+  '否认近期手术史。': 'Denies recent surgical history.',
   间断服用苯磺酸氨氯地平片: 'Intermittent amlodipine besylate use.',
+  '间断服用苯磺酸氨氯地平片。': 'Intermittent amlodipine besylate use.',
   否认药物及食物过敏史: 'Denies medication or food allergies.',
+  '否认药物及食物过敏史。': 'Denies medication or food allergies.',
+  '患者近一周活动后偶有胸闷，休息后可缓解，无明显出汗或晕厥。':
+    'The patient has occasional chest tightness after activity over the past week, relieved by rest, with no clear sweating or syncope.',
+  '冠心病病史5年。': 'History of coronary heart disease for five years.',
+  '规律服用抗血小板及降脂药物。': 'Regular antiplatelet and lipid-lowering medication use.',
+  '磺胺类过敏史。': 'Sulfonamide allergy.',
   餐后血糖波动一周: 'Postprandial glucose fluctuation for one week',
   '近一周餐后2小时血糖多次升高，伴口干，无明显乏力、胸闷或意识异常。':
     'Two-hour postprandial glucose has increased several times in the past week, with dry mouth and no clear fatigue, chest tightness, or altered consciousness.',
+  '近期餐后血糖较前波动，患者希望调整饮食和步行计划。':
+    'Recent postprandial glucose has fluctuated more than before; the patient wants to adjust diet and walking plans.',
   '2型糖尿病病史5年。': 'History of type 2 diabetes for five years.',
   '阑尾切除术后多年，恢复良好': 'Appendectomy years ago, recovered well.',
   '规律服用二甲双胍，近期饮食控制不稳定':
     'Regular metformin use; recent dietary control has been inconsistent.',
   青霉素过敏史: 'Penicillin allergy.',
+  '青霉素过敏史。': 'Penicillin allergy.',
   咳嗽气短三天: 'Cough and shortness of breath for three days',
   '受凉后出现阵发性咳嗽，活动后轻度气短，无高热，无咯血。':
     'Paroxysmal cough after catching cold, mild exertional shortness of breath, no high fever or hemoptysis.',
@@ -293,7 +304,30 @@ export const encountersMessages: Record<string, string> = {
   '糖尿病前期管理中。': 'Prediabetes management in progress.',
   '暂未使用降糖药。': 'No glucose-lowering medication currently.',
   规律服用他汀类降脂药: 'Regular statin use.',
+  '规律服用他汀类药物。': 'Regular statin use.',
+  '规律服用降压药。': 'Regular antihypertensive medication use.',
   否认明确过敏史: 'Denies known allergies.',
+  '否认明确过敏史。': 'Denies known allergies.',
+  家庭血压记录复核: 'Home blood pressure log review',
+  '患者提交一周家庭血压记录，晨起血压偶有升高。':
+    'The patient submitted one week of home blood pressure logs, with occasional morning elevation.',
+  '高血压病史8年。': 'History of hypertension for eight years.',
+  '患者偶有头晕，改变体位时明显，无肢体无力或言语不清。':
+    'The patient has occasional dizziness, worse with position changes, with no limb weakness or slurred speech.',
+  '患者咨询抗血小板药物服用注意事项，近期无黑便或明显出血。':
+    'The patient asks about antiplatelet medication precautions, with no recent black stool or obvious bleeding.',
+  '服用阿司匹林及他汀类药物。': 'Uses aspirin and statin medication.',
+  '医生您好，我想咨询一下：血压监测随访。':
+    'Hello doctor, I would like to ask about blood pressure follow-up.',
+  '医生您好，我想咨询一下：胸闷症状复查。':
+    'Hello doctor, I would like to ask about chest tightness follow-up.',
+  '医生您好，我想咨询一下：饮食运动计划调整。':
+    'Hello doctor, I would like to ask about diet and exercise plan adjustment.',
+  '医生您好，我想咨询一下：家庭血压记录复核。':
+    'Hello doctor, I would like to ask about my home blood pressure log review.',
+  '医生您好，我想咨询一下：冠心病用药答疑。':
+    'Hello doctor, I would like to ask about coronary medication.',
+  '医生您好，我已准备好视频问诊。': 'Hello doctor, I am ready for the video consultation.',
   '患者已提交在线问诊资料，详细病情需进入诊间后进一步核对。':
     'The patient has submitted online consultation materials; details should be confirmed in the consultation room.',
   暂无补充记录: 'No additional record.',

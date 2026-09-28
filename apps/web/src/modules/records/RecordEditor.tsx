@@ -550,7 +550,7 @@ export function RecordEditor({ recordId, onClose, onSaved }: EditorProps) {
               <input
                 aria-label={t('病历标题')}
                 maxLength={120}
-                value={editable ? form.title : t(form.title)}
+                value={t(form.title)}
                 disabled={!editable}
                 onChange={(event) => setForm((value) => ({ ...value, title: event.target.value }))}
               />
@@ -560,7 +560,7 @@ export function RecordEditor({ recordId, onClose, onSaved }: EditorProps) {
               <input
                 aria-label={t('诊断')}
                 maxLength={200}
-                value={editable ? form.diagnosis : t(form.diagnosis)}
+                value={t(form.diagnosis)}
                 disabled={!editable}
                 onChange={(event) =>
                   setForm((value) => ({ ...value, diagnosis: event.target.value }))
@@ -581,9 +581,11 @@ export function RecordEditor({ recordId, onClose, onSaved }: EditorProps) {
               patientLabel={
                 form.patientId
                   ? [
-                      patients?.find((patient) => patient.id === form.patientId)?.name ??
-                        record?.patientName ??
-                        '',
+                      t(
+                        patients?.find((patient) => patient.id === form.patientId)?.name ??
+                          record?.patientName ??
+                          '',
+                      ),
                       form.patientId,
                     ]
                       .filter(Boolean)
@@ -626,7 +628,7 @@ export function RecordEditor({ recordId, onClose, onSaved }: EditorProps) {
                   aria-label={t(field.labelKey)}
                   maxLength={field.maxLength}
                   rows={4}
-                  value={editable ? (form.body[field.key] ?? '') : t(form.body[field.key] ?? '')}
+                  value={t(form.body[field.key] ?? '')}
                   disabled={!editable}
                   onChange={(event) =>
                     setForm((value) => ({
